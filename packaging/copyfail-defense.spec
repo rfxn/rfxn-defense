@@ -1,5 +1,10 @@
 %global         _hardened_build         1
 %global         debug_package           %{nil}
+# annobin is metadata-only (records build flags into ELF notes); not a
+# hardening primitive. Disabling avoids EL9 chroot plugin-path drift
+# where redhat-rpm-config expects /usr/lib/gcc/.../plugin/annobin.so but
+# gcc-plugin-annobin ships /usr/lib/gcc/.../plugin/gcc-annobin.so.
+%undefine       _annotated_build
 
 # We deliberately do NOT byte-compile or strip the python script - it is
 # distributed as plain text so an operator can read it before running.
