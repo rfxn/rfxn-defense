@@ -297,7 +297,7 @@ assert d['posture']['layers']['ld_preload_shim'] == 'ok', d['posture']['layers']
 assert 'bug_classes_covered' in d['posture'], 'missing bug_classes_covered'
 assert isinstance(d['posture']['bug_classes_covered'], list)
 bc = d['posture'].get('bug_classes', {})
-assert set(bc.keys()) == {'cf1', 'cf2', 'dirtyfrag-esp', 'dirtyfrag-rxrpc'}, \
+assert set(bc.keys()) == {'cf1', 'cf2', 'dirtyfrag-esp', 'dirtyfrag-rxrpc', 'pintheft', 'keysign-pwn'}, \
     'bug_classes keys mismatch: ' + str(list(bc.keys()))
 # After shim-enable, cf1 should be EITHER unreachable (applicable=false,
 # the ideal outcome) OR mitigated. Anything else means the shim isn't
