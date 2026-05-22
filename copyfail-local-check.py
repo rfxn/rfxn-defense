@@ -65,6 +65,8 @@ import tempfile
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+__version__ = "2.1.0"
+
 # --- splice(2) wrapper ----------------------------------------------------
 # os.splice was added in Python 3.10. EL7/8/9 default Pythons are 3.6/3.6/3.9
 # so we need a ctypes fallback to actually run the trigger probe across the
@@ -1511,6 +1513,95 @@ def check_auto_detect_state():
                      ", ".join(detected_workloads), len(suppressed_mits)),
                  details=details)
 
+def check_rds_modprobe():
+    """v2.1.0 MITIGATION: AF_RDS / rds.ko blacklist for the pintheft class.
+
+    Decision matrix (drop-in 99-copyfail-defense-rds.conf):
+      suppressed.modprobe_rds=true  -> INFO (Oracle/RDS workload detected)
+      file present + not suppressed -> OK
+      file absent + -modprobe       -> FAIL (subpackage installed, drop
+                                             missing -> scriptlet failed)
+      file absent + no -modprobe    -> SKIP (auditor-only install)
+    Missing suppressed.modprobe_rds key is treated as false (operators
+    who upgraded RPMs before %posttrans re-ran)."""
+    drop_path = "/etc/modprobe.d/99-copyfail-defense-rds.conf"
+    drop_present = os.path.isfile(drop_path)
+
+    suppressed_rds = False
+    try:
+        with open(AUTO_DETECT_PATH, "r") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            sup = data.get("suppressed") or {}
+            if isinstance(sup, dict):
+                suppressed_rds = bool(sup.get("modprobe_rds", False))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        suppressed_rds = False
+
+    if suppressed_rds:
+        return Check("rds_modprobe", "MITIGATION", Status.INFO,
+                     "AF_RDS modprobe suppressed - Oracle/RDS workload "
+                     "detected",
+                     details={"path": drop_path, "suppressed": True})
+
+    if drop_present:
+        return Check("rds_modprobe", "MITIGATION", Status.OK,
+                     "AF_RDS modprobe drop-in present: {}".format(drop_path),
+                     details={"path": drop_path})
+
+    if _rpm_q_installed("copyfail-defense-modprobe"):
+        return Check("rds_modprobe", "MITIGATION", Status.FAIL,
+                     "AF_RDS modprobe drop-in missing despite -modprobe "
+                     "subpackage installed (scriptlet likely failed)",
+                     details={"path": drop_path},
+                     remediation="Run: /usr/sbin/copyfail-redetect ; verify "
+                                 "{} exists and contains 'install rds "
+                                 "/bin/false'".format(drop_path))
+
+    return Check("rds_modprobe", "MITIGATION", Status.SKIP,
+                 "auditor-only install (no -modprobe subpackage); AF_RDS "
+                 "drop-in not expected",
+                 details={"path": drop_path})
+
+def check_af_rds_restrict():
+    """v2.1.0 MITIGATION: AF_RDS systemd restriction for the pintheft class.
+
+    Reads sshd.service via systemctl cat as the representative tenant unit.
+    Falls back to the on-disk drop-in if systemctl is unavailable."""
+    raf_re = re.compile(r"RestrictAddressFamilies\s*=.*~AF_RDS")
+
+    rc, out, err = run_cmd(["systemctl", "cat", "sshd.service"], timeout=3)
+    text = ""
+    source = None
+    if rc == 0 and out:
+        text = out.decode("utf-8", errors="replace")
+        source = "systemctl cat sshd.service"
+    else:
+        dropin = "/etc/systemd/system/sshd.service.d/10-copyfail-defense.conf"
+        fallback = read_text_safe(dropin) or ""
+        if fallback:
+            text = fallback
+            source = dropin
+
+    if source is None:
+        return Check("af_rds_restrict", "MITIGATION", Status.SKIP,
+                     "sshd.service unavailable via systemctl and no "
+                     "copyfail drop-in on disk")
+
+    if raf_re.search(text):
+        return Check("af_rds_restrict", "MITIGATION", Status.OK,
+                     "sshd.service blocks AF_RDS via RestrictAddressFamilies",
+                     details={"source": source})
+
+    return Check("af_rds_restrict", "MITIGATION", Status.FAIL,
+                 "sshd.service does not restrict AF_RDS (pintheft "
+                 "primitive reachable inside tenant sessions)",
+                 details={"source": source},
+                 remediation="Install copyfail-defense-systemd, OR add to "
+                             "/etc/systemd/system/sshd.service.d/"
+                             "10-copyfail-defense.conf: [Service] "
+                             "RestrictAddressFamilies=~AF_RDS")
+
 def _unit_namespaces_blocked(rn_value):
     """Returns True if RestrictNamespaces blocks BOTH user and net.
 
@@ -1679,6 +1770,39 @@ def check_unprivileged_userns_sysctl():
                  " (cf2 / dirtyfrag-ESP unshare prerequisite reachable)",
                  details={"sysctls": parts})
 
+def check_ptrace_scope():
+    """v2.1.0 HARDENING: report kernel.yama.ptrace_scope posture.
+
+    ptrace_scope=2 (admin-only) blocks the keysign-pwn class of cross-
+    process /proc/PID/mem and ptrace(PTRACE_ATTACH) reach into agents
+    holding unwrapped keys (gpg-agent, ssh-agent). =1 (restricted) still
+    permits same-uid attach via prctl(PR_SET_PTRACER); =0 is unrestricted."""
+    val = read_text_safe("/proc/sys/kernel/yama/ptrace_scope")
+    if val is None:
+        return Check("ptrace_scope", "HARDENING", Status.SKIP,
+                     "/proc/sys/kernel/yama/ptrace_scope unreadable "
+                     "(Yama LSM not enabled)")
+    v = val.strip()
+    if v == "2":
+        return Check("ptrace_scope", "HARDENING", Status.OK,
+                     "kernel.yama.ptrace_scope=2 (admin-only attach)",
+                     details={"value": v})
+    if v == "1":
+        return Check("ptrace_scope", "HARDENING", Status.WARN,
+                     "kernel.yama.ptrace_scope=1 (same-uid attach still "
+                     "permitted; keysign-pwn agent reach partial)",
+                     details={"value": v},
+                     remediation="sysctl -w kernel.yama.ptrace_scope=2 ; "
+                                 "ensure /etc/sysctl.d/"
+                                 "99-copyfail-defense-userns.conf is loaded")
+    return Check("ptrace_scope", "HARDENING", Status.FAIL,
+                 "kernel.yama.ptrace_scope={} (unrestricted; keysign-pwn "
+                 "agent reach unblocked)".format(v),
+                 details={"value": v},
+                 remediation="sysctl -w kernel.yama.ptrace_scope=2 ; "
+                             "ensure /etc/sysctl.d/"
+                             "99-copyfail-defense-userns.conf is loaded")
+
 def check_apparmor_userns_restrict():
     """ENV: Ubuntu/Debian apparmor userns posture.
 
@@ -1827,6 +1951,38 @@ def check_auditd_rules_extended():
                           "missing": missing},
                  remediation="See --emit-remediation for the exact "
                              "auditctl/augenrules invocations.")
+
+def check_pidfd_getfd_auditd_rule():
+    """v2.1.0 DETECTION: report on pidfd_getfd audit rule presence.
+
+    pidfd_getfd(2) lets a tracer steal an open fd from a tracee — the
+    primitive behind the pintheft class (extract live TLS pins, agent
+    socket fds, keyring handles). The rule key copyfail_pidfd_getfd is
+    written by --emit-remediation and matches the canonical augenrules
+    snippet shipped by the operator-side guidance."""
+    rc, out, err = run_cmd(["auditctl", "-l"], timeout=3)
+    if rc != 0:
+        return Check("pidfd_getfd_auditd_rule", "DETECTION", Status.SKIP,
+                     "auditctl unavailable or returned error")
+    text = out.decode("utf-8", errors="replace") if out else ""
+    key = "copyfail_pidfd_getfd"
+    found = False
+    for line in text.splitlines():
+        if re.search(r"-k\s+" + re.escape(key) + r"\b", line) or \
+           re.search(r"key=" + re.escape(key) + r"\b", line):
+            found = True
+            break
+    if found:
+        return Check("pidfd_getfd_auditd_rule", "DETECTION", Status.OK,
+                     "pidfd_getfd audit rule loaded (key={})".format(key),
+                     details={"key": key})
+    return Check("pidfd_getfd_auditd_rule", "DETECTION", Status.FAIL,
+                 "pidfd_getfd audit rule absent (pintheft primitive "
+                 "unobserved)",
+                 details={"key": key},
+                 remediation="See --emit-remediation for the auditctl/"
+                             "augenrules invocation that installs "
+                             "key={}.".format(key))
 
 def check_initcall_blacklist():
     """v2.0.0: parse /proc/cmdline for initcall_blacklist= covering
@@ -2038,6 +2194,11 @@ def run_all_checks(args):
     # v2.0.1: auto-detect.json state
     PROGRESS.step("reading auto-detect.json state")
     add_one(check_auto_detect_state(), "MITIGATION")
+    # v2.1.0: pintheft - AF_RDS modprobe + systemd restrictions
+    PROGRESS.step("checking AF_RDS modprobe drop-in (pintheft)")
+    add_one(check_rds_modprobe(), "MITIGATION")
+    PROGRESS.step("checking AF_RDS systemd restriction (pintheft)")
+    add_one(check_af_rds_restrict(), "MITIGATION")
     PROGRESS.step("checking kernel.modules_disabled")
     add_one(check_modules_disabled(), "MITIGATION")
     # v2.0.0: initcall_blacklist= GRUB-line check (CERT-EU 2026-005 +
@@ -2067,12 +2228,18 @@ def run_all_checks(args):
         # v2.0.0: unprivileged userns sysctl posture
         PROGRESS.step("checking unprivileged userns sysctls")
         add_one(check_unprivileged_userns_sysctl(), "HARDENING")
+        # v2.1.0: keysign-pwn - kernel.yama.ptrace_scope posture
+        PROGRESS.step("checking kernel.yama.ptrace_scope (keysign-pwn)")
+        add_one(check_ptrace_scope(), "HARDENING")
 
     PROGRESS.step("checking auditd state and rules")
     add_many(check_auditd(), "DETECTION")
     # v2.0.0: cf-class extended auditd rule keys
     PROGRESS.step("checking cf-class auditd rules (cf_userns, cf_addkey)")
     add_one(check_auditd_rules_extended(), "DETECTION")
+    # v2.1.0: pintheft - pidfd_getfd audit rule
+    PROGRESS.step("checking pidfd_getfd audit rule (pintheft)")
+    add_one(check_pidfd_getfd_auditd_rule(), "DETECTION")
     PROGRESS.step("verifying seccomp filter active on running daemons")
     add_one(check_seccomp_runtime(), "DETECTION")
     # v2.0.0: dirtyfrag-RxRPC PAM nullok scan
@@ -2223,6 +2390,15 @@ def _aggregate_bug_classes(by_name):
     rxrpc_mit = is_ok("modprobe_extended") or \
                 (rxrpc_state is not None and rxrpc_state.status == Status.OK)
 
+    # pintheft - AF_RDS + pidfd_getfd live-key exfiltration class
+    pintheft_app = (status_of("rds_modprobe") not in (Status.OK, None)) or \
+                   (status_of("af_rds_restrict") not in (Status.OK, None))
+    pintheft_mit = is_ok("rds_modprobe") or is_ok("af_rds_restrict")
+
+    # keysign-pwn - ptrace/PROC_MEM reach into key-holding agents
+    keysign_app = status_of("ptrace_scope") not in (Status.OK, None)
+    keysign_mit = is_ok("ptrace_scope")
+
     # Per-class layer breakdown (which mitigations are active for each class).
     # Surfaces in the holistic view + JSON for SIEM/dashboard consumption.
     cf1_layers = {
@@ -2242,6 +2418,13 @@ def _aggregate_bug_classes(by_name):
         "modprobe_blacklist":     is_ok("modprobe_extended"),
         "systemd_af_rxrpc":       is_ok("systemd_restrict_namespaces"),  # same drop-in body covers both
         "rxrpc_module_absent":    rxrpc_state is not None and rxrpc_state.status == Status.OK,
+    }
+    pintheft_layers = {
+        "rds_modprobe":           is_ok("rds_modprobe"),
+        "af_rds_restrict":        is_ok("af_rds_restrict"),
+    }
+    keysign_layers = {
+        "ptrace_scope":           is_ok("ptrace_scope"),
     }
 
     return {
@@ -2268,6 +2451,18 @@ def _aggregate_bug_classes(by_name):
             "mitigated":  bool(rxrpc_mit) if rxrpc_app else None,
             "kernel_sink": "rxkad_verify_packet_1 in-place pcbc(fcrypt)",
             "layers": {k: bool(v) for k, v in rxrpc_layers.items()},
+        },
+        "pintheft": {
+            "applicable": bool(pintheft_app),
+            "mitigated":  bool(pintheft_mit) if pintheft_app else None,
+            "kernel_sink": "AF_RDS socket + pidfd_getfd live-key exfiltration",
+            "layers": {k: bool(v) for k, v in pintheft_layers.items()},
+        },
+        "keysign-pwn": {
+            "applicable": bool(keysign_app),
+            "mitigated":  bool(keysign_mit) if keysign_app else None,
+            "kernel_sink": "ptrace/PROC_MEM reach into key-holding agents",
+            "layers": {k: bool(v) for k, v in keysign_layers.items()},
         },
     }
 
@@ -2499,7 +2694,9 @@ def main():
         for cls_id, label in (("cf1", "cf1 (CVE-2026-31431)"),
                               ("cf2", "cf2 (xfrm-ESP)"),
                               ("dirtyfrag-esp",   "Dirty Frag-ESP"),
-                              ("dirtyfrag-rxrpc", "Dirty Frag-RxRPC")):
+                              ("dirtyfrag-rxrpc", "Dirty Frag-RxRPC"),
+                              ("pintheft",        "pintheft (AF_RDS)"),
+                              ("keysign-pwn",     "keysign-pwn (ptrace)")):
             info = bc.get(cls_id, {})
             applicable = info.get("applicable")
             mitigated  = info.get("mitigated")
@@ -2553,9 +2750,10 @@ def main():
                 return colorize("mitigated", C.GREEN)
             return colorize("vulnerable", C.RED)
         print("Bug-class coverage: cf1={} cf2={} dirtyfrag-esp={} "
-              "dirtyfrag-rxrpc={}".format(
+              "dirtyfrag-rxrpc={} pintheft={} keysign-pwn={}".format(
                   _bc_repr("cf1"), _bc_repr("cf2"),
-                  _bc_repr("dirtyfrag-esp"), _bc_repr("dirtyfrag-rxrpc")))
+                  _bc_repr("dirtyfrag-esp"), _bc_repr("dirtyfrag-rxrpc"),
+                  _bc_repr("pintheft"), _bc_repr("keysign-pwn")))
 
     return determine_exit_code(results)
 
