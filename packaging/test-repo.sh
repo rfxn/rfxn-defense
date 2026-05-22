@@ -353,7 +353,8 @@ ok "copyfail-shim-disable removed the line atomically"
 #    disabled), but if the operator forgot, the scriptlet must still
 #    leave /etc/ld.so.preload sane.
 echo "/usr/lib64/no-afalg.so" > /etc/ld.so.preload   # simulate forgotten enable
-dnf remove -y copyfail-defense copyfail-defense-shim \
+dnf remove -y --setopt=clean_requirements_on_remove=false \
+              copyfail-defense copyfail-defense-shim \
               copyfail-defense-modprobe copyfail-defense-systemd \
               copyfail-defense-auditor \
               copyfail-defense-sysctl copyfail-defense-audit \
