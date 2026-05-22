@@ -46,6 +46,12 @@ ExclusiveArch:  x86_64
 
 BuildRequires:  gcc
 BuildRequires:  glibc-devel
+# EL8+ redhat-rpm-config injects -specs=.../redhat-annobin-cc1 into CFLAGS;
+# the plugin lives in gcc-plugin-annobin and is not always pulled transitively
+# by gcc (observed: EL9 chroot lacks plugin/annobin.so unless requested).
+%if 0%{?rhel} >= 8
+BuildRequires:  gcc-plugin-annobin
+%endif
 # The auditor is plain Python 3 stdlib at runtime, but %build runs a
 # py_compile syntax check against it as a build-time gate (catches mismerged
 # patches before they reach a server). EL8/EL10 minimal buildroots do not
