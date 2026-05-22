@@ -13,7 +13,7 @@
 
 Name:           copyfail-defense
 Epoch:          1
-Version:        2.0.2
+Version:        2.1.0
 Release:        1%{?dist}
 Summary:        Defense-in-depth toolkit for the Copy Fail bug class
 
@@ -36,6 +36,8 @@ Source10:       copyfail-redetect
 Source11:       copyfail-systemd-dropin-rxrpc-af.conf
 Source12:       copyfail-sysctl-userns.conf
 Source13:       copyfail-defense-audit.rules
+Source14:       copyfail-modprobe-rds.conf
+Source15:       copyfail-systemd-dropin-rds.conf
 
 # x86_64 only: no-afalg.c has an explicit #error for non-x86_64. The auditor
 # is portable, but the shim is a load-bearing primitive of this package
@@ -100,6 +102,10 @@ report at /var/lib/copyfail-defense/auto-detect.json shows what ran
 and what was suppressed; /usr/sbin/copyfail-redetect re-runs detection
 on demand. Override the auto-detection by creating
 /etc/copyfail/force-full before install.
+
+v2.1.0 adds PinTheft (RDS) and ssh-keysign-pwn (CVE-2026-46333) coverage:
+rds*/AF_RDS cuts (modprobe + systemd + auditd) plus
+kernel.yama.ptrace_scope=2 sysctl and a pidfd_getfd auditd tripwire.
 
 # ---------------------------------------------------------------------------
 %package shim
@@ -168,6 +174,9 @@ configs, dm-crypt-via-AF_ALG userspace). Auto-detection suppresses the
 conflicting drop file on detected hosts; confirm posture before
 installing on hosts that run any of these.
 
+v2.1.0 adds rds/rds_tcp/rds_rdma blacklist for PinTheft mitigation
+(suppressed on Oracle Grid / HPC hosts via detect.sh).
+
 # ---------------------------------------------------------------------------
 %package systemd
 Summary:        systemd drop-ins blocking cf-class primitives on tenant units
@@ -209,6 +218,8 @@ May break rootless podman/buildah running under user@.service.
 Override: drop a 20-*.conf with empty directive values per unit;
 see README.
 
+v2.1.0 adds ~AF_RDS to the always-on 10-* drop-in (PinTheft coverage).
+
 # ---------------------------------------------------------------------------
 %package auditor
 Summary:        cf-class host posture auditor (cf1, cf2, Dirty Frag — read-only)
@@ -243,6 +254,10 @@ sentinel file - it does not corrupt /usr/bin/su or anything else.
 JSON output (--json) is fleet-rollout friendly; consume the
 posture.verdict, posture.bug_classes_covered (array), and
 posture.bug_classes (per-class map) fields, not the human report.
+
+v2.1.0 adds 4 new checks (ptrace_scope, pidfd_getfd auditd rule, rds
+modprobe, AF_RDS restrict) and 2 new bug-class entries (pintheft,
+keysign-pwn).
 
 # ---------------------------------------------------------------------------
 %package sysctl
@@ -283,6 +298,9 @@ when these are present; the drop-in is removed if any of
 is detected. See /var/lib/copyfail-defense/auto-detect.json for the
 decision trace.
 
+v2.1.0 adds kernel.yama.ptrace_scope=2 (ssh-keysign-pwn /
+CVE-2026-46333 mitigation).
+
 # ---------------------------------------------------------------------------
 %package audit
 Summary:        auditd tripwire rules for cf-class userspace prep
@@ -311,6 +329,10 @@ Query examples:
 
 x86_64 native ABI only (b64); i386-compat socket() rides socketcall()
 on b32 and is intentionally out of scope.
+
+v2.1.0 adds copyfail_afrds (PinTheft - AF_RDS=21) and
+copyfail_pidfd_getfd (ssh-keysign-pwn / CVE-2026-46333 - syscall 438)
+tripwire rules.
 
 # ===========================================================================
 %prep
@@ -380,6 +402,8 @@ install -m 0644 %{SOURCE6} \
     %{buildroot}/usr/share/copyfail-defense/conditional/modprobe/99-copyfail-defense-cf2-xfrm.conf
 install -m 0644 %{SOURCE7} \
     %{buildroot}/usr/share/copyfail-defense/conditional/modprobe/99-copyfail-defense-rxrpc.conf
+install -m 0644 %{SOURCE14} \
+    %{buildroot}/usr/share/copyfail-defense/conditional/modprobe/99-copyfail-defense-rds.conf
 
 # --- systemd subpackage layout ---
 # 10-* always-on body installed for all 5 tenant units.
@@ -396,6 +420,8 @@ install -m 0644 %{SOURCE11} \
     %{buildroot}/usr/share/copyfail-defense/conditional/systemd/12-copyfail-defense-rxrpc-af.conf
 install -m 0644 %{SOURCE8} \
     %{buildroot}/usr/share/copyfail-defense/conditional/systemd/15-copyfail-defense-userns.conf
+install -m 0644 %{SOURCE15} \
+    %{buildroot}/usr/share/copyfail-defense/conditional/systemd/13-copyfail-defense-rds.conf
 
 # Container-runtime drop-ins ship as opt-in examples (NOT active).
 install -d -m 0755 %{buildroot}%{_docdir}/%{name}/examples
@@ -825,6 +851,7 @@ exit 0
 %dir /usr/share/copyfail-defense/conditional/modprobe
 /usr/share/copyfail-defense/conditional/modprobe/99-copyfail-defense-cf2-xfrm.conf
 /usr/share/copyfail-defense/conditional/modprobe/99-copyfail-defense-rxrpc.conf
+/usr/share/copyfail-defense/conditional/modprobe/99-copyfail-defense-rds.conf
 # detect.sh + /usr/libexec/copyfail-defense + /var/lib/copyfail-defense
 # moved to meta package %files in v2.0.1 fixup pass (M-2): they were
 # only listed here, so installing -systemd without -modprobe missed
@@ -853,6 +880,7 @@ exit 0
 #        suppressed for user@.service.d when rootless containers detected.
 %dir /usr/share/copyfail-defense/conditional/systemd
 /usr/share/copyfail-defense/conditional/systemd/12-copyfail-defense-rxrpc-af.conf
+/usr/share/copyfail-defense/conditional/systemd/13-copyfail-defense-rds.conf
 /usr/share/copyfail-defense/conditional/systemd/15-copyfail-defense-userns.conf
 # %dir /var/lib/copyfail-defense moved to meta %files (v2.0.1 fixup M-2).
 # Existing example doc unchanged.
@@ -887,6 +915,29 @@ exit 0
 
 # ===========================================================================
 %changelog
+* Fri May 22 2026 Ryan MacDonald <ryan@rfxn.com> 2.1.0-1
+- Add PinTheft (RDS + io_uring) coverage: rds/rds_tcp/rds_rdma modprobe
+  blacklist, ~AF_RDS in always-on systemd 10-* drop-in, copyfail_afrds
+  auditd rule on AF_RDS=21 socket creation.
+- Add ssh-keysign-pwn (CVE-2026-46333) coverage: kernel.yama.ptrace_scope=2
+  sysctl key, copyfail_pidfd_getfd auditd rule on syscall 438 numeric.
+- Add commented-out kernel.io_uring_disabled=2 secondary mitigation
+  (operator opt-in; Linux 6.6+ only).
+- Bug-class taxonomy gains pintheft (Copy Fail class) and keysign-pwn
+  (FD-theft class - first member).
+- detect.sh adds detect_rds_workload() with three signals (Oracle oratab,
+  crsctl binary, rds.ko already loaded). Suppresses modprobe-rds on
+  Oracle Grid / HPC hosts; JSON state schema_version stays "2" (backward
+  compatible).
+- Auditor adds check_ptrace_scope, check_pidfd_getfd_auditd_rule,
+  check_rds_modprobe, check_af_rds_restrict. _aggregate_bug_classes()
+  extended with pintheft + keysign-pwn entries.
+- Build matrix expands to EL7/8/9/10. EL7 uses custom mock chroot with
+  vault.centos.org URLs; falls back to native rpmbuild if vault unreachable.
+- test-repo.sh adds IMAGE[7]=quay.io/centos/centos:7, defaults to (7 8 9 10),
+  adds new assertions for AF_RDS in 10-* drop-in, ptrace_scope sysctl,
+  both new audit-rule keys, rds-host suppression scenario.
+
 * Wed May 13 2026 rfxn.com <proj@rfxn.com> - 1:2.0.2-1
 - v2.0.2 broadens cf2 / Dirty Frag / Fragnesia coverage along three
   axes informed by the Fragnesia advisory and the Red Hat / AWS /
