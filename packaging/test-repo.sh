@@ -129,22 +129,36 @@ ok "running on $PRETTY_NAME"
 
 # v2.1.0: EL7 ships yum natively; install dnf via EPEL so the rest of
 # this script can call `dnf` uniformly across EL7/8/9/10. CentOS 7
-# reached EOL 2024-06-30 - mirror.centos.org is dead; rewrite default
-# .repo files to vault.centos.org BEFORE any yum operation.
+# reached EOL 2024-06-30 - mirror.centos.org is dead; replace default
+# repos with vault.centos.org + EPEL archive BEFORE any yum operation.
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    sed -i \
-        -e 's|^mirrorlist=|#mirrorlist=|g' \
-        -e 's|^#baseurl=http://mirror.centos.org|baseurl=https://vault.centos.org|g' \
-        /etc/yum.repos.d/CentOS-*.repo
-    yum install -y epel-release >/dev/null
-    # epel-release ships URLs pointing at mirrors.fedoraproject.org which
-    # no longer serves EL7; rewrite to archive.
-    sed -i \
-        -e 's|^metalink=|#metalink=|g' \
-        -e 's|^mirrorlist=|#mirrorlist=|g' \
-        -e 's|^#baseurl=https\?://download.fedoraproject.org/pub/epel|baseurl=https://archives.fedoraproject.org/pub/archive/epel|g' \
-        -e 's|^#baseurl=https\?://download.example/pub/epel|baseurl=https://archives.fedoraproject.org/pub/archive/epel|g' \
-        /etc/yum.repos.d/epel*.repo 2>/dev/null || true
+    # Remove all stock repos and write a single vault-based replacement.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    # Install dnf directly from EPEL archive (skip epel-release shim).
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 

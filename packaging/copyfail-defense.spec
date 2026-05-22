@@ -73,8 +73,11 @@ Requires:       %{name}-auditor  = %{epoch}:%{version}-%{release}
 Requires:       %{name}-sysctl   = %{epoch}:%{version}-%{release}
 # Soft dep: -audit pulls auditd transitively; minimal hosts can skip it
 # via `--setopt=install_weak_deps=false` or `dnf install <subpackages>`
-# selectively. `Recommends:` is rpm-4.13+; EL7's rpm-4.11 errors on it.
-%if 0%{?rhel} != 7
+# selectively. `Recommends:` is rpm-4.13+; EL7's rpm-4.11 errors on it,
+# so EL7 gets a hard Requires (no weak-dep mechanism available there).
+%if 0%{?rhel} == 7
+Requires:       %{name}-audit    = %{epoch}:%{version}-%{release}
+%else
 Recommends:     %{name}-audit    = %{epoch}:%{version}-%{release}
 %endif
 
