@@ -74,9 +74,10 @@ REPO_URL="${REPO_URL:-https://rfxn.github.io/copyfail/copyfail.repo}"
 KEY_URL="${KEY_URL:-https://rfxn.github.io/copyfail/RPM-GPG-KEY-copyfail}"
 UPGRADE_FIXTURE_DIR="${UPGRADE_FIXTURE_DIR:-/home/copyfail/rpmbuild/upgrade-fixture}"
 
-ELS=("$@")
-if [ "${#ELS[@]}" -eq 0 ]; then
-    ELS=(8 9 10)
+if [ $# -eq 0 ]; then
+    ELS=(7 8 9 10)
+else
+    ELS=("$@")
 fi
 
 # RHEL stand-ins. CentOS Stream 8 went EOL May 2024 and its baked-in
@@ -84,6 +85,7 @@ fi
 # CentOS Stream for EL9/EL10 (both still actively maintained and the
 # closest free analogues to their RHEL counterparts).
 declare -A IMAGE
+IMAGE[7]="quay.io/centos/centos:7"
 IMAGE[8]="docker.io/library/almalinux:8"
 IMAGE[9]="quay.io/centos/centos:stream9"
 IMAGE[10]="quay.io/centos/centos:stream10"
@@ -124,6 +126,13 @@ assert_no_scriptlet_fail() {
 # 0. Distro identity
 . /etc/os-release
 ok "running on $PRETTY_NAME"
+
+# v2.1.0: EL7 ships yum natively; install dnf via EPEL so the rest of
+# this script can call `dnf` uniformly across EL7/8/9/10.
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
 
 # 1. Add the dnf repo
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo \
@@ -189,7 +198,35 @@ grep -qE 'RestrictAddressFamilies=.*~AF_KEY' \
     /etc/systemd/system/sshd.service.d/10-copyfail-defense.conf \
     || fail "systemd 10-* drop-in missing ~AF_KEY restriction"
 
-ok "all expected files installed (subs + active dropins + opt-in examples + v2.0.2 sysctl/audit/AF_KEY)"
+# v2.1.0: PinTheft modprobe RDS template installed
+test -f /usr/share/copyfail-defense/conditional/modprobe/99-copyfail-defense-rds.conf \
+    || fail "rds modprobe template missing from -modprobe subpackage"
+
+# v2.1.0: PinTheft AF_RDS in always-on 10-* drop-in
+grep -qE 'RestrictAddressFamilies=.*~AF_RDS' \
+    /etc/systemd/system/sshd.service.d/10-copyfail-defense.conf \
+    || fail "systemd 10-* drop-in missing ~AF_RDS restriction (PinTheft)"
+
+# v2.1.0: ssh-keysign-pwn ptrace_scope sysctl key in -sysctl conf
+grep -qE '^[[:space:]]*-?kernel\.yama\.ptrace_scope[[:space:]]*=[[:space:]]*2' \
+    /etc/sysctl.d/99-copyfail-defense-userns.conf \
+    || fail "sysctl conf missing kernel.yama.ptrace_scope=2 (ssh-keysign-pwn)"
+
+# v2.1.0: PinTheft copyfail_afrds audit rule
+grep -qE 'a0=21 .* -k copyfail_afrds' \
+    /etc/audit/rules.d/99-copyfail-defense.rules \
+    || fail "audit rules missing AF_RDS (a0=21) -k copyfail_afrds"
+
+# v2.1.0: ssh-keysign-pwn copyfail_pidfd_getfd audit rule
+grep -qE '-S 438 .* -k copyfail_pidfd_getfd' \
+    /etc/audit/rules.d/99-copyfail-defense.rules \
+    || fail "audit rules missing pidfd_getfd (-S 438) -k copyfail_pidfd_getfd"
+
+# v2.1.0: RDS systemd template ships under conditional/systemd/
+test -f /usr/share/copyfail-defense/conditional/systemd/13-copyfail-defense-rds.conf \
+    || fail "rds systemd template missing from -systemd subpackage"
+
+ok "all expected files installed (subs + active dropins + opt-in examples + v2.0.2 sysctl/audit/AF_KEY + v2.1.0 rds/ptrace_scope/pidfd_getfd)"
 
 # 3b. Modprobe drop file content - 9 module entries summed across the
 # split files. Use cat-then-grep so the count is a single integer;
@@ -346,6 +383,11 @@ assert_no_scriptlet_fail() {
 # Add the repo so we can pull both old (afalg-defense-1.0.1) and new
 # (copyfail-defense-2.0.0) RPMs from it - the old ones are kept for
 # one release cycle per SPEC [D-22].
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 
 # Install old name explicitly. If the live repo no longer has 1.0.1,
@@ -433,6 +475,11 @@ assert_no_scriptlet_fail() {
 }
 
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
 dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
@@ -475,7 +522,20 @@ jq -e '.schema_version == "2" and
        .suppressed.sysctl_userns == false' \
        /var/lib/copyfail-defense/auto-detect.json >/dev/null \
     || fail "auto-detect.json reports workloads on clean host (or wrong v2.0.2 schema)"
-ok "clean host: all drop files present (18 dropins + sysctl + audit rules) + JSON reports clean"
+
+# v2.1.0: detected.rds_workload key present
+python3 -c "import json,sys; d=json.load(open('/var/lib/copyfail-defense/auto-detect.json')); sys.exit(0 if 'rds_workload' in d.get('detected',{}) else 1)" \
+    || fail "auto-detect.json missing detected.rds_workload key"
+
+# v2.1.0: applied.modprobe_rds is true on clean host (no Oracle signals)
+python3 -c "import json,sys; d=json.load(open('/var/lib/copyfail-defense/auto-detect.json')); sys.exit(0 if d.get('applied',{}).get('modprobe_rds') is True else 1)" \
+    || fail "auto-detect.json applied.modprobe_rds should be true on clean host"
+
+# v2.1.0: actual /etc/modprobe.d/ file present on clean host
+test -f /etc/modprobe.d/99-copyfail-defense-rds.conf \
+    || fail "rds modprobe file not staged on clean host"
+
+ok "clean host: all drop files present (18 dropins + sysctl + audit rules + v2.1.0 rds modprobe) + JSON reports clean"
 echo "=== CLEAN HOST OK ==="
 INNER
 }
@@ -522,6 +582,11 @@ charon { send_vendor_id = yes }
 EOC
 
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
 dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
@@ -581,6 +646,11 @@ mkdir -p /etc/openafs
 echo "lan.example.com" > /etc/openafs/ThisCell
 
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
 dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
@@ -651,6 +721,11 @@ install -d -o alice -g alice -m 0700 \
 touch /home/alice/.local/share/containers/storage/overlay-containers
 
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
 dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
@@ -731,6 +806,11 @@ done
 # Crucially: do NOT create /home/cpuser*/.local/share/containers/.
 
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
 dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
@@ -782,6 +862,11 @@ install -d -o alice -g alice -m 0700 \
 touch /etc/copyfail/force-full
 
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
 dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
@@ -829,6 +914,11 @@ assert_no_scriptlet_fail() {
 }
 
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
 dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
@@ -886,6 +976,11 @@ assert_no_scriptlet_fail() {
 }
 
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
 
 # Install ONLY -systemd (and let dnf pull meta as a hard Require).
@@ -970,6 +1065,11 @@ assert_no_scriptlet_fail() {
 }
 
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
 
 # Install v2.0.0 explicitly. If the repo no longer has v2.0.0, SKIP.
@@ -1051,6 +1151,11 @@ mkdir -p /var/lib/flatpak/app/org.example.Test/current/active \
          /var/lib/flatpak/runtime
 
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
 dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
@@ -1090,6 +1195,61 @@ jq -e '.detected.rootless_containers.present == false' \
 
 ok "userns_consumer (Flatpak): sysctl drop-in suppressed; per-unit cuts retained"
 echo "=== USERNS-CONSUMER OK ==="
+INNER
+}
+
+# v2.1.0: Pre-stage an Oracle Grid signal (/etc/oratab) before installing
+# copyfail-defense. detect.sh must read this, suppress the host-wide RDS
+# modprobe blacklist (applied.modprobe_rds=false, suppressed.modprobe_rds=true),
+# and refuse to write /etc/modprobe.d/99-copyfail-defense-rds.conf.
+run_rds_host_test_in() {
+    local image="$1"
+    podman run --rm -i --network=host \
+        -e REPO_URL="$REPO_URL" -e KEY_URL="$KEY_URL" \
+        "$image" /bin/bash <<'INNER'
+set -euo pipefail
+fail() { echo "FAIL: $*" >&2; exit 1; }
+ok()   { echo "ok:   $*"; }
+assert_no_scriptlet_fail() {
+    local _log="$1"
+    if grep -qE 'scriptlet failed|Error in (POST|PRE)|syntax error near' "$_log"; then
+        echo "--- RPM scriptlet failure markers in dnf output ---" >&2
+        grep -nE 'scriptlet failed|Error in (POST|PRE)|syntax error near' "$_log" >&2
+        echo "--- end ---" >&2
+        fail "RPM scriptlet failure detected during dnf operation"
+    fi
+}
+
+# Pre-stage Oracle Grid signal BEFORE installing the package. detect.sh
+# reads /etc/oratab and gates the host-wide RDS cut.
+mkdir -p /etc
+echo "DEFAULTDB:/u01/app/oracle/product/19.3.0/dbhome_1:Y" > /etc/oratab
+
+curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    yum install -y epel-release >/dev/null
+    yum install -y dnf >/dev/null
+fi
+dnf install -y python3 jq >/dev/null 2>&1 || true
+dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+assert_no_scriptlet_fail /tmp/dnf.log
+
+# Detection must report rds_workload=present.
+jq -e '.detected.rds_workload.present == true' \
+       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+    || fail "Oracle /etc/oratab signal not detected (rds_workload.present != true)"
+
+# Suppression decision: applied.modprobe_rds=false AND suppressed.modprobe_rds=true.
+python3 -c "import json,sys; d=json.load(open('/var/lib/copyfail-defense/auto-detect.json')); a=d.get('applied',{}).get('modprobe_rds'); s=d.get('suppressed',{}).get('modprobe_rds'); sys.exit(0 if (a is False and s is True) else 1)" \
+    || fail "rds_host: suppression decision wrong (expect applied.modprobe_rds=false, suppressed.modprobe_rds=true)"
+
+# Host-wide RDS modprobe drop-in MUST NOT exist on disk.
+[ ! -f /etc/modprobe.d/99-copyfail-defense-rds.conf ] \
+    || fail "rds modprobe file staged despite Oracle workload signal"
+
+ok "rds_host: Oracle signal honored; host-wide RDS cut suppressed"
+echo "=== RDS-HOST OK ==="
 INNER
 }
 
@@ -1158,11 +1318,13 @@ for el in "${ELS[@]}"; do
     # v2.0.1: detection scenario tests (rev 2: + subuid_no_storage;
     # fixup pass: + systemd_only for M-2 canary).
     # v2.0.2: + userns_consumer for Flatpak/firejail/browser signal.
+    # v2.1.0: + rds_host for Oracle Grid /etc/oratab suppression.
     for scenario_name in clean_host ipsec_host afs_host rootless_host \
                          subuid_no_storage \
                          force_full redetect split_upgrade \
                          systemd_only \
-                         userns_consumer; do
+                         userns_consumer \
+                         rds_host; do
         echo
         step "${scenario_name} test"
         scenario_rc=0
