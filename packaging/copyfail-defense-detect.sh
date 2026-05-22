@@ -18,7 +18,7 @@ ETC_MODPROBE="/etc/modprobe.d"
 ETC_SYSTEMD="/etc/systemd/system"
 ETC_SYSCTL="/etc/sysctl.d"
 FORCE_FULL="/etc/copyfail/force-full"
-TOOL_VERSION="2.0.2"
+TOOL_VERSION="2.1.0"
 
 # Active tenant units (must match SPEC §4.2 and v2.0.0 CF_CLASS_TENANT_UNITS)
 TENANT_UNITS=("user@" "sshd" "cron" "crond" "atd")
@@ -229,12 +229,52 @@ detect_userns_consumers() {
     return 0
 }
 
+RDS_WORKLOAD_PRESENT="false"
+RDS_WORKLOAD_SIGNALS=()
+
+# v2.1.0: PinTheft mitigation gate. RDS modprobe blacklist is suppressed
+# when an Oracle Grid / clusterware / HPC workload is detected. Stock
+# RHEL/Alma/Rocky/Oracle UEK kernels do not ship CONFIG_RDS=m, so the
+# blacklist is a no-op there - we ship it anyway for defense in depth
+# against ELRepo kernel-ml swaps, but suppress on Oracle hosts where
+# rds.ko might be needed.
+detect_rds_workload() {
+    # Signal 1: /etc/oratab with non-comment, non-blank entries.
+    # Canonical marker for any Oracle product install (Grid, RAC, DB).
+    if [ -f /etc/oratab ] && \
+       grep -qE '^[[:space:]]*[^#[:space:]]' /etc/oratab 2>/dev/null; then
+        RDS_WORKLOAD_PRESENT="true"
+        RDS_WORKLOAD_SIGNALS+=("/etc/oratab: non-comment entry present")
+    fi
+
+    # Signal 2: Oracle Clusterware control binary. Path conventional but
+    # version-dependent; bounded find catches /u01/app/.../grid/bin/crsctl.
+    if find /u01/app /opt/oracle -maxdepth 6 -type f \
+            -name crsctl -path '*/grid/bin/crsctl' 2>/dev/null | grep -q .; then
+        RDS_WORKLOAD_PRESENT="true"
+        RDS_WORKLOAD_SIGNALS+=("oracle crsctl present (Grid Infrastructure)")
+    fi
+
+    # Signal 3: RDS module already loaded in running kernel - workload
+    # in active use. Strong signal regardless of distro.
+    local m
+    for m in rds rds_tcp rds_rdma; do
+        if [ -d "/sys/module/$m" ]; then
+            RDS_WORKLOAD_PRESENT="true"
+            RDS_WORKLOAD_SIGNALS+=("/sys/module/$m: loaded in running kernel")
+        fi
+    done
+
+    return 0
+}
+
 # SUPPRESS_*: true if mitigation is suppressed; false if applied.
 SUPPRESS_MODPROBE_CF2_XFRM="false"
 SUPPRESS_MODPROBE_RXRPC="false"
 SUPPRESS_SYSTEMD_RXRPC_AF="false"
 SUPPRESS_SYSTEMD_USERNS_USER_AT="false"
 SUPPRESS_SYSCTL_USERNS="false"
+SUPPRESS_MODPROBE_RDS="false"
 
 # force-full sentinel resolver: returns 0 (active) only for a regular
 # file. Logs WARN if path exists as directory, broken symlink, etc -
@@ -277,6 +317,7 @@ decide_suppressions() {
        [ "${USERNS_CONSUMERS_PRESENT}" = "true" ]; then
         SUPPRESS_SYSCTL_USERNS="true"
     fi
+    [ "${RDS_WORKLOAD_PRESENT}" = "true" ] && SUPPRESS_MODPROBE_RDS="true"
     # Explicit success: the chained `[ x ] && SUP=...` returns 1 when
     # the final test is false (clean host, nothing detected). Under
     # the script's `set -e` that would abort main() before
@@ -327,6 +368,25 @@ apply_modprobe() {
     elif [ -f "${src}" ]; then
         cmp_and_install "${src}" "${dst}" "modprobe rxrpc"
     fi
+    apply_rds_modprobe
+    return 0
+}
+
+apply_rds_modprobe() {
+    local src dst
+    src="${TEMPLATE_DIR}/modprobe/99-copyfail-defense-rds.conf"
+    dst="${ETC_MODPROBE}/99-copyfail-defense-rds.conf"
+    if [ ! -f "${src}" ]; then
+        # Subpackage -modprobe not installed; nothing to do.
+        return 0
+    fi
+    if [ "${SUPPRESS_MODPROBE_RDS}" = "true" ]; then
+        rm -f "${dst}"
+        log "modprobe rds: suppressed (Oracle/RDS workload detected)"
+    else
+        cmp_and_install "${src}" "${dst}" "modprobe rds"
+    fi
+    return 0
 }
 
 apply_systemd() {
@@ -383,7 +443,14 @@ apply_sysctl() {
 teardown_modprobe() {
     rm -f "${ETC_MODPROBE}/99-copyfail-defense-cf2-xfrm.conf"
     rm -f "${ETC_MODPROBE}/99-copyfail-defense-rxrpc.conf"
+    rm -f "${ETC_MODPROBE}/99-copyfail-defense-rds.conf"
     log "modprobe teardown: removed conditional /etc/modprobe.d/* files"
+}
+
+teardown_rds_modprobe() {
+    rm -f "${ETC_MODPROBE}/99-copyfail-defense-rds.conf"
+    log "modprobe rds teardown: removed /etc/modprobe.d/99-copyfail-defense-rds.conf"
+    return 0
 }
 
 teardown_sysctl() {
@@ -419,6 +486,11 @@ write_state_json() {
         sysctl_template_present="true"
     fi
 
+    local modprobe_rds_template_present="false"
+    if [ -f "${TEMPLATE_DIR}/modprobe/99-copyfail-defense-rds.conf" ]; then
+        modprobe_rds_template_present="true"
+    fi
+
     # Marshall signal arrays as NUL-delimited bytes via stdin.
     # Bash command substitution silently strips NUL bytes from a captured
     # string, so an env-var carrier collapses signal1\0signal2\0 into
@@ -434,6 +506,8 @@ write_state_json() {
         printf 'CFD_END_ROOTLESS\0'
         printf '%s\0' "${USERNS_CONSUMERS_SIGNALS[@]+${USERNS_CONSUMERS_SIGNALS[@]}}"
         printf 'CFD_END_USERNS_CONSUMERS\0'
+        printf '%s\0' "${RDS_WORKLOAD_SIGNALS[@]+${RDS_WORKLOAD_SIGNALS[@]}}"
+        printf 'CFD_END_RDS_WORKLOAD\0'
     } | env \
         CFD_TOOL_VERSION="${TOOL_VERSION}" \
         CFD_TIMESTAMP="$(date +%s)" \
@@ -443,12 +517,15 @@ write_state_json() {
         CFD_AFS_PRESENT="${AFS_PRESENT}" \
         CFD_ROOTLESS_PRESENT="${ROOTLESS_PRESENT}" \
         CFD_USERNS_CONSUMERS_PRESENT="${USERNS_CONSUMERS_PRESENT}" \
+        CFD_RDS_WORKLOAD_PRESENT="${RDS_WORKLOAD_PRESENT}" \
         CFD_SUP_MODPROBE_CF2_XFRM="${SUPPRESS_MODPROBE_CF2_XFRM}" \
         CFD_SUP_MODPROBE_RXRPC="${SUPPRESS_MODPROBE_RXRPC}" \
         CFD_SUP_SYSTEMD_RXRPC_AF="${SUPPRESS_SYSTEMD_RXRPC_AF}" \
         CFD_SUP_SYSTEMD_USERNS_USER_AT="${SUPPRESS_SYSTEMD_USERNS_USER_AT}" \
         CFD_SUP_SYSCTL_USERNS="${SUPPRESS_SYSCTL_USERNS}" \
+        CFD_SUP_MODPROBE_RDS="${SUPPRESS_MODPROBE_RDS}" \
         CFD_SYSCTL_TEMPLATE_PRESENT="${sysctl_template_present}" \
+        CFD_MODPROBE_RDS_TEMPLATE_PRESENT="${modprobe_rds_template_present}" \
         python3 -c '
 import json, os, sys
 
@@ -472,13 +549,16 @@ ipsec_signals      = take_until("CFD_END_IPSEC")
 afs_signals        = take_until("CFD_END_AFS")
 rootless_signals   = take_until("CFD_END_ROOTLESS")
 consumers_signals  = take_until("CFD_END_USERNS_CONSUMERS")
+rds_workload_signals = take_until("CFD_END_RDS_WORKLOAD")
 
 sup_xfrm       = b("CFD_SUP_MODPROBE_CF2_XFRM")
 sup_rxrpc      = b("CFD_SUP_MODPROBE_RXRPC")
 sup_rxaf       = b("CFD_SUP_SYSTEMD_RXRPC_AF")
 sup_userns     = b("CFD_SUP_SYSTEMD_USERNS_USER_AT")
 sup_sysctl     = b("CFD_SUP_SYSCTL_USERNS")
+sup_rds        = b("CFD_SUP_MODPROBE_RDS")
 sysctl_present = b("CFD_SYSCTL_TEMPLATE_PRESENT")
+modprobe_rds_template_present = b("CFD_MODPROBE_RDS_TEMPLATE_PRESENT")
 
 doc = {
     "schema_version": "2",
@@ -492,6 +572,7 @@ doc = {
         "afs":                 {"present": b("CFD_AFS_PRESENT"),               "signals": afs_signals},
         "rootless_containers": {"present": b("CFD_ROOTLESS_PRESENT"),          "signals": rootless_signals},
         "userns_consumers":    {"present": b("CFD_USERNS_CONSUMERS_PRESENT"),  "signals": consumers_signals},
+        "rds_workload":        {"present": b("CFD_RDS_WORKLOAD_PRESENT"),      "signals": rds_workload_signals},
     },
     "suppressed": {
         "modprobe_cf2_xfrm":      sup_xfrm,
@@ -499,6 +580,7 @@ doc = {
         "systemd_rxrpc_af":       sup_rxaf,
         "systemd_userns_user_at": sup_userns,
         "sysctl_userns":          sup_sysctl,
+        "modprobe_rds":           sup_rds,
     },
     "applied": {
         "modprobe_cf1":              True,
@@ -520,6 +602,7 @@ doc = {
         # subpackage installed). Otherwise the JSON would misreport
         # apply state on hosts where -sysctl is excluded from install.
         "sysctl_userns":             (not sup_sysctl) and sysctl_present,
+        "modprobe_rds":              (not sup_rds) and modprobe_rds_template_present,
     },
 }
 with open(sys.argv[1], "w") as f:
@@ -552,6 +635,7 @@ main() {
             detect_afs
             detect_rootless_containers
             detect_userns_consumers
+            detect_rds_workload
             decide_suppressions
             if [ "${scope}" = "modprobe" ] || [ "${scope}" = "both" ] || [ "${scope}" = "all" ]; then
                 apply_modprobe
@@ -563,7 +647,7 @@ main() {
                 apply_sysctl
             fi
             write_state_json "${STATE_FILE}"
-            log "apply ${scope} complete: ipsec=${IPSEC_PRESENT} afs=${AFS_PRESENT} rootless=${ROOTLESS_PRESENT} userns_consumers=${USERNS_CONSUMERS_PRESENT}"
+            log "apply ${scope} complete: ipsec=${IPSEC_PRESENT} afs=${AFS_PRESENT} rootless=${ROOTLESS_PRESENT} userns_consumers=${USERNS_CONSUMERS_PRESENT} rds_workload=${RDS_WORKLOAD_PRESENT}"
             ;;
         teardown)
             case "${scope}" in
