@@ -415,7 +415,32 @@ assert_no_scriptlet_fail() {
 # one release cycle per SPEC [D-22].
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    yum install -y epel-release >/dev/null
+    # CentOS 7 EOL 2024-06-30; rewrite default repos to vault.centos.org.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
@@ -507,7 +532,32 @@ assert_no_scriptlet_fail() {
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    yum install -y epel-release >/dev/null
+    # CentOS 7 EOL 2024-06-30; rewrite default repos to vault.centos.org.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
@@ -614,7 +664,32 @@ EOC
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    yum install -y epel-release >/dev/null
+    # CentOS 7 EOL 2024-06-30; rewrite default repos to vault.centos.org.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
@@ -678,7 +753,32 @@ echo "lan.example.com" > /etc/openafs/ThisCell
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    yum install -y epel-release >/dev/null
+    # CentOS 7 EOL 2024-06-30; rewrite default repos to vault.centos.org.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
@@ -753,7 +853,32 @@ touch /home/alice/.local/share/containers/storage/overlay-containers
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    yum install -y epel-release >/dev/null
+    # CentOS 7 EOL 2024-06-30; rewrite default repos to vault.centos.org.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
@@ -838,7 +963,32 @@ done
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    yum install -y epel-release >/dev/null
+    # CentOS 7 EOL 2024-06-30; rewrite default repos to vault.centos.org.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
@@ -894,7 +1044,32 @@ touch /etc/copyfail/force-full
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    yum install -y epel-release >/dev/null
+    # CentOS 7 EOL 2024-06-30; rewrite default repos to vault.centos.org.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
@@ -946,7 +1121,32 @@ assert_no_scriptlet_fail() {
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    yum install -y epel-release >/dev/null
+    # CentOS 7 EOL 2024-06-30; rewrite default repos to vault.centos.org.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
@@ -1008,7 +1208,32 @@ assert_no_scriptlet_fail() {
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    yum install -y epel-release >/dev/null
+    # CentOS 7 EOL 2024-06-30; rewrite default repos to vault.centos.org.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
@@ -1097,7 +1322,32 @@ assert_no_scriptlet_fail() {
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    yum install -y epel-release >/dev/null
+    # CentOS 7 EOL 2024-06-30; rewrite default repos to vault.centos.org.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
@@ -1183,7 +1433,32 @@ mkdir -p /var/lib/flatpak/app/org.example.Test/current/active \
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    yum install -y epel-release >/dev/null
+    # CentOS 7 EOL 2024-06-30; rewrite default repos to vault.centos.org.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
@@ -1258,7 +1533,32 @@ echo "DEFAULTDB:/u01/app/oracle/product/19.3.0/dbhome_1:Y" > /etc/oratab
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
-    yum install -y epel-release >/dev/null
+    # CentOS 7 EOL 2024-06-30; rewrite default repos to vault.centos.org.
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
