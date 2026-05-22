@@ -12,11 +12,15 @@ Covers three live LPE chains that share the same `splice()` →
 | **cf2 / Dirty Frag-ESP** | CVE-2026-43284 | `esp_input` skip_cow | 4-byte STORE via `seq_hi` |
 | **Dirty Frag-RxRPC** | CVE-2026-43500 | `rxkad_verify_packet_1` | 4-byte and 8-byte STORE |
 | **Fragnesia** | (no CVE yet — same surface as CVE-2026-43284) | `espintcp` ULP after splice | byte STORE in cached page |
+| **PinTheft** *(v2.1.0)* | CVE pending | RDS zerocopy double-free + io_uring fixed-buffer | page-cache overwrite of SUID binary |
+| **ssh-keysign-pwn** *(v2.1.0, FD-theft class)* | CVE-2026-46333 | `__ptrace_may_access()` race + `pidfd_getfd` on exiting SUID | open-fd theft from ssh-keysign / chage |
 
 Userspace primitives stack into a single `dnf install`: an `LD_PRELOAD`
 shim, a kernel-module-entry-point cut, kernel-enforced systemd
 restrictions, and a read-only host posture auditor that reports
-per-class coverage. Signed RPMs for EL8 / EL9 / EL10.
+per-class coverage. Signed RPMs for EL7 / EL8 / EL9 / EL10.
+
+Supported: EL7, EL8, EL9, EL10 (x86_64).
 
 <a href="https://rfxn.github.io/copyfail/"><img src="https://img.shields.io/badge/%F0%9F%93%A6%20yum%2Fdnf%20repo-rfxn.github.io%2Fcopyfail-22d3ee?style=for-the-badge&labelColor=09090b" alt="copyfail-defense yum/dnf package repo"></a>
 <a href="https://www.rfxn.com/research/copyfail-cve-2026-31431"><img src="https://img.shields.io/badge/%F0%9F%94%AC%20deep%20dive-rfxn.com%2Fresearch-d97757?style=for-the-badge&labelColor=09090b" alt="Deep-dive research article on rfxn.com"></a>
@@ -24,7 +28,7 @@ per-class coverage. Signed RPMs for EL8 / EL9 / EL10.
 [![Bug class](https://img.shields.io/badge/Copy%20Fail%20bug%20class-cf1%20%2F%20cf2%20%2F%20Dirty%20Frag-d97757?labelColor=09090b)](#what-this-protects-against)
 [![Severity](https://img.shields.io/badge/severity-LOCAL%20PRIVESC-d44d4d?labelColor=09090b)](#what-this-protects-against)
 [![License](https://img.shields.io/badge/license-GPL--2.0-22d3ee?labelColor=09090b)](LICENSE)
-[![EL8/9/10](https://img.shields.io/badge/EL-8%20%2F%209%20%2F%2010-4ade80?labelColor=09090b)](https://rfxn.github.io/copyfail/)
+[![EL7/8/9/10](https://img.shields.io/badge/EL-7%20%2F%208%20%2F%209%20%2F%2010-4ade80?labelColor=09090b)](https://rfxn.github.io/copyfail/)
 [![Latest release](https://img.shields.io/github/v/release/rfxn/copyfail?label=release&color=22d3ee&labelColor=09090b)](https://github.com/rfxn/copyfail/releases/latest)
 
 [Install](#install) · [Verify](#verify) · [Coverage](#coverage-matrix) · [Defense in depth](#defense-in-depth) · [Audit](#audit-the-host) · [Subpackages](#subpackages) · [Overrides](#override-paths) · [Signatures](#verifying-signatures) · [Limitations](#limitations)
@@ -35,11 +39,13 @@ per-class coverage. Signed RPMs for EL8 / EL9 / EL10.
 
 > [!NOTE]
 > Upgrading from `afalg-defense` v1.0.x or any `copyfail-defense`
-> 2.0.x release is a single command: `dnf upgrade copyfail-defense`.
+> 2.0.x release is a single command: `sudo dnf upgrade -y copyfail-defense`.
 > Auto-detection re-runs on every upgrade and suppresses any
 > conflicting drop-ins detected on your host (IPsec, AFS, rootless
-> containers, Flatpak, firejail, desktop browsers; see Auto-detection
-> below).
+> containers, Flatpak, firejail, desktop browsers, RDS / Oracle
+> clusterware; see Auto-detection below). All six subpackages
+> (`-shim`, `-modprobe`, `-systemd`, `-sysctl`, `-auditor`, `-audit`)
+> auto-update with the meta package.
 
 ---
 
@@ -52,8 +58,9 @@ sudo dnf install -y copyfail-defense
 sudo /usr/sbin/copyfail-shim-enable
 ```
 
-One repo file works on EL8/EL9/EL10. RPMs are GPG-signed; dnf imports
-the public key on first use. Cross-check the fingerprint when prompted:
+One repo file works on EL7/EL8/EL9/EL10. RPMs are GPG-signed; dnf
+imports the public key on first use. Cross-check the fingerprint
+when prompted:
 
 ```
 6001 1CDC EA2F F52D 975A  FDEE 6D30 F32C D5E8 0F80
@@ -76,6 +83,15 @@ Auditor only (no `LD_PRELOAD`, for hot infrastructure):
 ```sh
 sudo dnf install -y copyfail-defense-auditor
 ```
+
+> [!NOTE]
+> **EL7 (CentOS 7) note.** EL7 RPMs are built against
+> `vault.centos.org` repositories (CentOS 7 reached EOL 2024-06-30).
+> If your host loses access to `vault.centos.org`, install via the
+> GitHub release assets directly; the RPMs themselves carry no
+> runtime vault dependency. The repo file works against both
+> `mirror.centos.org`-style (EL8/9/10) and vault-style (EL7) DNS
+> on first install.
 
 ## Verify
 
@@ -154,18 +170,24 @@ hardening (suid lockdown, auditd rules) is in its own table below
 because no subpackage performs those actions; the auditor only
 recommends them conditionally.
 
-| Mitigation rung                                  | cf1 | cf2 | DF-ESP | DF-RxRPC | Fragnesia |
-|---                                               |:---:|:---:|:---:   |:---:     |:---:      |
-| LD_PRELOAD shim (`AF_ALG` hook)                  | ✅  |  ·  |   ·    |    ¹     |    ·      |
-| modprobe `algif_aead` family                     | ²   |  ·  |   ·    |    ·     |    ·      |
-| modprobe `esp4 esp6 xfrm_user xfrm_algo`         |  ·  | ✅  |  ✅    |    ·     |   ✅      |
-| modprobe `rxrpc`                                 |  ·  |  ·  |   ·    |   ✅     |    ·      |
-| systemd `RestrictAddressFamilies=~AF_ALG`        | ✅  |  ·  |   ·    |    ·     |    ·      |
-| systemd `RestrictAddressFamilies=~AF_KEY` *(v2.0.2)* |  ·  | ✅  |  ✅    |    ·     |   ✅      |
-| systemd `RestrictAddressFamilies=~AF_RXRPC`      |  ·  |  ·  |   ·    |   ✅     |    ·      |
-| systemd `RestrictNamespaces=~user ~net`          |  ·  | ✅  |  ✅    |    ·     |   ✅      |
-| sysctl `user.max_user_namespaces=0` *(v2.0.2)*   |  ·  | ✅  |  ✅    |    ·     |   ✅      |
-| auditd tripwire rules *(v2.0.2)*                 | ³   | ³   |  ³     |   ³      |   ³       |
+| Mitigation rung                                  | cf1 | cf2 | DF-ESP | DF-RxRPC | Fragnesia | PinTheft | keysign-pwn |
+|---                                               |:---:|:---:|:---:   |:---:     |:---:      |:---:     |:---:        |
+| LD_PRELOAD shim (`AF_ALG` hook)                  | ✅  |  ·  |   ·    |    ¹     |    ·      |    ·     |     ·       |
+| modprobe `algif_aead` family                     | ²   |  ·  |   ·    |    ·     |    ·      |    ·     |     ·       |
+| modprobe `esp4 esp6 xfrm_user xfrm_algo`         |  ·  | ✅  |  ✅    |    ·     |   ✅      |    ·     |     ·       |
+| modprobe `rxrpc`                                 |  ·  |  ·  |   ·    |   ✅     |    ·      |    ·     |     ·       |
+| modprobe `rds rds_tcp rds_rdma` *(v2.1.0)*       |  ·  |  ·  |   ·    |    ·     |    ·      |   ✅     |     ·       |
+| systemd `RestrictAddressFamilies=~AF_ALG`        | ✅  |  ·  |   ·    |    ·     |    ·      |    ·     |     ·       |
+| systemd `RestrictAddressFamilies=~AF_KEY` *(v2.0.2)* |  ·  | ✅  |  ✅    |    ·     |   ✅      |    ·     |     ·       |
+| systemd `RestrictAddressFamilies=~AF_RXRPC`      |  ·  |  ·  |   ·    |   ✅     |    ·      |    ·     |     ·       |
+| systemd `RestrictAddressFamilies=~AF_RDS` *(v2.1.0)* |  ·  |  ·  |   ·    |    ·     |    ·      |   ✅     |     ·       |
+| systemd `RestrictNamespaces=~user ~net`          |  ·  | ✅  |  ✅    |    ·     |   ✅      |    ·     |     ·       |
+| sysctl `user.max_user_namespaces=0` *(v2.0.2)*   |  ·  | ✅  |  ✅    |    ·     |   ✅      |    ·     |     ·       |
+| sysctl `kernel.yama.ptrace_scope=2` *(v2.1.0)*   |  ·  |  ·  |   ·    |    ·     |    ·      |    ·     |    ✅       |
+| sysctl `kernel.io_uring_disabled=2` *(v2.1.0)* ⁴ |  ·  |  ·  |   ·    |    ·     |    ·      |   ✅ ⁴   |     ·       |
+| auditd tripwire rules *(v2.0.2)*                 | ³   | ³   |  ³     |   ³      |   ³       |    ·     |     ·       |
+| auditd `copyfail_afrds` *(v2.1.0)*               |  ·  |  ·  |   ·    |    ·     |    ·      |   ³      |     ·       |
+| auditd `copyfail_pidfd_getfd` *(v2.1.0)*         |  ·  |  ·  |   ·    |    ·     |    ·      |    ·     |    ³        |
 
 ¹ Catches the `cksum` step in the public DF-RxRPC PoC, not the kernel
 sink itself. Useful as defense-in-depth, not as a primary stop.
@@ -175,22 +197,52 @@ or non-RHEL kernels where `algif_aead` ships modular. On RHEL the
 supported workaround is `grubby --update-kernel ALL --args
 "initcall_blacklist=algif_aead_init"` + reboot; the auditor reports
 this state under MITIGATION.
-³ Detection, not mitigation — telemetry for `socket(AF_ALG/AF_KEY/AF_RXRPC)`
-syscalls from unprivileged users. Real value is on hosts where
-modprobe blacklists are auto-suppressed (IPsec / AFS workloads) and
-the kernel sink is intentionally reachable; rules become the
-residual tripwire. Query via `ausearch -k copyfail_afalg` /
-`copyfail_afkey` / `copyfail_afrxrpc`.
+³ Detection, not mitigation — telemetry for
+`socket(AF_ALG/AF_KEY/AF_RXRPC/AF_RDS)` syscalls and `pidfd_getfd`
+from unprivileged users. Real value is on hosts where modprobe
+blacklists are auto-suppressed (IPsec / AFS / RDS workloads) and the
+kernel sink is intentionally reachable; rules become the residual
+tripwire. Query via `ausearch -k copyfail_afalg` / `copyfail_afkey`
+/ `copyfail_afrxrpc` / `copyfail_afrds` / `copyfail_pidfd_getfd`.
+⁴ `kernel.io_uring_disabled=2` is operator opt-in (the v2.1.0
+`-sysctl` drop-in ships the line commented out). io_uring is widely
+used by databases, runtimes, and container engines; uncomment only
+after confirming no in-tree workload depends on it. PinTheft's
+primary cut is the `rds`/`rds_tcp`/`rds_rdma` modprobe blacklist;
+io_uring is secondary defense for the few hosts where RDS is
+intentionally reachable.
 
 ### Reference: kernel patches and detection signatures
 
-| Class     | Upstream patch  | Audit signature                |
-|---        |---              |---                             |
-| cf1       | `a664bf3d`      | `socket(a0=38)` / `copyfail_afalg`   |
-| cf2       | `f4c50a4034`    | `socket(a0=15)` / `copyfail_afkey` · `unshare(NEWUSER)` |
-| DF-ESP    | `f4c50a4034`    | same as cf2                    |
-| DF-RxRPC  | none upstream   | `socket(a0=33)` / `copyfail_afrxrpc` · `add_key("rxrpc",...)` |
-| Fragnesia | netdev only (2026-05-13); not yet in stable trees | same as cf2 + `setsockopt(TCP_ULP="espintcp")` |
+| Class       | Upstream patch  | Audit signature                |
+|---          |---              |---                             |
+| cf1         | `a664bf3d`      | `socket(a0=38)` / `copyfail_afalg`   |
+| cf2         | `f4c50a4034`    | `socket(a0=15)` / `copyfail_afkey` · `unshare(NEWUSER)` |
+| DF-ESP      | `f4c50a4034`    | same as cf2                    |
+| DF-RxRPC    | none upstream   | `socket(a0=33)` / `copyfail_afrxrpc` · `add_key("rxrpc",...)` |
+| Fragnesia   | netdev only (2026-05-13); not yet in stable trees | same as cf2 + `setsockopt(TCP_ULP="espintcp")` |
+| PinTheft    | none upstream as of v2.1.0 ship  | `socket(a0=21)` / `copyfail_afrds` |
+| keysign-pwn | none upstream (CVE-2026-46333)   | `pidfd_getfd` syscall 438 / `copyfail_pidfd_getfd` |
+
+### Audit keys (`-audit` subpackage)
+
+The `copyfail-defense-audit` subpackage installs auditd tripwire
+rules under these keys. Existing keys are unchanged in v2.1.0; the
+v2.1.0 cut adds the two `*v2.1.0*` rows at the bottom.
+
+| Key                       | Signature                                                              |
+|---                        |---                                                                     |
+| `copyfail_afalg`          | `socket(AF_ALG=38)` by unprivileged user (cf1)                         |
+| `copyfail_afkey`          | `socket(AF_KEY=15)` by unprivileged user (cf2 / DF-ESP / Fragnesia)    |
+| `copyfail_afrxrpc`        | `socket(AF_RXRPC=33)` by unprivileged user (DF-RxRPC)                  |
+| `copyfail_afrds` *(v2.1.0)*       | `socket(AF_RDS=21)` by unprivileged user (PinTheft)            |
+| `copyfail_pidfd_getfd` *(v2.1.0)* | `pidfd_getfd()` syscall 438 by unprivileged user (ssh-keysign-pwn) |
+
+SIEM consumers querying by audit key: existing keys
+(`copyfail_afalg`, `copyfail_afkey`, `copyfail_afrxrpc`) are
+unchanged in v2.1.0. Two new keys (`copyfail_afrds`,
+`copyfail_pidfd_getfd`) are additive; existing `ausearch -k <key>`
+queries continue to work without modification.
 
 The auditor emits a page-cache integrity probe (cached IOC) for every
 class; see `--json` `posture.bug_classes[*].kernel_sink`.
@@ -208,9 +260,22 @@ Review every line before pasting.
 | `auditd` rule `cf_userns` (`unshare(CLONE_NEWUSER)`)       | cf2, DF-ESP   | Hosts where `auditd` is tuned for userns events (otherwise high alert noise). Pairs with the v2.0.2 `-audit` subpackage rules. |
 | `auditd` rule `cf_addkey` (`add_key("rxrpc",...)`)         | DF-RxRPC      | Always; rxrpc keyring activity is rare enough that the false-positive rate stays low. The v2.0.2 `-audit` subpackage already installs the `socket(AF_RXRPC,...)` tripwire — `add_key` catches the next step in the chain. |
 
+### CVE / disclosure references
+
+| Bug class | Disclosure link |
+|---|---|
+| cf1 | [CVE-2026-31431](https://www.rfxn.com/research/copyfail-cve-2026-31431) |
+| cf2 / Dirty Frag-ESP | CVE-2026-43284 |
+| Dirty Frag-RxRPC | CVE-2026-43500 |
+| Fragnesia | (no CVE yet — same surface as CVE-2026-43284) |
+| PinTheft | CVE pending — RDS zerocopy + io_uring fixed-buffer page-cache overwrite of SUID binary |
+| ssh-keysign-pwn | [CVE-2026-46333](https://nvd.nist.gov/vuln/detail/CVE-2026-46333) — `__ptrace_may_access()` race + `pidfd_getfd` on exiting SUID binary |
+
 > 🔬 **Full writeup:** [Copy Fail (CVE-2026-31431) on rfxn.com/research](https://www.rfxn.com/research/copyfail-cve-2026-31431)
 > covers cf1 kernel mechanics; cf2 and Dirty Frag extend the same
-> primitive to two more sinks.
+> primitive to two more sinks. PinTheft and ssh-keysign-pwn extend
+> the toolkit's coverage in v2.1.0 to a third Copy Fail-class sink
+> (RDS) and the new FD-theft class (ptrace exit-race).
 
 ---
 
@@ -518,7 +583,7 @@ Out-of-band verification of a downloaded RPM:
 ```sh
 curl -sSL https://rfxn.github.io/copyfail/RPM-GPG-KEY-copyfail \
   | sudo rpm --import /dev/stdin
-rpm -K copyfail-defense-2.0.2-1.el9.x86_64.rpm
+rpm -K copyfail-defense-2.1.0-1.el9.x86_64.rpm
 # expect: digests signatures OK
 ```
 
@@ -579,7 +644,7 @@ To rebuild the RPMs from the published SRPM (under your own signing):
 
 ```sh
 mock -r centos-stream+epel-9-x86_64 --rebuild \
-  https://github.com/rfxn/copyfail/releases/download/v2.0.2/copyfail-defense-2.0.2-1.el9.src.rpm
+  https://github.com/rfxn/copyfail/releases/download/v2.1.0/copyfail-defense-2.1.0-1.el9.src.rpm
 ```
 
 The spec lives at `packaging/copyfail-defense.spec`.

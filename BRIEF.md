@@ -140,3 +140,57 @@ Any tenant on a vulnerable node can root the box with the published PoC. Both Th
 - Red Hat: https://access.redhat.com/security/cve/CVE-2026-31431
 - Debian tracker: https://security-tracker.debian.org/tracker/CVE-2026-31431
 - Reference Ansible playbook (m3nu): https://gist.github.com/m3nu/c19269ef4fd6fa53b03eb388f77464da
+
+## PinTheft (CVE pending; disclosed 2026-05)
+
+RDS zerocopy double-free + io_uring fixed-buffer page-cache overwrite
+of SUID binary. Direct successor to cf1's primitive: same outcome
+(page-cache overwrite of suid binary), different entry path.
+
+Affected populations: Ubuntu/Debian/Arch + RHEL hosts on ELRepo
+kernel-ml. Stock RHEL/Alma/Rocky/Oracle UEK not affected (no
+CONFIG_RDS). Defense-in-depth still valuable on those hosts because
+custom-kernel rebuilds and kernel-ml installs are common in HPC and
+specialty fleets.
+
+Mitigation in copyfail-defense (v2.1.0+):
+  - `copyfail-defense-modprobe` blacklist of `rds`/`rds_tcp`/`rds_rdma`
+    (conditional; suppressed on Oracle Grid + RDS-workload hosts via
+    the same detect.sh path that suppresses cf2-xfrm / rxrpc for IPsec
+    / AFS)
+  - `copyfail-defense-systemd` `RestrictAddressFamilies=~AF_RDS` on the
+    five always-on tenant units (user@/sshd/cron/crond/atd) via the
+    10-* drop-in
+  - `copyfail-defense-audit` rule `copyfail_afrds` on
+    `socket(AF_RDS=21)` by auid>=1000
+  - operator opt-in: `kernel.io_uring_disabled=2` (Linux 6.6+) — line
+    ships commented out in the v2.1.0 `-sysctl` drop-in because
+    io_uring is widely used by databases, runtimes, and container
+    engines
+
+## ssh-keysign-pwn (CVE-2026-46333)
+
+`__ptrace_may_access()` race exposes root-readable file descriptors
+via `pidfd_getfd` on exiting SUID. Targets ssh-keysign (SSH host
+private keys) and chage (`/etc/shadow`). New bug **class**: FD-theft
+via privilege confusion, not page-cache overwrite. copyfail-defense
+v2.1.0 extends the toolkit's coverage from the Copy Fail page-cache
+family to this adjacent privilege-confusion family because the
+detection primitives (auditd, sysctl) and operator surface (one
+`dnf install`, one auditor) overlap completely.
+
+Affected: Linux kernels with `pidfd_getfd` (added in 5.6). EL7 + EL8
+stock not exposed via public PoC; defense-in-depth still valuable on
+those hosts (later kernel-ml installs, EL9-shaped backports).
+
+Mitigation in copyfail-defense (v2.1.0+):
+  - `copyfail-defense-sysctl` sets `kernel.yama.ptrace_scope = 2`
+    (closes the `pidfd_getfd` path without breaking root debugging)
+  - `copyfail-defense-audit` rule `copyfail_pidfd_getfd` (numeric
+    syscall 438; PoC needs 100-2000 spawns per success — fires
+    loudly in audit log)
+
+The auditor (`copyfail-local-check`) gains `check_ptrace_scope`
+(HARDENING category) and `check_pidfd_getfd_auditd_rule` (DETECTION
+category) and reports `keysign-pwn` in the per-class surface
+matrix.

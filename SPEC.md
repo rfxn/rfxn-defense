@@ -1656,3 +1656,139 @@ are resolved (C-7→cmp-and-skip; C-8/M-12→20-override+25-additions;
 L-2 ack-deferred). All in-scope CRITICALs and MEDIUMs are folded.
 The two new mechanisms flagged above (find perf, python3 dep) are
 documented for the next reviewer pass to inspect.
+
+---
+
+## 13. v2.1.0 architecture — PinTheft, ssh-keysign-pwn, EL7
+
+### 13.1 Scope of v2.1.0
+
+Two new bug-class additions and one new build target. The package
+family naming, scriptlet structure, auto-detection framework, and
+auditor JSON schema (v2) are unchanged. v2.1.0 layers new mitigation
+rungs onto the existing six subpackages — no subpackage rename, no
+new subpackage. **[D-59]**
+
+- **PinTheft** (CVE pending) — RDS zerocopy double-free + io_uring
+  fixed-buffer page-cache overwrite of SUID binary. Same outcome as
+  cf1; different entry path. Covered by a new `-modprobe` blacklist
+  for `rds`/`rds_tcp`/`rds_rdma`, a new `RestrictAddressFamilies=~AF_RDS`
+  entry in the always-on `10-copyfail-defense.conf` systemd drop-in,
+  a new auditd key `copyfail_afrds`, and an opt-in
+  `kernel.io_uring_disabled=2` sysctl.
+- **ssh-keysign-pwn** (CVE-2026-46333) — `__ptrace_may_access()` race
+  + `pidfd_getfd` on exiting SUID binary. FD-theft / privilege
+  confusion class, not page-cache overwrite. Covered by a new
+  `kernel.yama.ptrace_scope=2` sysctl entry and a new auditd key
+  `copyfail_pidfd_getfd`.
+- **EL7** — build target restored. Mock chroot uses
+  `vault.centos.org/centos/7.9.2009/{os,updates,extras}/x86_64/` +
+  EPEL archive at `archives.fedoraproject.org/pub/archive/epel/7/x86_64/`.
+  Native rpmbuild on the existing EL7 toolchain is the fallback if
+  mock fails; CHANGELOG documents which path each release shipped via.
+
+### 13.2 New entry-point cuts
+
+| Layer        | File                                               | Action |
+|---           |---                                                 |---     |
+| `-modprobe`  | `/etc/modprobe.d/99-copyfail-defense-rds.conf`     | `install rds /bin/true` for `rds`, `rds_tcp`, `rds_rdma`; conditional (suppressed by detect.sh on RDS-workload hosts) **[D-60]** |
+| `-systemd`   | extends always-on `10-copyfail-defense.conf` on the 5 tenant units with `~AF_RDS` in the `RestrictAddressFamilies=` list (joined with existing `~AF_ALG ~AF_KEY ~AF_RXRPC`) | unconditional **[D-61]** |
+| `-sysctl`    | extends `/etc/sysctl.d/99-copyfail-defense-userns.conf` with `kernel.yama.ptrace_scope = 2` (active) and `# kernel.io_uring_disabled = 2` (commented out — opt-in) | active line unconditional; opt-in line operator-uncomments **[D-62]** |
+| `-audit`     | extends `/etc/audit/rules.d/99-copyfail-defense.rules` with two new rules: `socket(a0=21)` keyed `copyfail_afrds`, and `pidfd_getfd` (numeric syscall 438) keyed `copyfail_pidfd_getfd` | unconditional **[D-63]** |
+
+### 13.3 RDS workload detection
+
+`detect.sh` gains `detect_rds_workload()` paralleling the existing
+IPsec / AFS / rootless detectors. Signals (any of):
+
+- `/etc/oratab` present and non-empty (Oracle clusterware is the
+  canonical RDS consumer on EL)
+- `rds`, `rds_tcp`, or `rds_rdma` already loaded (per `lsmod`) AND
+  any active socket bound to AF_RDS (per `ss -A` family inspection)
+- `/etc/rdma/rdma.conf` present (RDMA fabric for Lustre / GPFS / HPC)
+
+When detected, `apply_modprobe` suppresses
+`99-copyfail-defense-rds.conf`. The auto-detect.json `detected` map
+gains a `rds_workload` entry; the `suppressed` map gains
+`modprobe_rds`. **Schema version remains 2** — keys are additive,
+existing SIEM consumers ignore them gracefully. **[D-64]**
+
+The AF_RDS entry in the always-on systemd drop-in is **NOT**
+suppressed on RDS-workload hosts: per the existing pattern
+(D-30, `RestrictAddressFamilies=~AF_ALG` unconditional even on
+IPsec-detected hosts), system-wide tenant unit hardening stays on,
+and the operator-owned `20-override.conf` is the escape hatch if a
+specific tenant unit legitimately needs AF_RDS. **[D-65]**
+
+### 13.4 Auditor extensions
+
+`copyfail-local-check` gains four new checks:
+
+- `check_rds_modprobe` (MITIGATION) — verifies
+  `99-copyfail-defense-rds.conf` presence and content (or
+  acknowledges suppression via `auto-detect.json`)
+- `check_af_rds_restrict` (MITIGATION) — verifies
+  `10-copyfail-defense.conf` contains `~AF_RDS` in
+  `RestrictAddressFamilies=` for all 5 tenant units
+- `check_ptrace_scope` (HARDENING) — reads
+  `/proc/sys/kernel/yama/ptrace_scope`, OK at 2, INFO at 1, WARN
+  at 0 (only WARNs if the `-sysctl` package is installed, per
+  D-45 pattern)
+- `check_pidfd_getfd_auditd_rule` (DETECTION) — verifies the
+  `copyfail_pidfd_getfd` key exists in the loaded audit ruleset
+
+The per-class surface matrix gains two rows: `pintheft` and
+`keysign-pwn`. JSON `posture.bug_classes_covered` includes them when
+mitigated. **[D-66]**
+
+### 13.5 EL7 build target
+
+Mock chroot for EL7 uses a custom config pointing at vault URLs (see
+Phase 2 of the v2.1.0 plan). Fallback to native rpmbuild on the EL7
+host's toolchain (gcc 4.8, glibc 2.17, rpm 4.11) is supported and
+documented in CHANGELOG when used. `test-repo.sh` adds
+`IMAGE[7]=quay.io/centos/centos:7` and defaults `ELS=(7 8 9 10)` for
+the four-EL canary. If `quay.io/centos/centos:7` becomes unavailable
+at runtime, the harness surfaces a warning and continues with the
+EL8/9/10 subset; release proceeds without EL7 only when the
+operator explicitly accepts a deferred EL7 build. **[D-67]**
+
+### 13.6 v2.1.0 decision index
+
+- **D-59** v2.1.0 adds bug-class coverage via new mitigation rungs
+  on the existing six subpackages; no rename, no new subpackage.
+- **D-60** PinTheft modprobe cut is a separate conf file
+  (`99-copyfail-defense-rds.conf`), conditional via detect.sh —
+  parallels the cf2-xfrm and rxrpc conditional-file pattern from
+  v2.0.1 (D-32).
+- **D-61** PinTheft systemd cut extends the existing always-on
+  10-* drop-in's `RestrictAddressFamilies=` list — does NOT add a
+  new file. Aligns with the existing always-on-vs-conditional
+  split: tenant-unit address-family restrictions are universal
+  (D-30) so AF_RDS belongs in the universal block.
+- **D-62** ssh-keysign-pwn sysctl (`kernel.yama.ptrace_scope=2`)
+  AND PinTheft secondary sysctl (`kernel.io_uring_disabled=2`,
+  commented out) both extend the existing
+  `99-copyfail-defense-userns.conf` file. The file is renamed
+  semantically (still keeps its filename for `%config(noreplace)`
+  continuity) — its scope broadens from "userns lockdown" to
+  "kernel hardening for the cf-class + adjacent classes."
+- **D-63** Two new auditd rules added to the existing
+  `99-copyfail-defense.rules` file; no new audit rule file.
+  Existing SIEM `ausearch -k <key>` queries unaffected.
+- **D-64** auto-detect.json `schema_version` stays at "2". New keys
+  (`rds_workload`, `modprobe_rds`) are additive. v2.0.x auditors
+  reading a v2.1.0 host's auto-detect.json see the existing keys
+  unchanged and ignore the new ones — backward compatible.
+- **D-65** AF_RDS in systemd drop-in is unconditional even on
+  RDS-detected hosts; matches D-30 (AF_ALG unconditional on
+  IPsec-detected hosts). Operator's `20-override.conf` is the
+  escape hatch for any tenant unit that legitimately needs AF_RDS.
+- **D-66** Auditor JSON `posture.bug_classes` map gains `pintheft`
+  and `keysign-pwn` entries. `bug_classes_covered` array gains
+  them when mitigated. Schema version on auditor JSON stays at
+  "2.0" — additive, backward compatible.
+- **D-67** EL7 build is best-effort: mock chroot preferred,
+  native rpmbuild fallback documented in CHANGELOG. Release
+  proceeds with EL7 deferred only on explicit operator
+  acceptance.

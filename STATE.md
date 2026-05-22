@@ -1,20 +1,32 @@
 # copyfail-defense — shipping state
 
-Snapshot: **2026-05-08**
+Snapshot: **2026-05-22**
 
 ## Latest release
 
-- **v2.0.1** — hotfix adding auto-detection of conflicting workloads
-  (IPsec, AFS, rootless containers) at install time. Conditional
-  modprobe/systemd drop-ins suppressed when a workload is detected.
-  Adds `copyfail-redetect` helper and `check_auto_detect_state` auditor
-  check. Signed RPMs, EL8 / EL9 / EL10, x86_64 only.
-- Tag: <https://github.com/rfxn/copyfail/releases/tag/v2.0.1>
-- v2.0.0 RPMs retained in repo trees for upgrade path
+- **v2.1.0** — adds PinTheft (RDS zerocopy + io_uring) and
+  ssh-keysign-pwn (CVE-2026-46333; ptrace exit-race + `pidfd_getfd`)
+  coverage; new `-modprobe` cut for `rds`/`rds_tcp`/`rds_rdma`; new
+  `RestrictAddressFamilies=~AF_RDS` in the always-on systemd
+  10-* drop-in; new `kernel.yama.ptrace_scope=2` sysctl entry; opt-in
+  `kernel.io_uring_disabled=2` line (commented out by default); two
+  new auditd tripwire rules (`copyfail_afrds`, `copyfail_pidfd_getfd`).
+  Build matrix expands to **EL7 / EL8 / EL9 / EL10**, x86_64.
+  Signed RPMs.
+- Tag: <https://github.com/rfxn/copyfail/releases/tag/v2.1.0>
+- v2.0.2 RPMs retained in repo trees for upgrade path
   (`dnf upgrade copyfail-defense`).
-- v1.0.1 RPMs retained in repo trees for one cycle (clean
+- v2.0.1 RPMs retained for one cycle.
+- v2.0.0 RPMs retained for one cycle.
+- v1.0.1 RPMs retained for one cycle (clean
   `dnf upgrade afalg-defense -> copyfail-defense` path).
 - v1.0.0 was rolled back (was unsigned baseline; deleted from GH releases).
+
+ELS = {7, 8, 9, 10}. EL7 RPMs are built against `vault.centos.org`
+repositories (CentOS 7 EOL 2024-06-30); if mock-EL7 chroot fails at
+build time, fallback is best-effort native rpmbuild against the
+existing EL7 toolchain. The CHANGELOG notes whether EL7 shipped via
+mock canary or native fallback for each release.
 
 ## Distribution
 
@@ -64,16 +76,25 @@ Do **not** cross-install across ELs.
 
 ## Coverage matrix
 
-| Layer | cf1 | cf2 | dirtyfrag-ESP | dirtyfrag-RxRPC |
-|---|:---:|:---:|:---:|:---:|
-| `-shim` (LD_PRELOAD AF_ALG) | ✅ primary | – | – | (incidental) |
-| `-modprobe` (algif/authenc/af_alg) | ✅ (modular kernels) | – | – | – |
-| `-modprobe` (esp4/esp6/xfrm_user/xfrm_algo) | – | ✅ | ✅ | – |
-| `-modprobe` (rxrpc) | – | – | – | ✅ |
-| `-systemd` (`~AF_ALG`) | ✅ | – | – | – |
-| `-systemd` (`~AF_RXRPC`) | – | – | – | ✅ |
-| `-systemd` (`~user ~net`) | – | ✅ | ✅ | – |
-| Kernel patch | `a664bf3d` | `f4c50a4034` | `f4c50a4034` | (none upstream) |
+| Layer | cf1 | cf2 | dirtyfrag-ESP | dirtyfrag-RxRPC | Fragnesia | PinTheft | keysign-pwn |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `-shim` (LD_PRELOAD AF_ALG) | ✅ primary | – | – | (incidental) | – | – | – |
+| `-modprobe` (algif/authenc/af_alg) | ✅ (modular kernels) | – | – | – | – | – | – |
+| `-modprobe` (esp4/esp6/xfrm_user/xfrm_algo) | – | ✅ | ✅ | – | ✅ | – | – |
+| `-modprobe` (rxrpc) | – | – | – | ✅ | – | – | – |
+| `-modprobe` (rds/rds_tcp/rds_rdma) *(v2.1.0)* | – | – | – | – | – | ✅ | – |
+| `-systemd` (`~AF_ALG`) | ✅ | – | – | – | – | – | – |
+| `-systemd` (`~AF_KEY`) *(v2.0.2)* | – | ✅ | ✅ | – | ✅ | – | – |
+| `-systemd` (`~AF_RXRPC`) | – | – | – | ✅ | – | – | – |
+| `-systemd` (`~AF_RDS`) *(v2.1.0)* | – | – | – | – | – | ✅ | – |
+| `-systemd` (`~user ~net`) | – | ✅ | ✅ | – | ✅ | – | – |
+| `-sysctl` (`user.max_user_namespaces=0`) *(v2.0.2)* | – | ✅ | ✅ | – | ✅ | – | – |
+| `-sysctl` (`kernel.yama.ptrace_scope=2`) *(v2.1.0)* | – | – | – | – | – | – | ✅ |
+| `-sysctl` (`kernel.io_uring_disabled=2`) *(v2.1.0, opt-in)* | – | – | – | – | – | ✅ (opt-in) | – |
+| `-audit` (`copyfail_afalg/afkey/afrxrpc`) *(v2.0.2)* | tripwire | tripwire | tripwire | tripwire | tripwire | – | – |
+| `-audit` (`copyfail_afrds`) *(v2.1.0)* | – | – | – | – | – | tripwire | – |
+| `-audit` (`copyfail_pidfd_getfd`) *(v2.1.0)* | – | – | – | – | – | – | tripwire |
+| Kernel patch | `a664bf3d` | `f4c50a4034` | `f4c50a4034` | (none upstream) | netdev only | (none upstream) | (CVE-2026-46333; none upstream) |
 
 ## Signing
 
