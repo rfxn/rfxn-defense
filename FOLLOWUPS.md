@@ -202,3 +202,19 @@ v2.0.2" above — landed early as `copyfail-defense-sysctl`.)
 ## Key lifecycle
 
 - [ ] **2028-04-29 — signing key expires.** Either extend (`gpg --edit-key proj@rfxn.com expire`) or rotate (generate new key, ship 2.0.0 release whose `.repo` points at the new key URL, bump version so old signed RPMs aren't accidentally trusted). Re-run the backup procedure after either operation.
+
+## v2.1.0 watch list
+
+- **DirtyDecrypt (CVE-2026-31635) formal verification.** v2.1.0 ships
+  under the assumption that the RXGK/RxRPC primitive is covered by the
+  existing rxrpc cuts (modprobe blacklist + ~AF_RXRPC + copyfail_afrxrpc
+  audit rule). Verify against the public advisory post-publish; if the
+  entry primitive is not AF_RXRPC-mediated, open a v2.1.1 hotfix.
+- **EL7 mock vault availability.** vault.centos.org and
+  archives.fedoraproject.org/pub/archive/epel/7/ were live 2026-05-22.
+  If they become unreachable, drop EL7 from subsequent releases or
+  document the unmocked native-build fallback in CHANGELOG.
+- **Rename to rfxn-defense (deferred).** v3.0.0 rename plan
+  (docs/plans/2026-05-21-rfxn-defense-rename-plan.md) remains deferred
+  to a future major release. Coverage from that plan landed in v2.1.0
+  minus the rename mechanics.
