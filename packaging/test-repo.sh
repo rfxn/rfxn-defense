@@ -217,8 +217,10 @@ grep -qE 'a0=21 .* -k copyfail_afrds' \
     /etc/audit/rules.d/99-copyfail-defense.rules \
     || fail "audit rules missing AF_RDS (a0=21) -k copyfail_afrds"
 
-# v2.1.0: ssh-keysign-pwn copyfail_pidfd_getfd audit rule
-grep -qE '-S 438 .* -k copyfail_pidfd_getfd' \
+# v2.1.0: ssh-keysign-pwn copyfail_pidfd_getfd audit rule.
+# Use -- to terminate grep option parsing; '-S 438' starts with a dash and
+# grep would otherwise treat -S as an unknown flag (exit 2).
+grep -qE -- '-S 438 .* -k copyfail_pidfd_getfd' \
     /etc/audit/rules.d/99-copyfail-defense.rules \
     || fail "audit rules missing pidfd_getfd (-S 438) -k copyfail_pidfd_getfd"
 
