@@ -73,8 +73,10 @@ Requires:       %{name}-auditor  = %{epoch}:%{version}-%{release}
 Requires:       %{name}-sysctl   = %{epoch}:%{version}-%{release}
 # Soft dep: -audit pulls auditd transitively; minimal hosts can skip it
 # via `--setopt=install_weak_deps=false` or `dnf install <subpackages>`
-# selectively.
+# selectively. `Recommends:` is rpm-4.13+; EL7's rpm-4.11 errors on it.
+%if 0%{?rhel} != 7
 Recommends:     %{name}-audit    = %{epoch}:%{version}-%{release}
+%endif
 
 # v2.0.0 rename: afalg-defense -> copyfail-defense. Compat retained
 # through the 2.0.x release line; dropped in 2.1.0.
@@ -243,10 +245,12 @@ Provides:       afalg-defense-auditor = %{epoch}:%{version}-%{release}
 # run_cmd which returns rc=-1 on FileNotFoundError). We list them as
 # Recommends so a minimal install still gets the auditor working even
 # when the recommendations cannot be satisfied (e.g. EL8 minimal).
+%if 0%{?rhel} != 7
 Recommends:     coreutils
 Recommends:     systemd
 Recommends:     audit
 Recommends:     libcap
+%endif
 
 %description auditor
 copyfail-local-check: comprehensive read-only auditor that scores the host
