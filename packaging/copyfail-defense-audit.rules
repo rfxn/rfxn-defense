@@ -24,3 +24,16 @@
 -a always,exit -F arch=b64 -S socket -F a0=38 -F auid>=1000 -F auid!=-1 -k copyfail_afalg
 -a always,exit -F arch=b64 -S socket -F a0=15 -F auid>=1000 -F auid!=-1 -k copyfail_afkey
 -a always,exit -F arch=b64 -S socket -F a0=33 -F auid>=1000 -F auid!=-1 -k copyfail_afrxrpc
+
+## PinTheft (CVE pending): unprivileged AF_RDS socket creation. RDS is
+## the entry point for the RDS zerocopy double-free chained to io_uring
+## fixed buffers. AF_RDS=21 per <linux/socket.h>.
+-a always,exit -F arch=b64 -S socket -F a0=21 -F auid>=1000 -F auid!=-1 -k copyfail_afrds
+
+## ssh-keysign-pwn (CVE-2026-46333): unprivileged pidfd_getfd().
+## Public PoC needs 100-2000 spawns per success; this rule fires loudly
+## during exploitation attempts. Syscall referenced by NUMERIC value 438
+## (b64) rather than name 'pidfd_getfd': EL7+EL8 audit-userspace do not
+## recognise the name. The numeric form parses cleanly on every EL
+## kernel-userspace combination.
+-a always,exit -F arch=b64 -S 438 -F auid>=1000 -F auid!=-1 -k copyfail_pidfd_getfd
