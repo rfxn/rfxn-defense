@@ -106,10 +106,21 @@ minimal hosts without auditd skip the pull-in):
 > ausearch -k copyfail_pidfd_getfd  →  ausearch -k rfxn_pidfd_getfd
 > ```
 >
-> The legacy gh-pages URL `https://rfxn.github.io/copyfail/` 301-redirects
-> to `https://rfxn.github.io/rfxn-defense/`; existing `copyfail.repo`
-> files continue to resolve through the redirect. New installs should
-> use the new URL above.
+> **Important — legacy URL hosts need manual migration.** GitHub Pages
+> does NOT redirect renamed-repo URLs (only the git remote and the
+> github.com web URL auto-redirect for ~6 months). v2.x hosts with
+> `copyfail.repo` in `/etc/yum.repos.d/` will see HTTP 404 on
+> `dnf check-update` after v3.0.0 ships and remain stranded on v2.1.1
+> until manually re-pointed:
+>
+> ```
+> sudo curl -sSL https://rfxn.github.io/rfxn-defense/rfxn-defense.repo \
+>     -o /etc/yum.repos.d/rfxn-defense.repo
+> sudo rm -f /etc/yum.repos.d/copyfail.repo
+> sudo dnf upgrade -y rfxn-defense
+> ```
+>
+> New installs should use the new URL in the install section above.
 | `rfxn-defense-audit` *(v2.0.2, soft-dep)* | auditd tripwire rules for `socket(AF_ALG/AF_KEY/AF_RXRPC)` syscalls |
 
 Auditor only (no `LD_PRELOAD`, for hot infrastructure):
@@ -545,7 +556,7 @@ Drop a sentinel file before `dnf install` (or before
 `rfxn-redetect`) to skip detection entirely:
 
 ```sh
-sudo mkdir -p /etc/copyfail
+sudo mkdir -p /etc/rfxn-defense
 sudo touch /etc/rfxn-defense/force-full
 sudo dnf install -y rfxn-defense
 ```

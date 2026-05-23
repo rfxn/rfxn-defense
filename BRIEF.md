@@ -164,16 +164,16 @@ custom-kernel rebuilds and kernel-ml installs are common in HPC and
 specialty fleets.
 
 Mitigation in copyfail-defense (v2.1.0+):
-  - `copyfail-defense-modprobe` blacklist of `rds`/`rds_tcp`/`rds_rdma`
+  - `rfxn-defense-modprobe` blacklist of `rds`/`rds_tcp`/`rds_rdma`
     (conditional; suppressed on Oracle Grid + RDS-workload hosts via
     the same detect.sh path that suppresses cf2-xfrm / rxrpc for IPsec
     / AFS)
-  - `copyfail-defense-systemd` `RestrictAddressFamilies=~AF_RDS` on the
+  - `rfxn-defense-systemd` `RestrictAddressFamilies=~AF_RDS` on the
     five always-on tenant units (user@/sshd/cron/crond/atd) via the
     10-* drop-in
-  - `copyfail-defense-audit` rule `rfxn_afrds` on
+  - `rfxn-defense-audit` rule `rfxn_afrds` on
     `socket(AF_RDS=21)` by auid>=1000
-  - `copyfail-defense-sysctl` sets `kernel.io_uring_disabled=2` in a
+  - `rfxn-defense-sysctl` sets `kernel.io_uring_disabled=2` in a
     new `/etc/sysctl.d/99-rfxn-defense-iouring.conf` drop-in
     (v2.1.1, auto-applied; see below for suppression conditions)
 
@@ -202,9 +202,9 @@ stock not exposed via public PoC; defense-in-depth still valuable on
 those hosts (later kernel-ml installs, EL9-shaped backports).
 
 Mitigation in copyfail-defense (v2.1.0+):
-  - `copyfail-defense-sysctl` sets `kernel.yama.ptrace_scope = 2`
+  - `rfxn-defense-sysctl` sets `kernel.yama.ptrace_scope = 2`
     (closes the `pidfd_getfd` path without breaking root debugging)
-  - `copyfail-defense-audit` rule `rfxn_pidfd_getfd` (numeric
+  - `rfxn-defense-audit` rule `rfxn_pidfd_getfd` (numeric
     syscall 438; PoC needs 100-2000 spawns per success, fires
     loudly in audit log)
 

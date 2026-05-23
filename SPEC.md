@@ -1,4 +1,4 @@
-# SPEC, `copyfail-defense` v2.0.0
+# SPEC, `rfxn-defense` v3.0.0 (formerly `copyfail-defense`)
 
 **Status:** Drafted autonomously 2026-05-08 (rev 3). Optimized for **maximum
 protection without disrupting the business**. Every decision in §9 was made
@@ -1872,10 +1872,13 @@ keep working via redirect. Local remote URL update is a one-liner:
 `git remote set-url origin https://github.com/rfxn/rfxn-defense`.
 
 The gh-pages branch travels with the repo, so the published dnf
-repository at `https://rfxn.github.io/copyfail/` 301-redirects to
-`https://rfxn.github.io/rfxn-defense/` automatically. Existing hosts
-with `copyfail.repo` installed continue to resolve through the redirect
-with no operator action; v3.0.0 `.repo` files use the new canonical URL.
+repository now serves at `https://rfxn.github.io/rfxn-defense/`. The
+legacy URL `https://rfxn.github.io/copyfail/` returns HTTP 404 -
+GitHub Pages does NOT issue HTTP redirects for renamed repos. Hosts
+with the legacy `copyfail.repo` in `/etc/yum.repos.d/` are stranded on
+v2.1.1 until manually re-pointed; FOLLOWUPS.md "Known issue: legacy
+/copyfail/ URL after v3.0.0 repo rename" documents the operator
+migration recipe.
 
 ### 14.5 v3.0.0 decision index
 

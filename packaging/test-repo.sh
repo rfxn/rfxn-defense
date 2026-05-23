@@ -18,10 +18,10 @@
 #      binaries (smoke-test on /bin/true)
 #   6. AF_ALG socket creation returns EPERM with the shim in place
 #   7. AF_INET still works (surgical block, not blanket socket disable)
-#   8. copyfail-shim-enable wires /etc/ld.so.preload correctly
+#   8. rfxn-shim-enable wires /etc/ld.so.preload correctly
 #   9. AF_ALG is blocked from a fresh process (no explicit LD_PRELOAD)
-#  10. copyfail-local-check runs and emits valid posture JSON v2 schema
-#  11. copyfail-shim-disable removes the line atomically
+#  10. rfxn-local-check runs and emits valid posture JSON v2 schema
+#  11. rfxn-shim-disable removes the line atomically
 #  12. dnf remove leaves /etc/ld.so.preload sane (preun scriptlet)
 #  v2.0.0 additions:
 #  13. rfxn-defense-modprobe drops split modprobe conf files (cf1/cf2-xfrm/rxrpc)
@@ -70,8 +70,8 @@
 
 set -uo pipefail
 
-REPO_URL="${REPO_URL:-https://rfxn.github.io/copyfail/copyfail.repo}"
-KEY_URL="${KEY_URL:-https://rfxn.github.io/copyfail/RPM-GPG-KEY-copyfail}"
+REPO_URL="${REPO_URL:-https://rfxn.github.io/rfxn-defense/rfxn-defense.repo}"
+KEY_URL="${KEY_URL:-https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-rfxn}"
 UPGRADE_FIXTURE_DIR="${UPGRADE_FIXTURE_DIR:-/home/copyfail/rpmbuild/upgrade-fixture}"
 
 if [ $# -eq 0 ]; then
@@ -184,9 +184,9 @@ ok "dnf install -y rfxn-defense (gpgcheck + repo_gpgcheck, 7 subpackages incl. -
 
 # 3. Files are where we expect
 test -f /usr/lib64/no-afalg.so          || fail "shim .so missing"
-test -x /usr/sbin/copyfail-shim-enable  || fail "enable helper missing"
-test -x /usr/sbin/copyfail-shim-disable || fail "disable helper missing"
-test -x /usr/sbin/copyfail-local-check  || fail "auditor missing"
+test -x /usr/sbin/rfxn-shim-enable  || fail "enable helper missing"
+test -x /usr/sbin/rfxn-shim-disable || fail "disable helper missing"
+test -x /usr/sbin/rfxn-local-check  || fail "auditor missing"
 for f in cf1 cf2-xfrm rxrpc; do
     test -f "/etc/modprobe.d/99-rfxn-defense-${f}.conf" \
         || fail "modprobe ${f} drop file missing"
@@ -326,7 +326,7 @@ LD_PRELOAD=/usr/lib64/no-afalg.so python3 -c \
 ok "AF_INET still works (surgical block confirmed)"
 
 # 7. copyfail-shim-enable
-/usr/sbin/copyfail-shim-enable >/tmp/enable.log 2>&1 \
+/usr/sbin/rfxn-shim-enable >/tmp/enable.log 2>&1 \
     || { cat /tmp/enable.log; fail "copyfail-shim-enable returned non-zero"; }
 grep -Fxq /usr/lib64/no-afalg.so /etc/ld.so.preload \
     || fail "/etc/ld.so.preload does not contain shim line"
@@ -347,7 +347,7 @@ ok "AF_ALG blocked via /etc/ld.so.preload (no explicit LD_PRELOAD needed)"
 #    live AF_ALG probe (we just verified that path manually).
 # Capture rc under `set -e` requires the explicit-OR idiom:
 audit_rc=0
-/usr/sbin/copyfail-local-check --json --skip-trigger --skip-hardening \
+/usr/sbin/rfxn-local-check --json --skip-trigger --skip-hardening \
     --no-progress > /tmp/audit.json 2>/dev/null || audit_rc=$?
 python3 -c "
 import json, sys
@@ -377,7 +377,7 @@ print('ld_preload_shim layer:', d['posture']['layers']['ld_preload_shim'])
 ok "auditor JSON: schema 2.0, bug_classes_covered + map present, exit_rc=$audit_rc"
 
 # 10. copyfail-shim-disable
-/usr/sbin/copyfail-shim-disable >/tmp/disable.log 2>&1 \
+/usr/sbin/rfxn-shim-disable >/tmp/disable.log 2>&1 \
     || { cat /tmp/disable.log; fail "copyfail-shim-disable returned non-zero"; }
 if [ -f /etc/ld.so.preload ] && grep -Fxq /usr/lib64/no-afalg.so /etc/ld.so.preload; then
     fail "shim line still in /etc/ld.so.preload after disable"
@@ -516,13 +516,13 @@ test -f /etc/modprobe.d/99-rfxn-defense-cf1.conf \
     || fail "modprobe cf1 drop missing post-upgrade"
 test -f /etc/systemd/system/sshd.service.d/10-rfxn-defense.conf \
     || fail "sshd systemd drop-in missing post-upgrade"
-test -x /usr/sbin/copyfail-local-check \
+test -x /usr/sbin/rfxn-local-check \
     || fail "auditor missing post-upgrade"
 
 # Assert: auditor JSON v2 schema (post-upgrade, shim still disabled by
 # default, so exit code is normally 4 - hardening_recs - but never 2).
 audit_rc=0
-/usr/sbin/copyfail-local-check --json --skip-trigger --skip-hardening \
+/usr/sbin/rfxn-local-check --json --skip-trigger --skip-hardening \
     --no-progress > /tmp/audit.json 2>/dev/null || audit_rc=$?
 python3 -c "
 import json

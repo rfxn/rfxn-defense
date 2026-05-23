@@ -1113,9 +1113,11 @@ exit 0
   -local-check. __version__ bumped 2.1.1 -> 3.0.0. All on-disk path
   literals migrated; bug-class detection logic unchanged.
 - README, STATE.md, SPEC.md, BRIEF.md, FOLLOWUPS.md rewritten with the
-  responsive-defense-layer reframe. gh-pages landing page rewritten;
-  /copyfail/ URL retained as 301-redirect to /rfxn-defense/ (GitHub
-  Pages auto-redirects post-repo-rename).
+  responsive-defense-layer reframe. gh-pages landing page rewritten.
+  Legacy URL /copyfail/ returns HTTP 404 after repo rename (GitHub
+  Pages does not redirect renamed-repo URLs); v2.x hosts with
+  copyfail.repo in /etc/yum.repos.d/ require manual migration
+  (recipe documented in FOLLOWUPS.md "Known issue").
 - BRIEF.md DirtyDecrypt (CVE-2026-31635) cross-stamp confirms coverage
   by the existing rxrpc cuts (modprobe blacklist + RestrictAddressFamilies
   ~AF_RXRPC + rfxn_afrxrpc audit rule). No new primitive needed.

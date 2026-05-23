@@ -74,8 +74,8 @@ mock canary or native fallback for each release.
 |---|---|
 | Source repo (main) | <https://github.com/rfxn/rfxn-defense> |
 | GH Pages site | <https://rfxn.github.io/rfxn-defense/> |
-| DNF repo file | <https://rfxn.github.io/rfxn-defense/copyfail.repo> |
-| Public signing key | <https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail> |
+| DNF repo file | <https://rfxn.github.io/rfxn-defense/rfxn-defense.repo> |
+| Public signing key | <https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-rfxn> |
 | Per-EL RPM trees | `https://rfxn.github.io/rfxn-defense/repo/{8,9,10}/x86_64/` |
 | Detached repodata sigs | `…/repo/{8,9,10}/x86_64/repodata/repomd.xml.asc` |
 | Deep-dive article | <https://www.rfxn.com/research/copyfail-cve-2026-31431> |
@@ -83,8 +83,8 @@ mock canary or native fallback for each release.
 ## Operator one-liner
 
 ```sh
-sudo curl -sSL https://rfxn.github.io/rfxn-defense/copyfail.repo \
-  -o /etc/yum.repos.d/copyfail.repo
+sudo curl -sSL https://rfxn.github.io/rfxn-defense/rfxn-defense.repo \
+  -o /etc/yum.repos.d/rfxn-defense.repo
 sudo dnf install -y rfxn-defense
 sudo /usr/sbin/rfxn-shim-enable
 ```
@@ -100,7 +100,7 @@ sudo dnf upgrade -y rfxn-defense
 | Package | Arch | Path |
 |---|---|---|
 | `rfxn-defense` (meta) | x86_64 | requires shim + modprobe + systemd + auditor |
-| `rfxn-defense-shim` | x86_64 | `/usr/lib64/no-afalg.so`, `/usr/sbin/copyfail-shim-{enable,disable}` |
+| `rfxn-defense-shim` | x86_64 | `/usr/lib64/no-afalg.so`, `/usr/sbin/rfxn-shim-{enable,disable}` |
 | `rfxn-defense-modprobe` | noarch | `/etc/modprobe.d/99-rfxn-defense-cf1.conf` (always-on) + cf2-xfrm + rxrpc (conditional via detect.sh) |
 | `rfxn-defense-systemd` | noarch | `/etc/systemd/system/{user@,sshd,cron,crond,atd}.service.d/10-rfxn-defense.conf` (always-on) + rxrpc-af (12-*, conditional) + userns (15-*, conditional) |
 | `rfxn-defense-auditor` | noarch | `/usr/sbin/rfxn-local-check` |
@@ -151,17 +151,17 @@ uid:          Copyfail Project Signing Key <proj@rfxn.com>
 - Backed up at: `forge.lab.rpx.sh:/hdd-pool/backups/copyfail-signing-key/` (ZFS, lz4, snapshot `@20260430`)
 - Backup runbook: `rfxn-infra/docs/runbooks/copyfail-signing-key-backup.md`
 - Portable export: `/root/admin/secrets/copyfail-signing-key/`
-- `/etc/yum.repos.d/copyfail.repo` enforces `gpgcheck=1` + `repo_gpgcheck=1`
+- `/etc/yum.repos.d/rfxn-defense.repo` enforces `gpgcheck=1` + `repo_gpgcheck=1`
 
 ## Build / package conventions
 
 - Spec: `packaging/rfxn-defense.spec`
-- Helper scripts: `packaging/copyfail-shim-{enable,disable}`
+- Helper scripts: `packaging/rfxn-shim-{enable,disable}`
 - Active dropins source: `packaging/copyfail-modprobe-{cf1,cf2-xfrm,rxrpc}.conf`, `packaging/copyfail-systemd-dropin{,-rxrpc-af,-userns}.conf`, `packaging/copyfail-sysctl-{userns,iouring}.conf`
 - Container-runtime example dropin source: `packaging/copyfail-systemd-dropin-containers.conf`
 - Workload detection helper: `packaging/rfxn-defense-detect.sh`
 - Operator re-detect helper: `packaging/rfxn-redetect`
-- `.repo` source: `packaging/copyfail.repo`
+- `.repo` source: `packaging/rfxn-defense.repo`
 - Public key source: `packaging/RPM-GPG-KEY-copyfail`
 - Build invocation: `rpmbuild --define "_topdir /home/copyfail/rpmbuild" -ba packaging/rfxn-defense.spec`
 - Per-EL: `mock -r centos-stream+epel-{8,9,10}-x86_64 --rebuild SRPMS/...`
