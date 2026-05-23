@@ -962,7 +962,7 @@ exit 0
 %files
 %license LICENSE
 %doc README.md
-%dir /etc/copyfail
+%dir /etc/rfxn-defense
 %{_sbindir}/rfxn-redetect
 # Detection helper (called from -modprobe + -systemd %posttrans/%postun
 # and from rfxn-redetect). Owned here in meta so a single copy
