@@ -298,3 +298,36 @@ v2.0.2" above, landed early as `copyfail-defense-sysctl`.)
   (docs/plans/2026-05-21-rfxn-defense-rename-plan.md) remains deferred
   to a future major release. Coverage from that plan landed in v2.1.0
   minus the rename mechanics.
+
+## Known issue: legacy /copyfail/ URL after v3.0.0 repo rename
+
+After `gh repo rename rfxn/copyfail -> rfxn/rfxn-defense`, the GitHub
+Pages URL `https://rfxn.github.io/copyfail/` returns HTTP 404
+(GitHub Pages does NOT support HTTP redirects on renamed repos; only
+the git remote and the github.com/rfxn/copyfail web URL are
+auto-redirected for ~6 months).
+
+Existing v2.x dnf clients with `/etc/yum.repos.d/copyfail.repo` still
+in place will see HTTP 404 on `dnf check-update` after v3.0.0 ships,
+because their baseurl is `https://rfxn.github.io/copyfail/repo/...`
+which no longer resolves. They are stranded on v2.1.1 until manually
+re-pointed.
+
+**Operator migration path:**
+```
+sudo curl -sSL https://rfxn.github.io/rfxn-defense/rfxn-defense.repo \
+    -o /etc/yum.repos.d/rfxn-defense.repo
+sudo rm -f /etc/yum.repos.d/copyfail.repo
+sudo dnf upgrade -y rfxn-defense
+```
+
+**Possible mitigations for the next cycle:**
+
+- [ ] Create a new `rfxn/copyfail-redirect` repo with a gh-pages
+      branch containing HTML meta-refresh redirects (won't help dnf
+      clients but serves browser traffic).
+- [ ] Document in rfxn.com blog post + auditor JSON output
+      (`installation_path_legacy` field flags hosts still on
+      copyfail.repo so operators see it in their fleet surveys).
+- [ ] Update the rfxn.com /research/copyfail-cve-2026-31431 page
+      with a banner pointing at the new repo URL.
