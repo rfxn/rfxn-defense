@@ -18,7 +18,7 @@
 
 Name:           copyfail-defense
 Epoch:          1
-Version:        2.1.0
+Version:        2.1.1
 Release:        1%{?dist}
 Summary:        Defense-in-depth toolkit for the Copy Fail bug class
 
@@ -43,6 +43,7 @@ Source12:       copyfail-sysctl-userns.conf
 Source13:       copyfail-defense-audit.rules
 Source14:       copyfail-modprobe-rds.conf
 Source15:       copyfail-systemd-dropin-rds.conf
+Source16:       copyfail-sysctl-iouring.conf
 
 # x86_64 only: no-afalg.c has an explicit #error for non-x86_64. The auditor
 # is portable, but the shim is a load-bearing primitive of this package
@@ -453,6 +454,8 @@ install -m 0644 %{SOURCE5} \
 install -d -m 0755 %{buildroot}/usr/share/copyfail-defense/conditional/sysctl
 install -m 0644 %{SOURCE12} \
     %{buildroot}/usr/share/copyfail-defense/conditional/sysctl/99-copyfail-defense-userns.conf
+install -m 0644 %{SOURCE16} \
+    %{buildroot}/usr/share/copyfail-defense/conditional/sysctl/99-copyfail-defense-iouring.conf
 
 # --- audit subpackage layout (v2.0.2) ---
 # Rules drop directly into /etc/audit/rules.d/. Mode 0640 matches the
@@ -756,15 +759,14 @@ exit 0
     | logger -t copyfail-defense -p authpriv.info 2>/dev/null) \
     || true
 
-if [ -f /etc/sysctl.d/99-copyfail-defense-userns.conf ]; then
-    # Use -p <file> instead of --system to avoid re-applying every other
-    # sysctl.d drop-in (noisy + unrelated). The '-' prefix on our keys
-    # silences "unknown key" errors on kernels where one of the three
-    # keys is undefined (sysctl.d(5)).
-    sysctl -p /etc/sysctl.d/99-copyfail-defense-userns.conf 2>&1 \
-        | logger -t copyfail-defense -p authpriv.info 2>/dev/null \
-        || true
-fi
+for f in /etc/sysctl.d/99-copyfail-defense-userns.conf \
+         /etc/sysctl.d/99-copyfail-defense-iouring.conf; do
+    if [ -f "$f" ]; then
+        sysctl -p "$f" 2>&1 \
+            | logger -t copyfail-defense -p authpriv.info 2>/dev/null \
+            || true
+    fi
+done
 exit 0
 
 %postun sysctl -p /bin/bash
@@ -775,7 +777,8 @@ if [ "$1" -eq 0 ]; then
                 | logger -t copyfail-defense -p authpriv.info 2>/dev/null) \
             || true
     else
-        rm -f /etc/sysctl.d/99-copyfail-defense-userns.conf
+        rm -f /etc/sysctl.d/99-copyfail-defense-userns.conf \
+              /etc/sysctl.d/99-copyfail-defense-iouring.conf
     fi
     # Reload from the remaining sysctl.d set. user.max_user_namespaces
     # stays at whatever value the kernel's last sysctl --system pass left
@@ -919,6 +922,7 @@ exit 0
 # desktop browser is detected on the host).
 %dir /usr/share/copyfail-defense/conditional/sysctl
 /usr/share/copyfail-defense/conditional/sysctl/99-copyfail-defense-userns.conf
+/usr/share/copyfail-defense/conditional/sysctl/99-copyfail-defense-iouring.conf
 
 %files audit
 %license LICENSE
@@ -933,6 +937,36 @@ exit 0
 
 # ===========================================================================
 %changelog
+* Fri May 22 2026 Ryan MacDonald <ryan@rfxn.com> 2.1.1-1
+- Promote kernel.io_uring_disabled to auto-applied with layered
+  suppression. v2.1.0 shipped the key commented-out as opt-in;
+  v2.1.1 ships it active in a new /etc/sysctl.d/99-copyfail-defense-
+  iouring.conf drop-in, gated on detect.sh signals.
+- detect.sh adds detect_io_uring_workload(): liburing.so in any
+  /proc/*/maps, known-consumer binary list (postgres, scylla,
+  mariadbd, dockerd, redis-server, nginx, envoy, rabbitmq), and
+  io_uring-named systemd units. Kernel <6.6 gate suppresses with
+  reason kernel_too_old. Operator env knobs
+  CFD_FORCE_IOURING_DISABLE=1 / CFD_SUPPRESS_IOURING_DISABLE=1.
+- Split sysctl drop-in into two files so io_uring can be suppressed
+  independently of userns/ptrace_scope. The userns sysctl file
+  keeps user.max_user_namespaces + kernel.yama.ptrace_scope; the
+  new iouring file carries the io_uring key alone.
+- JSON state: suppressed.sysctl_iouring is now a {suppressed,
+  reason} dict (not bool) so the suppression reason surfaces
+  for operator triage. detected.io_uring_workload added.
+  applied.sysctl_iouring added.
+- Auditor adds check_io_uring_disabled (MITIGATION); reports
+  OK when applied, INFO/SKIP on correctly-suppressed hosts, FAIL
+  on hosts where workload absent but key not applied.
+- gh-pages publish: older RPMs (2.0.x, 2.1.0) moved to
+  repo/N/x86_64/archive/ so dnf install resolves only v2.1.1
+  via createrepo_c. Archive URLs remain reachable for backward-
+  compatible curl links.
+- test-repo.sh adds bare_iouring_host (clean EL10 -> applied),
+  iouring_consumer_host (pre-staged liburing.so process -> suppressed),
+  iouring_old_kernel_host (uname stub -> kernel_too_old).
+
 * Fri May 22 2026 Ryan MacDonald <ryan@rfxn.com> 2.1.0-1
 - Add PinTheft (RDS + io_uring) coverage: rds/rds_tcp/rds_rdma modprobe
   blacklist, ~AF_RDS in always-on systemd 10-* drop-in, copyfail_afrds
