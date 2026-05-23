@@ -2,38 +2,23 @@
 
 # rfxn-defense
 
-**Responsive defense layer for Linux — ships mitigations as 0days land,
-closing the delta between public CVE disclosure and the kernel/software
-vendor patch set landing on hosts.**
+**Responsive defense layer for Linux.** Ships kernel-LPE mitigations as
+0days land, closing the window between public CVE disclosure and the
+vendor patch reaching your hosts (or a fleet reboot becoming available).
 
-Each release pairs a disclosed kernel-LPE bug class with the on-disk
-primitives that cut the attack path *without* waiting for a kernel
-reboot or an upstream patch: modprobe blacklists, kernel-enforced
-systemd `RestrictAddressFamilies` / `RestrictNamespaces`, sysctl
-drop-ins, auditd tripwires, an `LD_PRELOAD` entry-point shim, and a
-read-only host posture auditor. A 4-hourly auto-update cron keeps
-hosts current with each new release — install once, stay covered.
+Signed yum/dnf repo for EL7 / EL8 / EL9 / EL10. 4-hourly auto-update
+cron. Zero reboot required for any mitigation. New bug classes ship
+with each release tag. Install once, stay covered.
 
-Current coverage (Copy Fail page-cache family + FD-theft class):
-
-| | CVE | Sink | Primitive |
-|---|---|---|---|
-| **cf1** | CVE-2026-31431 | `algif_aead` AEAD scratch-write | 4-byte STORE via `seqno_lo` |
-| **cf2 / Dirty Frag-ESP** | CVE-2026-43284 | `esp_input` skip_cow | 4-byte STORE via `seq_hi` |
-| **Dirty Frag-RxRPC** | CVE-2026-43500 | `rxkad_verify_packet_1` | 4-byte and 8-byte STORE |
-| **Fragnesia** | (no CVE yet, same surface as CVE-2026-43284) | `espintcp` ULP after splice | byte STORE in cached page |
-| **PinTheft** *(v2.1.0)* | CVE pending | RDS zerocopy double-free + io_uring fixed-buffer | page-cache overwrite of SUID binary |
-| **DirtyDecrypt** *(v3.0.0 cross-stamp)* | CVE-2026-31635 | `rxgk_*` RXGK token-decrypt in-place crypto | page-cache overwrite via AF_RXRPC |
-| **ssh-keysign-pwn** *(v2.1.0, FD-theft class)* | CVE-2026-46333 | `__ptrace_may_access()` race + `pidfd_getfd` on exiting SUID | open-fd theft from ssh-keysign / chage |
-
-Signed RPMs for EL7 / EL8 / EL9 / EL10 (x86_64). One `dnf install`,
-one auditor, one 4-hourly update cron.
+Today's shipping coverage: 7 LPE classes across two families. Copy Fail
+page-cache writes (cf1, cf2, Dirty Frag-ESP, DF-RxRPC, Fragnesia,
+PinTheft, DirtyDecrypt) and FD-theft via SUID exit-race (ssh-keysign-pwn).
+See the [coverage matrix](#coverage-matrix) for per-class detail.
 
 <a href="https://rfxn.github.io/rfxn-defense/"><img src="https://img.shields.io/badge/%F0%9F%93%A6%20yum%2Fdnf%20repo-rfxn.github.io%2Frfxn--defense-22d3ee?style=for-the-badge&labelColor=09090b" alt="rfxn-defense yum/dnf package repo"></a>
 <a href="https://www.rfxn.com/research/copyfail-cve-2026-31431"><img src="https://img.shields.io/badge/%F0%9F%94%AC%20deep%20dive-rfxn.com%2Fresearch-d97757?style=for-the-badge&labelColor=09090b" alt="Deep-dive research article on rfxn.com"></a>
 
-[![Bug class](https://img.shields.io/badge/coverage-cf1%20%2F%20cf2%20%2F%20Dirty%20Frag%20%2F%20PinTheft%20%2F%20DirtyDecrypt%20%2F%20keysign--pwn-d97757?labelColor=09090b)](#what-this-protects-against)
-[![Severity](https://img.shields.io/badge/severity-LOCAL%20PRIVESC-d44d4d?labelColor=09090b)](#what-this-protects-against)
+[![Severity](https://img.shields.io/badge/severity-LOCAL%20PRIVESC-d44d4d?labelColor=09090b)](#coverage-matrix)
 [![License](https://img.shields.io/badge/license-GPL--2.0-22d3ee?labelColor=09090b)](LICENSE)
 [![EL7/8/9/10](https://img.shields.io/badge/EL-7%20%2F%208%20%2F%209%20%2F%2010-4ade80?labelColor=09090b)](https://rfxn.github.io/rfxn-defense/)
 [![Latest release](https://img.shields.io/github/v/release/rfxn/rfxn-defense?label=release&color=22d3ee&labelColor=09090b)](https://github.com/rfxn/rfxn-defense/releases/latest)
@@ -41,18 +26,6 @@ one auditor, one 4-hourly update cron.
 [Install](#install) · [Verify](#verify) · [Coverage](#coverage-matrix) · [Defense in depth](#defense-in-depth) · [Audit](#audit-the-host) · [Subpackages](#subpackages) · [Overrides](#override-paths) · [Signatures](#verifying-signatures) · [Limitations](#limitations)
 
 </div>
-
----
-
-> [!NOTE]
-> Upgrading from `afalg-defense` v1.0.x or any `rfxn-defense`
-> 2.0.x release is a single command: `sudo dnf upgrade -y rfxn-defense`.
-> Auto-detection re-runs on every upgrade and suppresses any
-> conflicting drop-ins detected on your host (IPsec, AFS, rootless
-> containers, Flatpak, firejail, desktop browsers, RDS / Oracle
-> clusterware; see Auto-detection below). All six subpackages
-> (`-shim`, `-modprobe`, `-systemd`, `-sysctl`, `-auditor`, `-audit`)
-> auto-update with the meta package.
 
 ---
 
@@ -65,62 +38,56 @@ sudo dnf install -y rfxn-defense
 sudo /usr/sbin/rfxn-shim-enable
 ```
 
-One repo file works on EL7/EL8/EL9/EL10. RPMs are GPG-signed; dnf
-imports the public key on first use. Cross-check the fingerprint
-when prompted:
+One repo file works on EL7 / EL8 / EL9 / EL10. RPMs are GPG-signed; dnf
+imports the public key on first use. Cross-check the fingerprint when
+prompted:
 
 ```
 6001 1CDC EA2F F52D 975A  FDEE 6D30 F32C D5E8 0F80
 ```
 
-After install the 4-hourly auto-update cron keeps the host current; new
-mitigations land within 4 hours of a release tag without any operator
-action. Opt out by touching `/etc/rfxn-defense/auto-update.disabled`.
+The 4-hourly auto-update cron keeps hosts current; new mitigations land
+within 4 hours of a release tag with no operator action. Opt out by
+touching `/etc/rfxn-defense/auto-update.disabled`.
 
-The meta package pulls seven subpackages (with `-audit` as a soft dep so
-minimal hosts without auditd skip the pull-in):
+The meta package pulls seven subpackages (`-audit` as a soft dep on
+EL8/9/10, hard dep on EL7 since rpm-4.11 has no `Recommends:`):
 
 | Subpackage | Coverage |
 |---|---|
-| `rfxn-defense-shim` | LD_PRELOAD AF_ALG block (cf1 primary) |
-| `rfxn-defense-modprobe` | kernel-module entry-point cuts (cf1 + cf2 + Dirty Frag + PinTheft + DirtyDecrypt) |
-| `rfxn-defense-systemd` | per-unit `RestrictAddressFamilies=~AF_ALG ~AF_KEY ~AF_RXRPC ~AF_RDS` + `RestrictNamespaces=~user ~net` (all bug classes) |
-| `rfxn-defense-sysctl` *(v2.0.2)* | host-wide `user.max_user_namespaces=0`, `kernel.yama.ptrace_scope=2`, `kernel.io_uring_disabled=2` sysctls |
-| `rfxn-defense-auditor` | read-only host posture auditor with per-class coverage report |
-| `rfxn-defense-audit` | auditd tripwire rules (`rfxn_afalg/afkey/afrxrpc/afrds/pidfd_getfd`) |
-| `rfxn-defense-autoupdate` *(v3.0.0)* | 4-hourly responsive auto-update cron + flock-protected wrapper |
+| `rfxn-defense-shim` | `LD_PRELOAD` `AF_ALG` block (cf1 primary) |
+| `rfxn-defense-modprobe` | kernel-module entry-point cuts (cf1, cf2, Dirty Frag, PinTheft, DirtyDecrypt) |
+| `rfxn-defense-systemd` | per-unit `RestrictAddressFamilies=~AF_ALG ~AF_KEY ~AF_RXRPC ~AF_RDS` + `RestrictNamespaces=~user ~net` |
+| `rfxn-defense-sysctl` | host-wide `user.max_user_namespaces=0`, `kernel.yama.ptrace_scope=2`, `kernel.io_uring_disabled=2` (auto-suppressed where unsafe) |
+| `rfxn-defense-auditor` | read-only host posture auditor (`rfxn-local-check`) with per-class coverage report |
+| `rfxn-defense-audit` | auditd tripwires (`rfxn_afalg/afkey/afrxrpc/afrds/pidfd_getfd`) |
+| `rfxn-defense-autoupdate` | 4-hourly responsive auto-update cron + flock wrapper |
+
+Per-EL binary RPMs are independently compiled against each
+distribution's glibc (EL8: 2.28 with split `libdl`; EL9/EL10: 2.34+
+with merged `libdl`). **Do not cross-install across ELs.** Direct
+download links + sha256s:
+[rfxn.github.io/rfxn-defense](https://rfxn.github.io/rfxn-defense/#direct-downloads).
 
 > [!IMPORTANT]
-> **Upgrading from v2.x (`copyfail-defense`):** `sudo dnf upgrade -y
-> rfxn-defense`. The double Obsoletes/Provides chain handles the rename
-> automatically; operator state under `/var/lib/copyfail-defense/` and
-> `/etc/copyfail/` migrates to `/var/lib/rfxn-defense/` and
-> `/etc/rfxn-defense/` via `%pretrans` `mv -n` (idempotent). Audit-key
-> rename — SIEM operators MUST update queries:
+> **Upgrading from v2.x (`copyfail-defense`) or v1.x (`afalg-defense`):**
+> `sudo dnf upgrade -y rfxn-defense`. The Obsoletes/Provides chain
+> handles every prior layout; operator state under
+> `/var/lib/copyfail-defense/` and `/etc/copyfail/` migrates to
+> `/var/lib/rfxn-defense/` and `/etc/rfxn-defense/` via `%pretrans`
+> `mv -n` (idempotent). SIEM queries must update the audit-key prefix
+> (`copyfail_*` → `rfxn_*`).
 >
-> ```
-> ausearch -k copyfail_afalg        →  ausearch -k rfxn_afalg
-> ausearch -k copyfail_afkey        →  ausearch -k rfxn_afkey
-> ausearch -k copyfail_afrxrpc      →  ausearch -k rfxn_afrxrpc
-> ausearch -k copyfail_afrds        →  ausearch -k rfxn_afrds
-> ausearch -k copyfail_pidfd_getfd  →  ausearch -k rfxn_pidfd_getfd
-> ```
+> **Legacy URL hosts need manual migration.** GitHub Pages does not
+> redirect renamed-repo URLs. v2.x hosts with `copyfail.repo` in
+> `/etc/yum.repos.d/` will 404 on `dnf check-update` after v3.0.0:
 >
-> **Important — legacy URL hosts need manual migration.** GitHub Pages
-> does NOT redirect renamed-repo URLs (only the git remote and the
-> github.com web URL auto-redirect for ~6 months). v2.x hosts with
-> `copyfail.repo` in `/etc/yum.repos.d/` will see HTTP 404 on
-> `dnf check-update` after v3.0.0 ships and remain stranded on v2.1.1
-> until manually re-pointed:
->
-> ```
+> ```sh
 > sudo curl -sSL https://rfxn.github.io/rfxn-defense/rfxn-defense.repo \
 >     -o /etc/yum.repos.d/rfxn-defense.repo
 > sudo rm -f /etc/yum.repos.d/copyfail.repo
 > sudo dnf upgrade -y rfxn-defense
 > ```
->
-> New installs should use the new URL in the install section above.
 
 Auditor only (no `LD_PRELOAD`, for hot infrastructure):
 
@@ -129,17 +96,12 @@ sudo dnf install -y rfxn-defense-auditor
 ```
 
 > [!NOTE]
-> **EL7 (CentOS 7) note.** EL7 RPMs are built against
-> `vault.centos.org` repositories (CentOS 7 reached EOL 2024-06-30).
-> If your host loses access to `vault.centos.org`, install via the
-> GitHub release assets directly; the RPMs themselves carry no
-> runtime vault dependency. The repo file works against both
-> `mirror.centos.org`-style (EL8/9/10) and vault-style (EL7) DNS
-> on first install.
+> **EL7 note.** EL7 RPMs are built against `vault.centos.org`
+> (CentOS 7 reached EOL 2024-06-30). If your host loses vault access,
+> install via the GitHub release assets directly; the RPMs themselves
+> carry no runtime vault dependency.
 
 ## Verify
-
-After install + activation:
 
 ```sh
 # cf1: AF_ALG socket creation should fail
@@ -150,20 +112,9 @@ python3 -c 'import socket; socket.socket(socket.AF_ALG, socket.SOCK_SEQPACKET, 0
 sudo rfxn-local-check
 ```
 
-The auditor renders a surface-area matrix at the bottom showing, per
-bug-class, whether the kernel sink is reachable on this host AND which
-mitigation layers are active:
-
-```
-Surface area / mitigation matrix:
-  Class                Sink reachable?  Mitigated?  Active layers
-  cf1 (CVE-2026-31431) YES              yes         ld_preload_shim, systemd_af_alg, modprobe_blacklist
-  cf2 (xfrm-ESP)       YES              yes         modprobe_blacklist, systemd_restrict_ns
-  Dirty Frag-ESP       YES              yes         modprobe_blacklist, systemd_restrict_ns
-  Dirty Frag-RxRPC     YES              yes         modprobe_blacklist, systemd_af_rxrpc
-
-Bug-class coverage: cf1=mitigated cf2=mitigated dirtyfrag-esp=mitigated dirtyfrag-rxrpc=mitigated
-```
+The auditor renders a surface-area matrix per bug-class showing whether
+the kernel sink is reachable on this host AND which mitigation layers
+are active.
 
 ## Audit the host
 
@@ -174,22 +125,16 @@ sudo rfxn-local-check --emit-remediation   # bash script of suggested fixes
 ```
 
 Read-only by design: writes only to `mkdtemp()` sentinels, never modifies
-`/usr/bin` or `/etc`, runs unprivileged (some checks degrade gracefully
-without root). Five categories: `ENV`, `KERNEL`, `MITIGATION`,
-`HARDENING`, `DETECTION`.
+`/usr/bin` or `/etc`, runs unprivileged.
 
-Exit codes (unchanged from v1.0.1): `0` clean · `2` **VULN**
-(no userspace mitigation) · `3` VULN-but-mitigated · `4` hardening
+Exit codes (unchanged from v1.0.1): `0` clean · `2` **VULN** (no
+userspace mitigation) · `3` VULN-but-mitigated · `4` hardening
 recommendations only.
 
-JSON output (`--json`) includes:
-- `posture.bug_classes_covered`: array of class IDs where mitigation is
-  active. Single SIEM filter for "is this host hardened against the cf
-  class?"
-- `posture.bug_classes`: per-class map with `applicable`, `mitigated`,
-  `kernel_sink`, and per-layer activation booleans for dashboards.
-- `posture.verdict`: headline string from v1.0.x, preserved for
-  backwards compat.
+`--json` exposes `posture.bug_classes_covered` (single SIEM filter for
+"is this host hardened?"), `posture.bug_classes` (per-class `applicable`
+/ `mitigated` / `kernel_sink` / layer flags for dashboards), and the
+v1.0.x `posture.verdict` headline for backwards compat.
 
 ## Remove
 
@@ -198,161 +143,109 @@ sudo /usr/sbin/rfxn-shim-disable
 sudo dnf remove rfxn-defense
 ```
 
-`%preun` scrubs `/etc/ld.so.preload` on full erase as a safety net,
-and the modprobe drop file is removed; `%config(noreplace)` means the
-operator's hand-edits to systemd drop-ins survive package upgrade.
+`%preun` scrubs `/etc/ld.so.preload` on full erase; the modprobe drop
+file is removed. `%config(noreplace)` preserves operator hand-edits to
+systemd drop-ins across upgrade.
 
 ---
 
 ## Coverage matrix
 
-Which rung blocks which bug class. **✅** = primary mitigation, applied
-without caveat; **✅ ⁿ** = active coverage with a kernel- or workload-
-conditional caveat (see footnote); **ⁿ** alone = detection only, no
-mitigation (see footnote); **·** = not applicable.
+Which rung blocks which bug class. **✅** primary mitigation, applied
+without caveat. **✅ ⁿ** active coverage with a kernel- or
+workload-conditional caveat (see footnote). **ⁿ** alone is detection
+only, no mitigation. **·** not applicable.
 
-Rows below are mitigation rungs the package installs. Operator-applied
-hardening (suid lockdown, auditd rules) is in its own table below
-because no subpackage performs those actions; the auditor only
-recommends them conditionally.
+Rows are mitigation rungs the package installs. Operator-applied
+hardening (suid lockdown, additional auditd rules) is in a separate
+table below; no subpackage performs those actions because each can
+break legitimate workloads on a busy fleet.
 
-| Mitigation rung                                  | cf1 | cf2 | DF-ESP | DF-RxRPC | Fragnesia | PinTheft | keysign-pwn |
-|---                                               |:---:|:---:|:---:   |:---:     |:---:      |:---:     |:---:        |
-| LD_PRELOAD shim (`AF_ALG` hook)                  | ✅  |  ·  |   ·    |   ✅ ¹    |    ·      |    ·     |     ·       |
-| modprobe `algif_aead` family                     | ✅ ² |  ·  |   ·    |    ·     |    ·      |    ·     |     ·       |
-| modprobe `esp4 esp6 xfrm_user xfrm_algo`         |  ·  | ✅  |  ✅    |    ·     |   ✅      |    ·     |     ·       |
-| modprobe `rxrpc`                                 |  ·  |  ·  |   ·    |   ✅     |    ·      |    ·     |     ·       |
-| modprobe `rds rds_tcp rds_rdma` *(v2.1.0)*       |  ·  |  ·  |   ·    |    ·     |    ·      |   ✅ ⁵   |     ·       |
-| systemd `RestrictAddressFamilies=~AF_ALG`        | ✅  |  ·  |   ·    |    ·     |    ·      |    ·     |     ·       |
-| systemd `RestrictAddressFamilies=~AF_KEY` *(v2.0.2)* |  ·  | ✅  |  ✅    |    ·     |   ✅      |    ·     |     ·       |
-| systemd `RestrictAddressFamilies=~AF_RXRPC`      |  ·  |  ·  |   ·    |   ✅     |    ·      |    ·     |     ·       |
-| systemd `RestrictAddressFamilies=~AF_RDS` *(v2.1.0)* |  ·  |  ·  |   ·    |    ·     |    ·      |   ✅     |     ·       |
-| systemd `RestrictNamespaces=~user ~net`          |  ·  | ✅  |  ✅    |    ·     |   ✅      |    ·     |     ·       |
-| sysctl `user.max_user_namespaces=0` *(v2.0.2)*   |  ·  | ✅  |  ✅    |    ·     |   ✅      |    ·     |     ·       |
-| sysctl `kernel.yama.ptrace_scope=2` *(v2.1.0)*   |  ·  |  ·  |   ·    |    ·     |    ·      |    ·     |    ✅       |
-| sysctl `kernel.io_uring_disabled=2` *(v2.1.1)* ⁴ |  ·  |  ·  |   ·    |    ·     |    ·      |   ✅ ⁴   |     ·       |
-| auditd tripwire rules *(v2.0.2)*                 | ³   | ³   |  ³     |   ³      |   ³       |    ·     |     ·       |
-| auditd `rfxn_afrds` *(v2.1.0)*               |  ·  |  ·  |   ·    |    ·     |    ·      |   ³      |     ·       |
-| auditd `rfxn_pidfd_getfd` *(v2.1.0)*         |  ·  |  ·  |   ·    |    ·     |    ·      |    ·     |    ³        |
+| Mitigation rung                                  | cf1 | cf2 | DF-ESP | DF-RxRPC ⁶ | Fragnesia | PinTheft | keysign-pwn |
+|---                                               |:---:|:---:|:---:   |:---:       |:---:      |:---:     |:---:        |
+| LD_PRELOAD shim (`AF_ALG` hook)                  | ✅  |  ·  |   ·    |   ✅ ¹      |    ·      |    ·     |     ·       |
+| modprobe `algif_aead` family                     | ✅ ² |  ·  |   ·    |    ·       |    ·      |    ·     |     ·       |
+| modprobe `esp4 esp6 xfrm_user xfrm_algo`         |  ·  | ✅  |  ✅    |    ·       |   ✅      |    ·     |     ·       |
+| modprobe `rxrpc`                                 |  ·  |  ·  |   ·    |   ✅       |    ·      |    ·     |     ·       |
+| modprobe `rds rds_tcp rds_rdma`                  |  ·  |  ·  |   ·    |    ·       |    ·      |   ✅ ⁵   |     ·       |
+| systemd `RestrictAddressFamilies=~AF_ALG`        | ✅  |  ·  |   ·    |    ·       |    ·      |    ·     |     ·       |
+| systemd `RestrictAddressFamilies=~AF_KEY`        |  ·  | ✅  |  ✅    |    ·       |   ✅      |    ·     |     ·       |
+| systemd `RestrictAddressFamilies=~AF_RXRPC`      |  ·  |  ·  |   ·    |   ✅       |    ·      |    ·     |     ·       |
+| systemd `RestrictAddressFamilies=~AF_RDS`        |  ·  |  ·  |   ·    |    ·       |    ·      |   ✅     |     ·       |
+| systemd `RestrictNamespaces=~user ~net`          |  ·  | ✅  |  ✅    |    ·       |   ✅      |    ·     |     ·       |
+| sysctl `user.max_user_namespaces=0`              |  ·  | ✅  |  ✅    |    ·       |   ✅      |    ·     |     ·       |
+| sysctl `kernel.yama.ptrace_scope=2`              |  ·  |  ·  |   ·    |    ·       |    ·      |    ·     |    ✅       |
+| sysctl `kernel.io_uring_disabled=2` ⁴            |  ·  |  ·  |   ·    |    ·       |    ·      |   ✅ ⁴   |     ·       |
+| auditd tripwire rules                            | ³   | ³   |  ³     |   ³        |   ³       |   ³      |    ³        |
 
 ¹ Catches the `cksum` step in the public DF-RxRPC PoC, not the kernel
-sink itself. Useful as defense-in-depth, not as a primary stop.
+sink itself. Defense-in-depth, not a primary stop.
 ² No-op on RHEL stock kernels: `CRYPTO_USER_API*` is built-in, so the
-blacklist line cannot prevent load. Listed for completeness on custom
-or non-RHEL kernels where `algif_aead` ships modular. On RHEL the
-supported workaround is `grubby --update-kernel ALL --args
-"initcall_blacklist=algif_aead_init"` + reboot; the auditor reports
-this state under MITIGATION.
-³ Detection, not mitigation, telemetry for
-`socket(AF_ALG/AF_KEY/AF_RXRPC/AF_RDS)` syscalls and `pidfd_getfd`
-from unprivileged users. Real value is on hosts where modprobe
-blacklists are auto-suppressed (IPsec / AFS / RDS workloads) and the
-kernel sink is intentionally reachable; rules become the residual
-tripwire. Query via `ausearch -k rfxn_afalg` / `rfxn_afkey`
-/ `rfxn_afrxrpc` / `rfxn_afrds` / `rfxn_pidfd_getfd`.
-⁴ `kernel.io_uring_disabled=2` is auto-applied by v2.1.1 in a
-separate `/etc/sysctl.d/99-rfxn-defense-iouring.conf` drop-in
-(Linux 6.6+ only). Auto-detect suppresses it on rootless-container,
-Flatpak/firejail/browser, and io_uring-workload hosts (liburing.so
-in `/proc/*/maps`, known consumer binaries, or io_uring-named systemd
-units), and on kernels older than 6.6 (`reason=kernel_too_old`).
-Operator escape hatch: `CFD_SUPPRESS_IOURING_DISABLE=1` (suppress)
-or `CFD_FORCE_IOURING_DISABLE=1` (force-apply). PinTheft's primary
-cut is the `rds`/`rds_tcp`/`rds_rdma` modprobe blacklist; io_uring
-is the secondary layer for hosts where RDS is intentionally
-reachable.
-⁵ Functional on Ubuntu/Debian/Arch kernels and ELRepo kernel-ml
-swaps where `rds.ko` is loadable. No-op on stock RHEL/Alma/Rocky/Oracle
-UEK kernels (no `CONFIG_RDS=m`). Auto-suppressed on Oracle Grid /
-HPC hosts where RDS is in active use (detected via `/etc/oratab`,
-`crsctl` binary, or loaded `rds*.ko`).
-
-### Reference: kernel patches and detection signatures
-
-| Class       | Upstream patch  | Audit signature                |
-|---          |---              |---                             |
-| cf1         | `a664bf3d`      | `socket(a0=38)` / `rfxn_afalg`   |
-| cf2         | `f4c50a4034`    | `socket(a0=15)` / `rfxn_afkey` · `unshare(NEWUSER)` |
-| DF-ESP      | `f4c50a4034`    | same as cf2                    |
-| DF-RxRPC    | none upstream   | `socket(a0=33)` / `rfxn_afrxrpc` · `add_key("rxrpc",...)` |
-| Fragnesia   | netdev only (2026-05-13); not yet in stable trees | same as cf2 + `setsockopt(TCP_ULP="espintcp")` |
-| PinTheft    | none upstream as of v2.1.0 ship  | `socket(a0=21)` / `rfxn_afrds` |
-| keysign-pwn | none upstream (CVE-2026-46333)   | `pidfd_getfd` syscall 438 / `rfxn_pidfd_getfd` |
+blacklist line cannot prevent load. Supported workaround is
+`grubby --update-kernel ALL --args "initcall_blacklist=algif_aead_init"`
++ reboot; the auditor reports this state under MITIGATION.
+³ Detection only, not mitigation. Telemetry for
+`socket(AF_ALG/AF_KEY/AF_RXRPC/AF_RDS)` and `pidfd_getfd` from
+unprivileged users. Highest value on hosts where modprobe blacklists
+are auto-suppressed (IPsec / AFS / RDS) and the kernel sink is
+intentionally reachable. Query via `ausearch -k rfxn_afalg` /
+`rfxn_afkey` / `rfxn_afrxrpc` / `rfxn_afrds` / `rfxn_pidfd_getfd`.
+⁴ `kernel.io_uring_disabled=2` ships as a separate
+`/etc/sysctl.d/99-rfxn-defense-iouring.conf` (Linux 6.6+ only).
+Auto-suppressed on rootless-container, Flatpak/firejail/browser, and
+io_uring-workload hosts (liburing.so in `/proc/*/maps`, known consumer
+binaries, or io_uring-named systemd units), and on kernels older
+than 6.6. Operator escape hatch: `CFD_SUPPRESS_IOURING_DISABLE=1`
+(suppress) or `CFD_FORCE_IOURING_DISABLE=1` (force-apply). PinTheft's
+primary cut is the RDS modprobe blacklist; io_uring is secondary.
+⁵ Functional on Ubuntu/Debian/Arch kernels and ELRepo kernel-ml swaps
+where `rds.ko` is loadable. No-op on stock RHEL/Alma/Rocky/Oracle UEK
+kernels (no `CONFIG_RDS=m`). Auto-suppressed on Oracle Grid / HPC
+hosts where RDS is in active use (`/etc/oratab`, `crsctl` binary, or
+loaded `rds*.ko`).
+⁶ DirtyDecrypt (CVE-2026-31635, `rxgk_*` RXGK token-decrypt in-place
+crypto) is cross-stamped onto the DF-RxRPC column: every AF_RXRPC
+mitigation that covers DF-RxRPC also covers DirtyDecrypt.
 
 ### Audit keys (`-audit` subpackage)
 
-The `rfxn-defense-audit` subpackage installs auditd tripwire
-rules under these keys. Existing keys are unchanged in v2.1.0; the
-v2.1.0 cut adds the two `*v2.1.0*` rows at the bottom.
-
-| Key                       | Signature                                                              |
-|---                        |---                                                                     |
-| `rfxn_afalg`          | `socket(AF_ALG=38)` by unprivileged user (cf1)                         |
-| `rfxn_afkey`          | `socket(AF_KEY=15)` by unprivileged user (cf2 / DF-ESP / Fragnesia)    |
-| `rfxn_afrxrpc`        | `socket(AF_RXRPC=33)` by unprivileged user (DF-RxRPC)                  |
-| `rfxn_afrds` *(v2.1.0)*       | `socket(AF_RDS=21)` by unprivileged user (PinTheft)            |
-| `rfxn_pidfd_getfd` *(v2.1.0)* | `pidfd_getfd()` syscall 438 by unprivileged user (ssh-keysign-pwn) |
-
-SIEM consumers querying by audit key: existing keys
-(`rfxn_afalg`, `rfxn_afkey`, `rfxn_afrxrpc`) are
-unchanged in v2.1.0. Two new keys (`rfxn_afrds`,
-`rfxn_pidfd_getfd`) are additive; existing `ausearch -k <key>`
-queries continue to work without modification.
-
-The auditor emits a page-cache integrity probe (cached IOC) for every
-class; see `--json` `posture.bug_classes[*].kernel_sink`.
+| Key                  | Signature                                                              |
+|---                   |---                                                                     |
+| `rfxn_afalg`         | `socket(AF_ALG=38)` by unprivileged user (cf1)                         |
+| `rfxn_afkey`         | `socket(AF_KEY=15)` by unprivileged user (cf2 / DF-ESP / Fragnesia)    |
+| `rfxn_afrxrpc`       | `socket(AF_RXRPC=33)` by unprivileged user (DF-RxRPC / DirtyDecrypt)   |
+| `rfxn_afrds`         | `socket(AF_RDS=21)` by unprivileged user (PinTheft)                    |
+| `rfxn_pidfd_getfd`   | `pidfd_getfd()` syscall 438 by unprivileged user (ssh-keysign-pwn)     |
 
 ### Operator-applied (auditor-recommended)
 
-These are surfaced via `--emit-remediation`. **No subpackage applies
-them**, since each can break legitimate workloads on a busy fleet.
-Review every line before pasting.
+Surfaced via `--emit-remediation`. **No subpackage applies these**, since
+each can break legitimate workloads on a busy fleet. Review every line
+before pasting.
 
 | Action                                                     | Targets       | When the auditor recommends it |
 |---                                                         |---            |--- |
 | `chmod 4750 /usr/bin/su && chgrp wheel /usr/bin/su`        | cf2, DF-ESP   | Suppressed when `/etc/passwd` shows non-wheel/admin interactive users (cPanel-style tenant fleets); chmod 4750 would break their `su` workflow. |
 | `grubby --update-kernel ALL --args "initcall_blacklist=algif_aead_init"` + reboot | cf1 | RHEL kernels with `CRYPTO_USER_API_AEAD=y` (modprobe blacklist is a no-op on those); the supported escape per CIQ / Rocky Linux mitigation guidance. |
-| `auditd` rule `cf_userns` (`unshare(CLONE_NEWUSER)`)       | cf2, DF-ESP   | Hosts where `auditd` is tuned for userns events (otherwise high alert noise). Pairs with the v2.0.2 `-audit` subpackage rules. |
-| `auditd` rule `cf_addkey` (`add_key("rxrpc",...)`)         | DF-RxRPC      | Always; rxrpc keyring activity is rare enough that the false-positive rate stays low. The v2.0.2 `-audit` subpackage already installs the `socket(AF_RXRPC,...)` tripwire, `add_key` catches the next step in the chain. |
+| `auditd` rule `cf_userns` (`unshare(CLONE_NEWUSER)`)       | cf2, DF-ESP   | Hosts where `auditd` is tuned for userns events (otherwise high alert noise). |
+| `auditd` rule `cf_addkey` (`add_key("rxrpc",...)`)         | DF-RxRPC      | Always; `rxrpc` keyring activity is rare enough that the false-positive rate stays low. |
 
 ### CVE / disclosure references
 
-| Bug class | Disclosure link |
-|---|---|
-| cf1 | [CVE-2026-31431](https://www.rfxn.com/research/copyfail-cve-2026-31431) |
-| cf2 / Dirty Frag-ESP | CVE-2026-43284 |
-| Dirty Frag-RxRPC | CVE-2026-43500 |
-| Fragnesia | (no CVE yet, same surface as CVE-2026-43284) |
-| PinTheft | CVE pending, RDS zerocopy + io_uring fixed-buffer page-cache overwrite of SUID binary |
-| ssh-keysign-pwn | [CVE-2026-46333](https://nvd.nist.gov/vuln/detail/CVE-2026-46333), `__ptrace_may_access()` race + `pidfd_getfd` on exiting SUID binary |
+| Bug class | CVE | Kernel sink |
+|---|---|---|
+| cf1 | [CVE-2026-31431](https://www.rfxn.com/research/copyfail-cve-2026-31431) | `algif_aead` AEAD scratch-write |
+| cf2 / Dirty Frag-ESP | CVE-2026-43284 | `esp_input` `skip_cow` |
+| Dirty Frag-RxRPC | CVE-2026-43500 | `rxkad_verify_packet_1` |
+| Fragnesia | (no CVE yet; same surface as CVE-2026-43284) | `espintcp` ULP after splice |
+| PinTheft | CVE pending | RDS zerocopy double-free + io_uring fixed-buffer |
+| DirtyDecrypt | CVE-2026-31635 | `rxgk_*` RXGK token-decrypt in-place crypto |
+| ssh-keysign-pwn | [CVE-2026-46333](https://nvd.nist.gov/vuln/detail/CVE-2026-46333) | `__ptrace_may_access()` race + `pidfd_getfd` on exiting SUID |
 
 > 🔬 **Full writeup:** [Copy Fail (CVE-2026-31431) on rfxn.com/research](https://www.rfxn.com/research/copyfail-cve-2026-31431)
-> covers cf1 kernel mechanics; cf2 and Dirty Frag extend the same
-> primitive to two more sinks. PinTheft and ssh-keysign-pwn extend
-> the toolkit's coverage in v2.1.0 to a third Copy Fail-class sink
-> (RDS) and the new FD-theft class (ptrace exit-race).
-
----
-
-## What this protects against
-
-The Copy Fail bug **class** is a deterministic page-cache-write
-primitive: an unprivileged process uses `splice()` to plant a
-read-only page-cache page (e.g., `/etc/passwd` or `/usr/bin/su`)
-into a sender skb's `frag` slot, the receiver path performs in-place
-crypto on top of that frag, and the resulting STORE writes
-attacker-controlled bytes into the page cache. The on-disk file is
-unchanged; the corruption lives in RAM until eviction.
-
-| | Kernel sink | Privilege needed | Module |
-|---|---|---|---|
-| **cf1** (CVE-2026-31431) | `algif_aead` AEAD scratch-write | none | `algif_aead` (RHEL: builtin) |
-| **cf2 / Dirty Frag-ESP** (CVE-2026-43284) | `esp_input` `skip_cow` path | `CAP_NET_ADMIN` via `unshare(NEWUSER\|NEWNET)` + SA install via `AF_KEY` or XFRM netlink | `esp4`, `xfrm_user` (RHEL: modules) |
-| **Dirty Frag-RxRPC** (CVE-2026-43500) | `rxkad_verify_packet_1` in-place `pcbc(fcrypt)` | **none** | `rxrpc` (Ubuntu: loaded; RHEL: not in core) |
-| **Fragnesia** (no CVE yet) | `espintcp` ULP after splice into TCP receive queue | same as cf2 | same as cf2 |
-
-The same primitive shape, three different kernel sinks. Every layer in
-this toolkit is independently useful; none is a silver bullet on its own.
+> covers cf1 kernel mechanics; the rest of the Copy Fail family extends
+> the same `splice() → MSG_SPLICE_PAGES → in-place-crypto` primitive to
+> additional sinks.
 
 ---
 
@@ -364,17 +257,16 @@ that defeats one doesn't necessarily defeat the next:
 | Rung | Where it fails | What the next rung covers |
 |---|---|---|
 | **Kernel patch (vendor)** | EL7 EOL; EL8/9/10 patch rollout lags disclosure days-to-weeks; production reboot may not be available; **Dirty Frag-RxRPC has no upstream patch** | Userspace cuts close the window without a reboot |
-| **modprobe blacklist** | No-op when the relevant module is **builtin** (RHEL `algif_aead` is); no effect on already-resident modules | Functional for `esp4`/`esp6`/`xfrm_user`/`xfrm_algo`/`rxrpc` on stock RHEL kernels (these are modules) |
-| **systemd `RestrictAddressFamilies`/`RestrictNamespaces`** | Reaches only services systemd starts post-restriction. Misses cron-jobs running as root, sshd-pre-restriction, container payloads with their own pid 1 | LD_PRELOAD shim covers every dyn-linked process regardless of init |
+| **modprobe blacklist** | No-op when the relevant module is **builtin** (RHEL `algif_aead` is); no effect on already-resident modules | Functional for `esp4`/`esp6`/`xfrm_user`/`xfrm_algo`/`rxrpc` on stock RHEL kernels |
+| **systemd `RestrictAddressFamilies` / `RestrictNamespaces`** | Reaches only services systemd starts post-restriction. Misses cron jobs running as root, sshd-pre-restriction, container payloads with their own pid 1 | LD_PRELOAD shim covers every dyn-linked process regardless of init |
 | **LD_PRELOAD shim** | Static binaries; processes issuing `syscall` instruction directly; SUID binaries (kernel strips LD_PRELOAD for secure-exec) | seccomp at unit/runtime level catches direct-syscall path |
 | **seccomp filter** | Per-service. Operationally heavy: each unit/runtime needs explicit policy | This package's systemd subpackage ships a one-line filter for the highest-leverage tenant units |
 
-Where the shim itself fails (static binaries, direct `syscall`
-instruction, SUID stripping) is **attacker engineering territory**.
-The other rungs fail under **routine operator reality**: vendors
-haven't shipped yet, the kernel was built with builtin crypto, the
-threat surface includes a cron job. That asymmetry is the case for
-deploying every rung this package ships.
+Where the shim itself fails (static binaries, direct `syscall`, SUID
+stripping) is **attacker engineering territory**. The other rungs fail
+under **routine operator reality**: vendors haven't shipped yet, the
+kernel was built with builtin crypto, the threat surface includes a
+cron job. That asymmetry is the case for deploying every rung.
 
 ---
 
@@ -382,177 +274,77 @@ deploying every rung this package ships.
 
 | Package | Arch | Contents |
 |---|---|---|
-| `rfxn-defense` | x86_64 | meta, pulls all six below (`-audit` as Recommends) |
+| `rfxn-defense` | x86_64 | meta, pulls all six below (`-audit` as Recommends on EL8/9/10) |
 | `rfxn-defense-shim` | x86_64 | `/usr/lib64/no-afalg.so` + `rfxn-shim-{enable,disable}` |
-| `rfxn-defense-modprobe` | noarch | `/etc/modprobe.d/99-rfxn-defense-{cf1,cf2-xfrm,rxrpc}.conf` (cf-class entry-point cuts) |
-| `rfxn-defense-systemd` | noarch | drop-ins for `user@`/`sshd`/`cron`/`crond`/`atd` + container-runtime examples |
-| `rfxn-defense-sysctl` *(v2.0.2+)* | noarch | `/etc/sysctl.d/99-rfxn-defense-userns.conf` (host-wide userns disable, suppressed on userns-consumer hosts); `/etc/sysctl.d/99-rfxn-defense-iouring.conf` *(v2.1.1)* (io_uring disable, suppressed on io_uring-workload/rootless/Flatpak/kernel<6.6 hosts) |
+| `rfxn-defense-modprobe` | noarch | `/etc/modprobe.d/99-rfxn-defense-{cf1,cf2-xfrm,rxrpc,rds}.conf` |
+| `rfxn-defense-systemd` | noarch | drop-ins for `user@`/`sshd`/`cron`/`crond`/`atd` + container-runtime + RDS opt-in examples |
+| `rfxn-defense-sysctl` | noarch | `/etc/sysctl.d/99-rfxn-defense-{userns,ptrace,iouring}.conf` (each independently auto-suppressed) |
 | `rfxn-defense-auditor` | noarch | `/usr/sbin/rfxn-local-check` (Python, stdlib-only, read-only) |
-| `rfxn-defense-audit` *(v2.0.2)* | noarch | `/etc/audit/rules.d/99-rfxn-defense.rules` (syscall tripwires for AF_ALG / AF_KEY / AF_RXRPC) |
-
-Per-EL binary RPMs are independently compiled against each
-distribution's glibc (EL8: 2.28 with split `libdl`; EL9/EL10: 2.34+
-with merged `libdl`). **Do not cross-install across ELs.** Direct
-download links + sha256s:
-[rfxn.github.io/copyfail](https://rfxn.github.io/rfxn-defense/#direct-downloads).
+| `rfxn-defense-audit` | noarch | `/etc/audit/rules.d/99-rfxn-defense.rules` (syscall tripwires) |
+| `rfxn-defense-autoupdate` | noarch | `/etc/cron.d/rfxn-defense-autoupdate` + `/usr/sbin/rfxn-defense-update` (flock-protected wrapper) |
 
 ---
 
 ## Auto-detection of conflicting workloads
 
-v2.0.1+ inspects the host at install time for workloads the default
-cuts would break, and **suppresses the conflicting drop-in only**
-while keeping every other layer active. The intent is "do no harm to
-running production"; nothing else relaxes.
-
-### Why each workload triggers a carve-out
-
-- **IPsec**, the kernel xfrm/ESP path *is* the cf2 / Dirty Frag-ESP
-  kernel sink. Blacklisting `esp4`/`esp6`/`xfrm_user`/`xfrm_algo`
-  disables IPsec tunnels entirely (no SA install, no encrypted
-  traffic). Suppression keeps the modprobe drop off and leans on
-  systemd `RestrictNamespaces=~user ~net` to block the unprivileged
-  `unshare(NEWUSER|NEWNET)` step that gates the cf2 chain.
-- **AFS**, `rxrpc` is both the DF-RxRPC kernel sink and the transport
-  AFS itself rides on; blacklisting it breaks `openafs-client`. The
-  per-unit `RestrictAddressFamilies=~AF_RXRPC` would also break AFS
-  userspace tooling (`aklog`, `kinit`-style PAGs) when invoked from
-  any of the five tenant units. Suppression drops both of those
-  layers; every other rung still applies.
-- **Rootless containers**, rootless `podman`/`buildah` needs
-  `CLONE_NEWUSER` under the calling `user@.service`. Our default
-  `RestrictNamespaces=~user ~net` on `user@.service` makes the
-  `unshare(2)` return `EPERM`, which kills every rootless container.
-  Suppression strips the userns drop-in **on `user@.service` only**
-  `sshd`/`cron`/`crond`/`atd` retain it.
-- **Userns consumers** *(v2.0.2)*, Flatpak runtimes, firejail
-  sandboxes, and desktop browser renderer sandboxes
-  (Chromium/Chrome/Firefox) all rely on unprivileged user namespaces.
-  Our v2.0.2 host-wide sysctl drop-in
-  (`user.max_user_namespaces=0`) would break every one of them.
-  Suppression strips **only the sysctl drop-in**; the per-tenant-unit
-  `RestrictNamespaces=~user` cuts stay active. The same suppression
-  also fires on rootless-container hosts (so the host-wide sysctl and
-  the userns drop-in stay aligned).
+The installer inspects the host and **suppresses any drop-in that would
+break a detected workload**. Every other layer stays active. Intent:
+do no harm to running production; nothing else relaxes.
 
 ### Detection signals
 
-| Workload | Detection signals (any of) | Suppresses |
+| Workload | Signals (any of) | Suppresses |
 |---|---|---|
-| **IPsec** (strongSwan, libreswan, openswan) | `systemctl is-enabled` returns enabled for strongswan/strongswan-starter/strongswan-swanctl/ipsec/libreswan/openswan/pluto; OR `/etc/ipsec.conf` has a `conn` stanza; OR non-empty `*.conf` in `/etc/swanctl/conf.d/`, `/etc/ipsec.d/`, `/etc/strongswan/conf.d/`, `/etc/strongswan.d/` | `99-rfxn-defense-cf2-xfrm.conf` (esp4, esp6, xfrm_user, xfrm_algo blacklist) |
-| **AFS** (openafs, kafs) | `systemctl is-enabled` for openafs-client/openafs-server/kafs/afsd; OR `/etc/openafs/CellServDB` or `/etc/openafs/ThisCell` exists; OR `/etc/krb5.conf.d/openafs*` present; OR `/proc/fs/afs/` registered | `99-rfxn-defense-rxrpc.conf` (rxrpc modprobe blacklist) AND `12-rfxn-defense-rxrpc-af.conf` (`RestrictAddressFamilies=~AF_RXRPC` on all 5 tenant units) |
-| **Rootless containers** (rootless podman/buildah) | `/home/*/.local/share/containers/storage/overlay-containers/` present with mtime within 180d (rootless podman storage tree); OR `/var/lib/containers/storage/` non-empty with mtime <90d; OR `/run/user/<UID>/containers/` present for any UID ≥ 1000 (live rootless tmpfs); OR `podman.socket` enabled (system-wide or any per-user instance) | `15-rfxn-defense-userns.conf` on `user@.service.d` **only** + `/etc/sysctl.d/99-rfxn-defense-userns.conf` (v2.0.2) |
-| **Userns consumers** *(v2.0.2: Flatpak, firejail, desktop browser)* | non-empty `/var/lib/flatpak/{app,runtime}` OR per-user `~/.local/share/flatpak/app` within 180d; OR `/usr/bin/firejail` installed; OR `/usr/bin/{chromium,chromium-browser,google-chrome,firefox,firefox-esr}` present | `/etc/sysctl.d/99-rfxn-defense-userns.conf` (v2.0.2 host-wide userns sysctl) **only**, per-unit `RestrictNamespaces` stays active |
-| **io_uring workload** *(v2.1.1)* | liburing.so in any `/proc/*/maps` (running io_uring consumer); OR known consumer binary present and executable (`postgres`, `scylla`, `mariadbd`, `dockerd`, `redis-server`, `nginx`, `envoy`, `rabbitmq-server`); OR io_uring-named systemd unit listed by `systemctl list-unit-files` | `/etc/sysctl.d/99-rfxn-defense-iouring.conf` **only**, all other layers stay active |
+| **IPsec** (strongSwan, libreswan, openswan) | enabled systemd unit (strongswan/libreswan/openswan/ipsec/pluto); `/etc/ipsec.conf` `conn` stanza; non-empty `*.conf` under `/etc/swanctl/conf.d/`, `/etc/ipsec.d/`, `/etc/strongswan{,/conf.d}/` | `99-rfxn-defense-cf2-xfrm.conf` (esp4, esp6, xfrm_user, xfrm_algo blacklist) |
+| **AFS** (openafs, kafs) | enabled systemd unit (openafs-client/server, kafs, afsd); `/etc/openafs/{CellServDB,ThisCell}`; `/etc/krb5.conf.d/openafs*`; `/proc/fs/afs/` registered | `99-rxrpc.conf` + `12-rxrpc-af.conf` (`RestrictAddressFamilies=~AF_RXRPC` on all 5 tenant units) |
+| **Rootless containers** | `/home/*/.local/share/containers/storage/overlay-containers/` (mtime ≤180d); `/var/lib/containers/storage/` non-empty (mtime ≤90d); `/run/user/<UID≥1000>/containers/`; `podman.socket` enabled | `15-userns.conf` on **`user@.service` only** + `99-rfxn-defense-userns.conf` host-wide sysctl |
+| **Userns consumers** (Flatpak, firejail, desktop browser) | non-empty `/var/lib/flatpak/{app,runtime}` or per-user `~/.local/share/flatpak/app` (mtime ≤180d); `/usr/bin/firejail`; `/usr/bin/{chromium,chromium-browser,google-chrome,firefox,firefox-esr}` | `99-rfxn-defense-userns.conf` host-wide sysctl **only**; per-unit `RestrictNamespaces` stays active |
+| **io_uring workload** | `liburing.so` in `/proc/*/maps`; known consumer binary executable (`postgres`, `scylla`, `mariadbd`, `dockerd`, `redis-server`, `nginx`, `envoy`, `rabbitmq-server`); io_uring-named systemd unit | `99-rfxn-defense-iouring.conf` **only** |
 
-False-positive guards baked into the detector:
+False-positive guards baked into the detector: `/etc/subuid` populated
+by `useradd` is **not** a rootless signal (shadow-utils auto-populates
+it for every regular user, which produced ~100% FPs on cPanel-shaped fleets
+in v2.0.1 rev 1). Rootful container signal requires `mtime <90d`.
+`/home` walk bounded (`maxdepth 6`, `mtime -180`). `/run/user` signal
+requires `UID ≥ 1000`.
 
-- `/etc/subuid` populated by `useradd` is **not** a rootless signal.
-  shadow-utils auto-populates subuid for every regular user regardless
-  of container intent, which produced near-100% FPs on cPanel-shaped
-  fleets in v2.0.1 rev 1. Detection now requires *active* rootless
-  usage (storage tree, runtime tmpfs, or enabled `podman.socket`).
-- The rootful `/var/lib/containers/storage` signal is gated on
-  `mtime < 90d` so a long-purged podman install doesn't keep
-  triggering suppression.
-- The `/home` walk is bounded (`maxdepth 6`, `mtime -180`) so a
-  pathological tenant home tree can't stall `%posttrans`.
-- The `/run/user/<UID>/containers` signal requires `UID ≥ 1000` so
-  system-account artifacts under `/run/user/0` don't trip detection.
-
-### What stays protected after a suppression
-
-| Suppression triggered by | Layer dropped | Layers still active |
-|---|---|---|
-| **IPsec** | `99-cf2-xfrm.conf` modprobe blacklist | cf1 LD_PRELOAD shim · cf1 modprobe (`algif_aead` family) · `RestrictNamespaces=~user ~net` on all 5 tenant units (still blocks cf2/DF-ESP via the `unshare` gate) · `RestrictAddressFamilies=~AF_ALG ~AF_KEY ~AF_RXRPC` · `99-rxrpc.conf` blacklist · audit tripwire rules · host-wide userns sysctl (v2.0.2) |
-| **AFS** | `99-rxrpc.conf` blacklist + `12-rxrpc-af.conf` (`AF_RXRPC` restrict) on all 5 tenant units | cf1 LD_PRELOAD shim · cf1 modprobe · `99-cf2-xfrm.conf` blacklist · `RestrictNamespaces=~user ~net` on all 5 units (cf2/DF-ESP) · `RestrictAddressFamilies=~AF_ALG ~AF_KEY` · audit tripwire rules (DF-RxRPC ausearch key still emits, gated by auid≥1000) · host-wide userns sysctl |
-| **Rootless containers** | `15-userns.conf` on **`user@.service` only** + host-wide userns sysctl (v2.0.2) | All other layers; `sshd`/`cron`/`crond`/`atd` keep `RestrictNamespaces=~user ~net` (system-tier cf2/DF-ESP defense intact) · cf1 shim · all modprobe blacklists · `AF_ALG`/`AF_KEY`/`AF_RXRPC` restricts everywhere · audit tripwires |
-| **Userns consumers** *(v2.0.2: Flatpak / firejail / desktop browser)* | Host-wide userns sysctl drop-in **only** | All per-unit drop-ins · all modprobe blacklists · cf1 shim · all `RestrictAddressFamilies` cuts · audit tripwires |
-
-The cf1 shim and the auditor's tripwire layer are **never**
-suppressed by auto-detection; CVE-2026-31431 coverage is unchanged on
-every host.
+The cf1 shim and audit tripwires are **never** suppressed. cf1 coverage
+is unchanged on every host.
 
 ### Inspect the decision
 
-`%posttrans` writes a versioned JSON report. Read it any time:
-
 ```sh
 sudo cat /var/lib/rfxn-defense/auto-detect.json
-```
-
-```json
-{
-  "schema_version": "2",
-  "tool_version": "2.0.2",
-  "force_full": false,
-  "detected": {
-    "ipsec":               { "present": true,  "signals": ["systemctl: strongswan.service enabled"] },
-    "afs":                 { "present": false, "signals": [] },
-    "rootless_containers": { "present": true,  "signals": ["systemctl --user (alice): podman.socket enabled"] },
-    "userns_consumers":    { "present": true,  "signals": ["/usr/bin/firefox: desktop browser present"] }
-  },
-  "suppressed": {
-    "modprobe_cf2_xfrm":      true,
-    "modprobe_rxrpc":         false,
-    "systemd_rxrpc_af":       false,
-    "systemd_userns_user_at": true,
-    "sysctl_userns":          true
-  },
-  "applied": { "modprobe_cf1": true, "systemd_userns_sshd": true, "sysctl_userns": false, "...": "..." }
-}
-```
-
-Other inspection paths:
-
-```sh
-# Per-action log lines from %posttrans / rfxn-redetect
 sudo journalctl -t rfxn-defense-detect --since today
-
-# Auditor surface (SIEM-friendly)
-sudo rfxn-local-check --json \
-  | jq '.posture.auto_detect'
-# {"available": true, "suppressed_modprobe": ["cf2_xfrm"], "suppressed_systemd": ["userns_user_at"]}
+sudo rfxn-local-check --json | jq '.posture.auto_detect'
 ```
 
-Detection runs in `%posttrans` after every install/upgrade and is
-re-run on demand by `rfxn-redetect`. The auditor surfaces the
-decision under `posture.auto_detect` for fleet dashboards.
+`auto-detect.json` (schema v2) lists `detected.<workload>.signals`,
+`suppressed.<dropin>`, and `applied.<dropin>` flags. Detection runs in
+`%posttrans` after every install/upgrade and on demand via
+`rfxn-redetect`.
 
 ### Re-detect after the host changes
 
-If you enable IPsec / AFS / rootless containers / Flatpak / firejail
-/ a desktop browser post-install:
+If you enable IPsec / AFS / rootless containers / Flatpak / firejail /
+a desktop browser post-install:
 
 ```sh
 sudo /usr/sbin/rfxn-redetect
 sudo systemctl daemon-reload
 sudo systemctl try-reload-or-restart sshd.service
-sudo sysctl --system   # (v2.0.2) if the sysctl drop-in was added or removed
+sudo sysctl --system   # if any sysctl drop-in was added or removed
 ```
 
-The helper re-runs detection, refreshes `auto-detect.json`, and
-copies/removes the conditional drop-in files in `/etc/` (modprobe,
-systemd, **and sysctl** in v2.0.2). It does NOT auto-reload systemd
-or sysctl - the operator decides when running services pick up the
-change.
+The helper refreshes `auto-detect.json` and copies/removes the
+conditional drop-in files. It does NOT auto-reload systemd or sysctl;
+the operator decides when running services pick up the change.
 
-**Removing the sysctl drop-in does not reset the running-kernel
-value.** `user.max_user_namespaces` stays at `0` until either another
-sysctl.d file sets it, or the host reboots. To restore the default
-without reboot:
+**Removing the sysctl drop-in does not reset the running-kernel value.**
+`user.max_user_namespaces` stays at `0` until another sysctl.d file
+sets it or the host reboots.
 
-```sh
-sudo sysctl -w user.max_user_namespaces=$(zcat /proc/config.gz \
-    | grep -F CONFIG_USER_NS_DEFAULT_LIMIT \
-    | cut -d= -f2 \
-    || echo 31742)   # kernel default; 31742 on recent mainline
-```
-
-### Force full install (skip detection)
-
-Drop a sentinel file before `dnf install` (or before
-`rfxn-redetect`) to skip detection entirely:
+### Force full coverage (skip detection)
 
 ```sh
 sudo mkdir -p /etc/rfxn-defense
@@ -561,22 +353,20 @@ sudo dnf install -y rfxn-defense
 ```
 
 The auditor reports `force-full sentinel active` when this is on.
-Remove the sentinel and re-run `rfxn-redetect` to re-engage
-detection.
 
-### Manual override (finer than detection)
+---
 
-systemd drop-ins use the standard layered-override pattern.
-Within a `<unit>.service.d/` directory, files merge in
-lexicographic order, and **lower numbers lose to higher numbers
-for `=value` directives** (later files override earlier ones).
-rfxn-defense ships at `10-`, `12-`, `15-`; the standard
-operator escape hatches sit at `20-` and `25-`:
+## Override paths
 
-**`20-override.conf` (empty-value to neutralize a directive):**
-drop a `20-override.conf` next to our files with empty values for
-any directive you want to relax. Survives package upgrade because
-`20-override.conf` is operator-owned (RPM doesn't manage it).
+systemd drop-ins use the standard layered-override pattern. Within a
+`<unit>.service.d/` directory, files merge in lex order, and **lower
+numbers lose to higher numbers** for `=value` directives. rfxn-defense
+ships at `10-`, `12-`, `15-`; operator escape hatches sit at `20-`
+and `25-`.
+
+**`20-override.conf`** (neutralize one of our directives). Empty `=`
+clears the union for list-valued directives. Survives package upgrade
+(operator-owned, RPM does not manage it):
 
 ```sh
 sudo mkdir -p /etc/systemd/system/user@.service.d
@@ -588,14 +378,8 @@ EOF
 sudo systemctl daemon-reload
 ```
 
-Empty `=` clears the union for list-valued directives like
-`RestrictAddressFamilies` and `RestrictNamespaces`.
-
-**`25-additions.conf` (add a new directive on top of ours):**
-drop a `25-additions.conf` next to our files with directives you
-want to *add*. Sorts after `20-` so it can layer on top of an
-empty-override. Use this for fleet-wide hardening that goes
-beyond the cf-class scope.
+**`25-additions.conf`** (add a directive on top of ours). Sorts after
+`20-` so it can layer on top of an empty-override:
 
 ```sh
 sudo tee /etc/systemd/system/sshd.service.d/25-additions.conf >/dev/null <<'EOF'
@@ -606,48 +390,42 @@ sudo systemctl daemon-reload
 sudo systemctl try-reload-or-restart sshd.service
 ```
 
-**modprobe override**: the conditional `99-rfxn-defense-cf2-xfrm.conf`
-and `99-rfxn-defense-rxrpc.conf` files are managed by detect.sh
-(cmp-and-skip per [SPEC §12.10.2a / D-57]). If you hand-edit a
-conditional file, detect.sh detects the divergence on next
-`%posttrans` or `rfxn-redetect`, logs a WARN, and **preserves
-your edits** (does not overwrite). For the always-on
-`99-rfxn-defense-cf1.conf` file, edits survive package upgrade
-via `%config(noreplace)`.
-
-The earlier (incorrect) recommendation to `chattr +i` a managed
-file is **removed** - it broke dnf via EPERM on the next
-`install -m 0644` from `%posttrans`. Use the cmp-and-skip
-behavior or `force-full` instead.
+**modprobe override**: conditional `cf2-xfrm.conf` and `rxrpc.conf` are
+managed by detect.sh (cmp-and-skip). Hand-edit and detect.sh logs WARN
+on next `%posttrans` / `rfxn-redetect` and **preserves your edits**
+(does not overwrite). For the always-on `cf1.conf`, edits survive
+package upgrade via `%config(noreplace)`. Do not `chattr +i` a managed
+file: it breaks dnf via EPERM on the next `install -m 0644`.
 
 ---
+
 ## Verifying signatures
 
-1.0.1+ and 2.0.0+ are signed by the **Copyfail Project Signing Key**.
-The `.repo` file enforces both `gpgcheck=1` (per-RPM) and
-`repo_gpgcheck=1` (detached `repomd.xml.asc` over the metadata), so a
-stock `dnf install` does end-to-end verification automatically.
+v1.0.1+ and v2.0.0+ are signed by the Copyfail Project Signing Key
+(retained as the project's canonical signing identity through the
+v3.0.0 rfxn-defense rename). The `.repo` file enforces both
+`gpgcheck=1` (per-RPM) and `repo_gpgcheck=1` (detached `repomd.xml.asc`
+over the metadata), so a stock `dnf install` does end-to-end
+verification automatically.
 
 ```
 fingerprint: 6001 1CDC EA2F F52D 975A  FDEE 6D30 F32C D5E8 0F80
 uid:         Copyfail Project Signing Key <proj@rfxn.com>
-key file:    https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail
+key file:    https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-rfxn
 ```
 
 Out-of-band verification of a downloaded RPM:
 
 ```sh
-curl -sSL https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail \
+curl -sSL https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-rfxn \
   | sudo rpm --import /dev/stdin
-rpm -K rfxn-defense-2.1.1-1.el9.x86_64.rpm
+rpm -K rfxn-defense-3.0.0-1.el9.x86_64.rpm
 # expect: digests signatures OK
 ```
 
 ---
 
 ## Auditor JSON schema (v2.0)
-
-`--json` emits a structured object. The headline fields:
 
 ```json
 {
@@ -656,32 +434,21 @@ rpm -K rfxn-defense-2.1.1-1.el9.x86_64.rpm
   "posture": {
     "verdict": "vulnerable_kernel_userspace_mitigated",
     "bug_classes_covered": ["cf1", "cf2", "dirtyfrag-esp"],
-    "bug_classes": {
-      "cf1":             { "applicable": true, "mitigated": true,  "kernel_sink": "...", "layers": {...} },
-      "cf2":             { "applicable": true, "mitigated": true,  "kernel_sink": "...", "layers": {...} },
-      "dirtyfrag-esp":   { "applicable": true, "mitigated": true,  "kernel_sink": "...", "layers": {...} },
-      "dirtyfrag-rxrpc": { "applicable": true, "mitigated": false, "kernel_sink": "...", "layers": {...} }
-    },
-    "layers": { ... },
-    "auto_detect": {
-      "available": true,
-      "suppressed_modprobe": [],
-      "suppressed_systemd": []
-    }
+    "bug_classes": { "cf1": { "applicable": true, "mitigated": true, "layers": {} } },
+    "auto_detect": { "available": true, "suppressed_modprobe": [], "suppressed_systemd": [] }
   }
 }
 ```
 
-`bug_classes_covered` is the SIEM-ergonomic single filter ("is this
-host hardened?"). `bug_classes` map exposes per-layer breakdown for
-finer dashboards. `verdict` and `layers` from v1.0.x are preserved for
-backwards compatibility.
+`bug_classes_covered` is the SIEM-ergonomic single filter.
+`bug_classes` exposes per-layer breakdown for finer dashboards. `verdict`
+and `layers` from v1.0.x are preserved for backwards compat.
 
 `--emit-remediation` prints a bash script aggregating per-check
 remediation hints. Output is **fully commented** by default; review
 every block before pasting (chmod on suid binaries, modprobe blacklist,
-unprivileged-userns sysctl are policy-dependent or require a reboot to
-undo).
+and the unprivileged-userns sysctl are policy-dependent or require a
+reboot to undo).
 
 ---
 
@@ -689,7 +456,7 @@ undo).
 
 `no-afalg.c` is single-file, no build system. Tested on EL7
 (gcc 4.8 / glibc 2.17), EL8 (gcc 8.5 / glibc 2.28), EL9 (gcc 11.5 /
-glibc 2.34), and EL10 (gcc 14 / glibc 2.39). x86_64 only.
+glibc 2.34), EL10 (gcc 14 / glibc 2.39). x86_64 only.
 
 ```sh
 gcc -shared -fPIC -O2 -Wall -Wextra \
@@ -700,7 +467,7 @@ To rebuild the RPMs from the published SRPM (under your own signing):
 
 ```sh
 mock -r centos-stream+epel-9-x86_64 --rebuild \
-  https://github.com/rfxn/rfxn-defense/releases/download/v2.1.1/rfxn-defense-2.1.1-1.el9.src.rpm
+  https://github.com/rfxn/rfxn-defense/releases/download/v3.0.0/rfxn-defense-3.0.0-1.el9.src.rpm
 ```
 
 The spec lives at `packaging/rfxn-defense.spec`.
@@ -712,31 +479,19 @@ The spec lives at `packaging/rfxn-defense.spec`.
 - **x86_64 only.** The shim has architecture asserts; the auditor's
   trigger probe struct layout is x86_64. Patches welcome for arm64.
 - The userspace shim is irrelevant to static binaries and
-  syscall-instruction issuers. Other rungs (modprobe, systemd
-  RestrictNamespaces, kernel patch) cover those.
-- **Dirty Frag-RxRPC has no upstream patch** as of v2.0.0 ship date.
-  Mitigation is the `rxrpc` modprobe blacklist + systemd
-  `RestrictAddressFamilies=~AF_RXRPC` until upstream merges V4bel's
-  proposed gate (`skb_cloned(skb) || skb->data_len`).
-- modprobe blacklists do not unload already-resident modules. The
-  package's `%post modprobe` does a best-effort `rmmod`; reboot to
-  fully clear.
+  syscall-instruction issuers. Other rungs cover those.
+- **Dirty Frag-RxRPC has no upstream patch.** Mitigation is the `rxrpc`
+  modprobe blacklist + systemd `RestrictAddressFamilies=~AF_RXRPC`
+  until upstream merges V4bel's proposed `skb_cloned(skb) ||
+  skb->data_len` gate.
+- modprobe blacklists do not unload already-resident modules.
+  `%post modprobe` does a best-effort `rmmod`; reboot to fully clear.
 - Auditor's trigger probe is destructive *only* against its own
-  sentinel; it will not corrupt anything you would notice. It will,
-  however, briefly load `algif_aead` and friends if they aren't
-  already loaded (which is the point).
-- **v2.0.2:** the `-audit` subpackage installs three tripwire rules
-  catching `socket(AF_ALG/AF_KEY/AF_RXRPC)` from unprivileged users
-  (filtered to `auid>=1000`); installed by default via the meta
-  `Recommends` (skip with `--setopt=install_weak_deps=false`). The
-  auditor's `--emit-remediation` still surfaces additional rules
-  (`cf_userns` for `unshare(CLONE_NEWUSER)`, `cf_addkey` for
-  `add_key("rxrpc",...)`) that are out of scope for the default
-  install because they depend on operator-tuned auditd context.
-- **v2.0.2 sysctl drop-in:** removing `-sysctl` does NOT reset
-  `user.max_user_namespaces` to the kernel default, the running
-  kernel value persists until reboot or another sysctl.d drop-in
-  overrides it. See "Re-detect after the host changes" above.
+  sentinel; it will briefly load `algif_aead` and friends if they
+  aren't already loaded (which is the point).
+- Removing `-sysctl` does NOT reset `user.max_user_namespaces` to the
+  kernel default. The running kernel value persists until reboot or
+  another sysctl.d drop-in overrides it.
 
 ## License
 
