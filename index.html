@@ -40,7 +40,7 @@
 
 <h1>copyfail-defense</h1>
 <div class="badges">
-  <a class="badge" href="https://github.com/rfxn/copyfail/releases/latest">Latest: v2.1.0</a>
+  <a class="badge" href="https://github.com/rfxn/copyfail/releases/latest">Latest: v2.1.1</a>
   <span class="badge alt">EL7 / EL8 / EL9 / EL10</span>
   <span class="badge alt">x86_64</span>
   <a class="badge cve" href="https://nvd.nist.gov/vuln/detail/CVE-2026-31431">CVE-2026-31431</a>
@@ -210,6 +210,28 @@ Per-version summary. Full per-commit history:
 Per-release notes: <a href="https://github.com/rfxn/copyfail/releases">github.com/rfxn/copyfail/releases</a>.
 </p>
 
+<h3>v2.1.1 (2026-05-23) &middot; io_uring auto-detect with layered suppression</h3>
+<ul>
+<li><strong>io_uring sysctl auto-applied</strong> &mdash; promotes
+    <code>kernel.io_uring_disabled=2</code> from v2.1.0 operator opt-in
+    to auto-applied with layered suppression. New
+    <code>/etc/sysctl.d/99-copyfail-defense-iouring.conf</code> drop-in
+    (split from userns file so io_uring suppresses independently).
+    Suppression signals: liburing.so in any /proc/*/maps, known consumer
+    binaries (postgres, scylla, mariadbd, dockerd, redis-server, nginx,
+    envoy, rabbitmq), io_uring-named systemd units, kernel &lt; 6.6.
+    Operator knobs: <code>CFD_FORCE_IOURING_DISABLE</code> /
+    <code>CFD_SUPPRESS_IOURING_DISABLE</code>.</li>
+<li>Auditor: new <code>check_io_uring_disabled</code> (MITIGATION) reports
+    applied / suppressed+reason / absent state.</li>
+<li>JSON state extended: <code>detected.io_uring_workload</code>,
+    <code>suppressed.sysctl_iouring</code> (dict with
+    <code>suppressed</code> + <code>reason</code>),
+    <code>applied.sysctl_iouring</code>.</li>
+<li>gh-pages: older RPMs (2.0.x + 2.1.0) moved to
+    <code>repo/N/x86_64/archive/</code>; dnf resolves only v2.1.1.</li>
+</ul>
+
 <h3>v2.1.0 (2026-05-22) &middot; PinTheft + ssh-keysign-pwn + EL7 build target</h3>
 <ul>
 <li><strong>PinTheft</strong> (CVE pending) &mdash; Copy Fail class
@@ -230,8 +252,8 @@ Per-release notes: <a href="https://github.com/rfxn/copyfail/releases">github.co
     not recognise the name string).</li>
 <li>Operator opt-in commented-out
     <code>kernel.io_uring_disabled=2</code> (PinTheft secondary
-    mitigation; Linux 6.6+ only). Disabling io_uring breaks
-    containerd/podman runtimes that depend on it &mdash; opt in per host.</li>
+    mitigation; Linux 6.6+ only) &mdash; promoted to auto-applied with
+    layered suppression in v2.1.1.</li>
 <li>Auto-detect gains <code>detect_rds_workload()</code>: signals
     <code>/etc/oratab</code> non-comment entry, Oracle
     <code>crsctl</code> binary, or <code>rds*.ko</code> loaded in the
@@ -399,7 +421,7 @@ applicable; superscripts mark caveated coverage (notes below).
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td><td class="cls-y">&#x2713;</td></tr>
-<tr><td>sysctl <code>kernel.io_uring_disabled=2</code> <em>(v2.1.0, opt-in)</em></td>
+<tr><td>sysctl <code>kernel.io_uring_disabled=2</code> <em>(v2.1.1, auto-applied)</em></td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td>
@@ -433,11 +455,12 @@ RHEL/Alma/Rocky/Oracle UEK kernels (no <code>CONFIG_RDS=m</code>).
 Auto-suppressed on Oracle Grid / HPC hosts where RDS is in active use
 (detected via <code>/etc/oratab</code>, <code>crsctl</code> binary, or
 loaded <code>rds*.ko</code>).<br>
-<sup>5</sup> Operator opt-in: ships commented out by default. Available
-only on Linux 6.6+ (EL10+, Ubuntu 24.04+). Disabling io_uring breaks
-containerd/podman runtimes that depend on it; uncomment the line in
-<code>/etc/sysctl.d/99-copyfail-defense-userns.conf</code> only on
-hosts confirmed not to require io_uring.
+<sup>5</sup> Auto-applied (v2.1.1+) on Linux 6.6+ hosts where no io_uring
+workload is detected (liburing.so in any /proc/*/maps, known-consumer
+binaries, io_uring-named systemd units). Suppressed on rootless /
+Flatpak / container-runtime hosts and kernels &lt; 6.6.
+Override: <code>CFD_FORCE_IOURING_DISABLE=1 copyfail-redetect</code> or
+<code>CFD_SUPPRESS_IOURING_DISABLE=1 copyfail-redetect</code>.
 </p>
 
 <h3>Reference: kernel patches and audit signatures</h3>
