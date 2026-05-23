@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>rfxn-defense: responsive defense layer for Linux</title>
-<meta name="description" content="rfxn-defense is a responsive defense layer for Linux that ships kernel-LPE mitigations as 0days land, closing the delta between public CVE disclosure and the kernel/software vendor patch set. Coverage: Copy Fail page-cache family (cf1 / CVE-2026-31431, cf2 / Dirty Frag-ESP / CVE-2026-43284, DF-RxRPC / CVE-2026-43500, Fragnesia, PinTheft, DirtyDecrypt / CVE-2026-31635) and FD-theft class (ssh-keysign-pwn / CVE-2026-46333). Primitives: LD_PRELOAD AF_ALG shim, modprobe blacklists, systemd RestrictAddressFamilies + RestrictNamespaces, sysctl drop-ins, auditd tripwires, host posture auditor, and a 4-hourly auto-update cron. Packaged for EL7/EL8/EL9/EL10.">
+<meta name="description" content="rfxn-defense is a responsive defense layer for Linux. Ships kernel-LPE mitigations as 0days land, closing the window between public CVE disclosure and the vendor patch reaching your hosts (or a fleet reboot becoming available). Signed yum/dnf repo for EL7/EL8/EL9/EL10, 4-hourly auto-update cron, zero reboot required. New bug classes ship with each release tag.">
 <style>
  body{font-family:system-ui,sans-serif;max-width:52rem;margin:2rem auto;padding:0 1rem;line-height:1.5;color:#222}
  h1,h2{font-weight:600}
@@ -43,10 +43,8 @@
   <a class="badge" href="https://github.com/rfxn/rfxn-defense/releases/latest">Latest: v3.0.0</a>
   <span class="badge alt">EL7 / EL8 / EL9 / EL10</span>
   <span class="badge alt">x86_64</span>
-  <a class="badge cve" href="https://nvd.nist.gov/vuln/detail/CVE-2026-31431">CVE-2026-31431</a>
-  <a class="badge cve" href="https://nvd.nist.gov/vuln/detail/CVE-2026-46333">CVE-2026-46333</a>
-  <a class="badge cve" href="https://nvd.nist.gov/vuln/detail/CVE-2026-31635">CVE-2026-31635</a>
-  <span class="badge alt">cf2 / Dirty Frag / Fragnesia / PinTheft / DirtyDecrypt / ssh-keysign-pwn</span>
+  <span class="badge alt">7 LPE classes</span>
+  <span class="badge alt">4-hourly auto-update</span>
   <span class="badge alt">GPL v2</span>
 </div>
 <div class="source-link">
@@ -61,7 +59,6 @@ report a problem: <a href="https://github.com/rfxn/rfxn-defense/issues/new/choos
 
 <nav class="page-nav">
   <a href="#install">Install</a> &middot;
-  <a href="#changelog">Changelog</a> &middot;
   <a href="#coverage">Coverage</a> &middot;
   <a href="#auto-detect">Auto-detection</a> &middot;
   <a href="#verify">Verify</a> &middot;
@@ -69,85 +66,61 @@ report a problem: <a href="https://github.com/rfxn/rfxn-defense/issues/new/choos
   <a href="#json">JSON</a> &middot;
   <a href="#downloads">Downloads</a> &middot;
   <a href="#signing">Signing</a> &middot;
-  <a href="#defense">Defense in depth</a>
+  <a href="#defense">Defense in depth</a> &middot;
+  <a href="#changelog">Changelog</a>
 </nav>
 
 <p class="lede">
-Defense-in-depth toolkit for two bug classes: the <strong>Copy Fail
-class</strong> (five live LPE chains sharing the <code>splice() &rarr;
-MSG_SPLICE_PAGES</code> page-cache write primitive) and the
-<strong>FD-theft class</strong> (privilege-confusion via SUID exit-race,
-first member: ssh-keysign-pwn).
+<strong>Responsive defense layer for Linux.</strong> Ships kernel-LPE
+mitigations as 0days land, closing the window between public CVE
+disclosure and the vendor patch reaching your hosts (or a fleet
+reboot becoming available). Signed yum/dnf repo for EL7/EL8/EL9/EL10,
+4-hourly auto-update cron, zero reboot required for any mitigation.
+New bug classes ship with each release. Install once, stay covered.
 </p>
 
-<table>
-<tr><th>Class</th><th>CVE</th><th>Kernel sink</th><th>Privilege</th></tr>
-<tr><td><strong>cf1</strong></td>
-    <td>CVE-2026-31431</td>
-    <td><code>algif_aead</code> AEAD scratch-write</td>
-    <td>none</td></tr>
-<tr><td><strong>cf2 / Dirty Frag-ESP</strong></td>
-    <td>CVE-2026-43284</td>
-    <td><code>esp_input</code> <code>skip_cow</code> path</td>
-    <td>CAP_NET_ADMIN via <code>unshare(NEWUSER|NEWNET)</code> + SA install via <code>AF_KEY</code> / XFRM netlink</td></tr>
-<tr><td><strong>Dirty Frag-RxRPC</strong></td>
-    <td>CVE-2026-43500</td>
-    <td><code>rxkad_verify_packet_1</code> in-place <code>pcbc(fcrypt)</code></td>
-    <td>none</td></tr>
-<tr><td><strong>Fragnesia</strong></td>
-    <td>(no CVE yet; same surface as CVE-2026-43284)</td>
-    <td><code>espintcp</code> ULP after splice into TCP receive queue</td>
-    <td>same as cf2</td></tr>
-<tr><td><strong>PinTheft</strong> <em>(v2.1.0)</em></td>
-    <td>(CVE pending; disclosed 2026-05)</td>
-    <td>RDS zerocopy double-free chained to <code>io_uring</code>
-        fixed-buffer page-cache overwrite of SUID-root binary</td>
-    <td>none on kernels with <code>CONFIG_RDS=m</code>
-        (Ubuntu/Debian/Arch stock; RHEL+ELRepo kernel-ml swap)</td></tr>
-<tr><td><strong>ssh-keysign-pwn</strong> <em>(v2.1.0; FD-theft class)</em></td>
-    <td>CVE-2026-46333</td>
-    <td><code>__ptrace_may_access()</code> race exposes root-readable
-        FDs (SSH host keys, <code>/etc/shadow</code>) via
-        <code>pidfd_getfd</code> on exiting SUID binary</td>
-    <td>none</td></tr>
-</table>
+<p class="lede">
+Today's shipping coverage: 7 LPE classes across two families. <strong>Copy
+Fail page-cache writes</strong> (cf1 / <a href="https://nvd.nist.gov/vuln/detail/CVE-2026-31431">CVE-2026-31431</a>,
+cf2 / Dirty Frag-ESP / CVE-2026-43284, DF-RxRPC / CVE-2026-43500,
+Fragnesia, PinTheft, DirtyDecrypt / <a href="https://nvd.nist.gov/vuln/detail/CVE-2026-31635">CVE-2026-31635</a>);
+<strong>FD-theft via SUID exit-race</strong> (ssh-keysign-pwn / <a href="https://nvd.nist.gov/vuln/detail/CVE-2026-46333">CVE-2026-46333</a>).
+See <a href="#coverage">coverage matrix</a> for per-class rung detail.
+</p>
 
 <p class="lede">
-Six defense-in-depth rungs in one <code>dnf install</code> for EL7/EL8/EL9/EL10:
-LD_PRELOAD shim, modprobe blacklist, per-unit systemd drop-ins,
-host-wide userns + ptrace sysctl, auditd tripwires, and a read-only
-posture auditor. Auto-detection at install time suppresses any drop-in
-that would conflict with detected workloads (IPsec, AFS, rootless
-containers, Flatpak, firejail, desktop browsers, Oracle RDS / HPC);
-every other layer stays active.
-</p>
-<p class="lede">
-See the <a href="#changelog">Changelog</a> for per-version detail,
-<a href="#auto-detect">Auto-detection</a> for the signal list and
-suppression matrix, and
-<a href="https://www.rfxn.com/research/copyfail-cve-2026-31431">rfxn.com/research</a>
-for the cf1 kernel mechanics deep-dive.
+Six defense-in-depth rungs in one <code>dnf install</code>: LD_PRELOAD
+shim, modprobe blacklists, per-unit systemd drop-ins, host-wide userns
++ ptrace + io_uring sysctls, auditd tripwires, and a read-only posture
+auditor. Auto-detection at install time suppresses any drop-in that
+would break a detected workload (IPsec, AFS, rootless containers,
+Flatpak, firejail, desktop browsers, Oracle RDS / HPC, io_uring
+consumers); every other layer stays active.
 </p>
 
 <div class="note">
-<strong>Upgrading from any 2.0.x / 2.1.x or
-<code>afalg-defense</code> v1.0.x?</strong>
-<code>dnf upgrade rfxn-defense</code> handles every prior layout
-change (rename, file split, new subpackages) automatically. Auto-detect
-re-runs on each upgrade; review <code>journalctl -t rfxn-defense</code>
-afterward to see what was suppressed. Shim activation remains the
-explicit operator step (<code>copyfail-shim-enable</code>).
+<strong>Upgrading from v2.x (<code>copyfail-defense</code>) or v1.x
+(<code>afalg-defense</code>)?</strong>
+<code>sudo dnf upgrade -y rfxn-defense</code> handles every prior
+layout (rename, file splits, new subpackages) automatically. State
+under <code>/var/lib/copyfail-defense/</code> and <code>/etc/copyfail/</code>
+migrates to the <code>rfxn-defense</code> paths via <code>%pretrans</code>
+<code>mv -n</code> (idempotent). SIEM queries must update the audit-key
+prefix (<code>copyfail_*</code> &rarr; <code>rfxn_*</code>). Review
+<code>journalctl -t rfxn-defense-detect</code> afterward to see what
+was suppressed. Shim activation remains the explicit operator step
+(<code>rfxn-shim-enable</code>).
 </div>
 
 <div class="note">
-<strong>EL7 (CentOS 7 / RHEL 7) support, v2.1.0.</strong>
-CentOS 7 reached EOL 2024-06-30. v2.1.0 RPMs are built against
-<code>vault.centos.org/centos/7.9.2009/</code> via a custom mock chroot
-and signed with the same project key as EL8/9/10. The auditor's
-<code>pidfd_getfd</code> auditd rule uses the numeric syscall form
-(<code>-S 438</code>) because EL7+EL8 audit-userspace do not recognise
-the name string; auditctl accepts the numeric form cleanly on every EL
-kernel-userspace combination.
+<strong>Legacy URL hosts need manual migration.</strong> GitHub Pages
+does not redirect renamed-repo URLs. v2.x hosts with <code>copyfail.repo</code>
+in <code>/etc/yum.repos.d/</code> will <strong>404 on
+<code>dnf check-update</code></strong> after v3.0.0 ships:
+<pre>sudo curl -sSL https://rfxn.github.io/rfxn-defense/rfxn-defense.repo \
+    -o /etc/yum.repos.d/rfxn-defense.repo
+sudo rm -f /etc/yum.repos.d/copyfail.repo
+sudo dnf upgrade -y rfxn-defense</pre>
 </div>
 
 <h2 id="install">Install</h2>
@@ -163,196 +136,32 @@ RPMs are GPG-signed and the metadata itself is verified via detached
 sudo dnf install -y rfxn-defense
 sudo /usr/sbin/rfxn-shim-enable</pre>
 
-<p>The meta pulls six subpackages (<code>-audit</code> as soft dep on
-EL8/9/10, hard dep on EL7 since rpm-4.11 has no <code>Recommends:</code>
-mechanism):</p>
+<p>
+The 4-hourly auto-update cron (<code>-autoupdate</code> subpackage,
+pulled by the meta) keeps the host current; new mitigations land within
+4 hours of a release tag with no operator action. Opt out by touching
+<code>/etc/rfxn-defense/auto-update.disabled</code>.
+</p>
+
+<p>The meta pulls seven subpackages (<code>-audit</code> as soft dep on
+EL8/9/10, hard dep on EL7 since rpm-4.11 has no <code>Recommends:</code>):</p>
 <table>
 <tr><th>Subpackage</th><th>Coverage</th></tr>
 <tr><td><code>rfxn-defense-shim</code></td>
     <td>LD_PRELOAD <code>AF_ALG</code> block (cf1 primary)</td></tr>
 <tr><td><code>rfxn-defense-modprobe</code></td>
-    <td>kernel-module entry-point cuts (cf1 + cf2 + Dirty Frag + Fragnesia
-    + <strong>rds/rds_tcp/rds_rdma for PinTheft, v2.1.0</strong>)</td></tr>
+    <td>kernel-module entry-point cuts (cf1, cf2, Dirty Frag, PinTheft, DirtyDecrypt)</td></tr>
 <tr><td><code>rfxn-defense-systemd</code></td>
-    <td>per-unit <code>RestrictAddressFamilies=~AF_ALG ~AF_KEY ~AF_RXRPC
-    <strong>~AF_RDS</strong></code> (~AF_RDS added v2.1.0 for PinTheft)
-    + <code>RestrictNamespaces=~user ~net</code> on user@/sshd/cron/crond/atd
-    + opt-in container-runtime examples + RDS opt-in template (v2.1.0)</td></tr>
-<tr><td><code>rfxn-defense-sysctl</code> <em>(v2.0.2)</em></td>
-    <td>host-wide <code>user.max_user_namespaces=0</code> sysctl drop-in
-    (suppressed on rootless containers / Flatpak / firejail / desktop
-    browsers); <strong>v2.1.0 adds
-    <code>kernel.yama.ptrace_scope=2</code></strong> (ssh-keysign-pwn
-    primary mitigation) and a commented-out
-    <code>kernel.io_uring_disabled=2</code> for operator opt-in on
-    Linux 6.6+ (PinTheft secondary)</td></tr>
+    <td>per-unit <code>RestrictAddressFamilies=~AF_ALG ~AF_KEY ~AF_RXRPC ~AF_RDS</code> + <code>RestrictNamespaces=~user ~net</code> on user@/sshd/cron/crond/atd; container-runtime + RDS opt-in examples</td></tr>
+<tr><td><code>rfxn-defense-sysctl</code></td>
+    <td>host-wide <code>user.max_user_namespaces=0</code>, <code>kernel.yama.ptrace_scope=2</code>, <code>kernel.io_uring_disabled=2</code> drop-ins (each independently auto-suppressed)</td></tr>
 <tr><td><code>rfxn-defense-auditor</code></td>
-    <td>read-only host posture auditor with per-class coverage report;
-    v2.1.0 extends to 6 bug classes including <code>pintheft</code> and
-    <code>keysign-pwn</code> with 4 new checks
-    (<code>check_ptrace_scope</code>,
-    <code>check_pidfd_getfd_auditd_rule</code>,
-    <code>check_rds_modprobe</code>,
-    <code>check_af_rds_restrict</code>)</td></tr>
-<tr><td><code>rfxn-defense-audit</code> <em>(v2.0.2)</em></td>
-    <td>auditd tripwire rules for
-    <code>socket(AF_ALG/AF_KEY/AF_RXRPC)</code> from
-    <code>auid&ge;1000</code> (cf-class userspace prep); <strong>v2.1.0
-    adds <code>socket(AF_RDS=21)</code> /
-    <code>rfxn_afrds</code></strong> (PinTheft) and
-    <strong><code>pidfd_getfd</code> syscall 438 /
-    <code>rfxn_pidfd_getfd</code></strong> (ssh-keysign-pwn)</td></tr>
+    <td>read-only host posture auditor (<code>rfxn-local-check</code>) covering 7 bug classes with per-class layer breakdown</td></tr>
+<tr><td><code>rfxn-defense-audit</code></td>
+    <td>auditd tripwires (<code>rfxn_afalg</code>/<code>afkey</code>/<code>afrxrpc</code>/<code>afrds</code>/<code>pidfd_getfd</code>)</td></tr>
+<tr><td><code>rfxn-defense-autoupdate</code></td>
+    <td><code>/etc/cron.d/rfxn-defense-autoupdate</code> + flock-protected <code>/usr/sbin/rfxn-defense-update</code> wrapper</td></tr>
 </table>
-
-<h2 id="changelog">Changelog</h2>
-<p>
-Per-version summary. Full per-commit history:
-<a href="https://github.com/rfxn/rfxn-defense/commits/main">github.com/rfxn/rfxn-defense/commits</a>.
-Per-release notes: <a href="https://github.com/rfxn/rfxn-defense/releases">github.com/rfxn/rfxn-defense/releases</a>.
-</p>
-
-<h3>v2.1.1 (2026-05-23) &middot; io_uring auto-detect with layered suppression</h3>
-<ul>
-<li><strong>io_uring sysctl auto-applied</strong>, promotes
-    <code>kernel.io_uring_disabled=2</code> from v2.1.0 operator opt-in
-    to auto-applied with layered suppression. New
-    <code>/etc/sysctl.d/99-rfxn-defense-iouring.conf</code> drop-in
-    (split from userns file so io_uring suppresses independently).
-    Suppression signals: liburing.so in any /proc/*/maps, known consumer
-    binaries (postgres, scylla, mariadbd, dockerd, redis-server, nginx,
-    envoy, rabbitmq), io_uring-named systemd units, kernel &lt; 6.6.
-    Operator knobs: <code>CFD_FORCE_IOURING_DISABLE</code> /
-    <code>CFD_SUPPRESS_IOURING_DISABLE</code>.</li>
-<li>Auditor: new <code>check_io_uring_disabled</code> (MITIGATION) reports
-    applied / suppressed+reason / absent state.</li>
-<li>JSON state extended: <code>detected.io_uring_workload</code>,
-    <code>suppressed.sysctl_iouring</code> (dict with
-    <code>suppressed</code> + <code>reason</code>),
-    <code>applied.sysctl_iouring</code>.</li>
-<li>gh-pages: older RPMs (2.0.x + 2.1.0) moved to
-    <code>repo/N/x86_64/archive/</code>; dnf resolves only v2.1.1.</li>
-</ul>
-
-<h3>v2.1.0 (2026-05-22) &middot; PinTheft + ssh-keysign-pwn + EL7 build target</h3>
-<ul>
-<li><strong>PinTheft</strong> (CVE pending), Copy Fail class
-    extension. New
-    <code>/etc/modprobe.d/99-rfxn-defense-rds.conf</code> blocks
-    <code>rds</code> / <code>rds_tcp</code> / <code>rds_rdma</code>
-    module load; <code>~AF_RDS</code> added to the always-on
-    <code>10-*</code> systemd drop-in on all 5 tenant units; new
-    <code>rfxn_afrds</code> auditd rule fires on
-    <code>socket(AF_RDS=21)</code> from <code>auid&ge;1000</code>.</li>
-<li><strong>ssh-keysign-pwn (CVE-2026-46333)</strong>, FD-theft
-    class, first member. New
-    <code>kernel.yama.ptrace_scope=2</code> sysctl key in
-    <code>99-rfxn-defense-userns.conf</code> closes the
-    <code>pidfd_getfd</code> path without breaking root debugging;
-    new <code>rfxn_pidfd_getfd</code> auditd rule on syscall
-    <code>438</code> (numeric form, EL7+EL8 audit-userspace do
-    not recognise the name string).</li>
-<li>Operator opt-in commented-out
-    <code>kernel.io_uring_disabled=2</code> (PinTheft secondary
-    mitigation; Linux 6.6+ only), promoted to auto-applied with
-    layered suppression in v2.1.1.</li>
-<li>Auto-detect gains <code>detect_rds_workload()</code>: signals
-    <code>/etc/oratab</code> non-comment entry, Oracle
-    <code>crsctl</code> binary, or <code>rds*.ko</code> loaded in the
-    running kernel. Suppresses the rds modprobe blacklist on Oracle
-    Grid / HPC hosts.</li>
-<li>Auditor extends from 4 to 6 bug classes:
-    <code>cf1</code> / <code>cf2</code> / <code>dirtyfrag-esp</code> /
-    <code>dirtyfrag-rxrpc</code> / <strong><code>pintheft</code></strong>
-    / <strong><code>keysign-pwn</code></strong>. Four new checks for
-    ptrace_scope, AF_RDS restrict, rds modprobe, pidfd_getfd auditd
-    rule. JSON state schema_version stays <code>"2"</code> (additive,
-    backward compatible).</li>
-<li><strong>EL7 build target added.</strong> RPMs built against
-    <code>vault.centos.org/centos/7.9.2009/</code> via custom mock
-    chroot config; same signing key as EL8/9/10. EL7's rpm-4.11
-    lacks the <code>Recommends:</code> tag
-    <code>-audit</code> is a hard <code>Requires:</code> there.</li>
-<li>Operator-facing changes: README, gh-pages landing, STATE.md /
-    BRIEF.md / SPEC.md updated with PinTheft + ssh-keysign-pwn rows
-    and the EL7 vault note. v2.0.x RPMs retained in the gh-pages
-    repodata so <code>dnf upgrade</code> from any prior version
-    resolves cleanly.</li>
-</ul>
-
-<h3>v2.0.2 (2026-05-13) &middot; Fragnesia / Dirty Frag-ESP coverage</h3>
-<ul>
-<li>New <code>rfxn-defense-sysctl</code>: host-wide
-    <code>user.max_user_namespaces=0</code> sysctl drop-in. Auto-suppressed
-    on rootless containers, Flatpak, firejail, desktop browsers.</li>
-<li>New <code>rfxn-defense-audit</code> (soft-dep): auditd rules
-    tripping on <code>socket(AF_ALG/AF_KEY/AF_RXRPC)</code> at
-    <code>auid&ge;1000</code>. Query:
-    <code>ausearch -k rfxn_afalg|rfxn_afkey|rfxn_afrxrpc</code>.</li>
-<li>systemd 10-* drop-in adds <code>~AF_KEY</code> to
-    <code>RestrictAddressFamilies</code>. Closes the PF_KEYv2 SA-config
-    path used by Dirty Frag / Fragnesia.</li>
-<li>CVE cross-stamping: cf2 = <strong>CVE-2026-43284</strong>,
-    DF-RxRPC = <strong>CVE-2026-43500</strong>. Fragnesia documented as
-    same surface as CVE-2026-43284 (no upstream CVE assigned yet).</li>
-</ul>
-
-<h3>v2.0.1-2 (2026-05-08) &middot; packaging hotfix</h3>
-<ul>
-<li><code>-p /bin/bash</code> on four proc-sub scriptlets
-    (%posttrans / %postun for -modprobe and -systemd). Without it, EL8's
-    <code>/bin/sh</code> rejects the bash proc-sub idiom as a syntax error
-    and detect.sh silently never runs.</li>
-<li><code>%pretrans</code> v2.0.0&rarr;v2.0.1 rename guard fixed: was
-    using unescaped <code>%{version}</code> (expanded at build time);
-    now uses <code>%%{version}</code> so the macro reaches the scriptlet
-    body and queries the actually-installed version.</li>
-<li><code>test-repo.sh</code> adds a scriptlet-failure regression guard
-    that catches the class of bug 2.0.1-1 shipped with
-    (<code>scriptlet failed</code> / <code>syntax error near</code> markers
-    in dnf output).</li>
-</ul>
-
-<h3>v2.0.1 (2026-05-08) &middot; workload auto-detection</h3>
-<ul>
-<li><code>%posttrans</code> detection of IPsec / AFS / rootless-container
-    workloads. Conflicting drop-ins are suppressed automatically; every
-    other layer stays active. State written to
-    <code>/var/lib/rfxn-defense/auto-detect.json</code>.</li>
-<li>File-layout split: monolithic modprobe + systemd drop files become
-    three modprobe files (<code>-cf1</code>, <code>-cf2-xfrm</code>,
-    <code>-rxrpc</code>) and three systemd drop-in layers (10-* always-on,
-    12-* AF_RXRPC, 15-* userns).</li>
-<li>New <code>copyfail-redetect</code> helper re-runs detection on demand.
-    <code>/etc/rfxn-defense/force-full</code> sentinel bypasses detection.</li>
-</ul>
-
-<h3>v2.0.0 (2026-05-08) &middot; rfxn-defense umbrella</h3>
-<ul>
-<li>Package family renamed <code>afalg-defense</code> &rarr;
-    <code>rfxn-defense</code>. Scope expanded to the Copy Fail bug
-    class (cf1 + cf2 + Dirty Frag).</li>
-<li>New <code>-modprobe</code> subpackage: kernel-module entry-point cuts.</li>
-<li>New <code>-systemd</code> subpackage: per-unit
-    <code>RestrictAddressFamilies</code> and
-    <code>RestrictNamespaces</code> drop-ins on user@/sshd/cron/crond/atd.</li>
-<li><code>Obsoletes:</code>/<code>Provides:</code> on
-    <code>afalg-defense*</code> for clean upgrade. Compat retained
-    through the 2.0.x line.</li>
-</ul>
-
-<h3>v1.0.1 (2026-04-29) &middot; initial signed release</h3>
-<ul>
-<li>RPMs and repodata GPG-signed by the Copyfail Project Signing Key
-    (fingerprint <code>6001 1CDC EA2F F52D 975A FDEE 6D30 F32C D5E8 0F80</code>).
-    Published <code>.repo</code> enforces <code>gpgcheck=1</code> +
-    <code>repo_gpgcheck=1</code>.</li>
-<li>Subpackages: <code>afalg-defense-shim</code> (LD_PRELOAD
-    <code>AF_ALG</code> block) and <code>afalg-defense-auditor</code>
-    (read-only host posture auditor).</li>
-<li>Shim installed but not auto-enabled; operator runs
-    <code>copyfail-shim-enable</code> after pre-flight LD_PRELOAD
-    smoke-test against <code>/bin/true</code>.</li>
-</ul>
 
 <h2 id="coverage">Coverage matrix</h2>
 <p>
@@ -364,7 +173,7 @@ coverage with a kernel- or workload-conditional caveat (see footnote);
 <span style="color:#bbb">&middot;</span> = not applicable.
 </p>
 <table>
-<tr><th>Mitigation rung</th><th>cf1</th><th>cf2</th><th>DF-ESP</th><th>DF-RxRPC</th><th>Fragnesia</th><th>PinTheft</th><th>keysign-pwn</th></tr>
+<tr><th>Mitigation rung</th><th>cf1</th><th>cf2</th><th>DF-ESP</th><th>DF-RxRPC&nbsp;<sup>6</sup></th><th>Fragnesia</th><th>PinTheft</th><th>keysign-pwn</th></tr>
 <tr><td>LD_PRELOAD shim (<code>AF_ALG</code> hook)</td>
     <td class="cls-y">&#x2713;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td><td class="cls-y">&#x2713;&nbsp;&sup1;</td>
@@ -385,7 +194,7 @@ coverage with a kernel- or workload-conditional caveat (see footnote);
     <td class="cls-n">&middot;</td><td class="cls-y">&#x2713;</td>
     <td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td></tr>
-<tr><td><code>modprobe</code> <code>rds rds_tcp rds_rdma</code> <em>(v2.1.0)</em></td>
+<tr><td><code>modprobe</code> <code>rds rds_tcp rds_rdma</code></td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td>
@@ -395,7 +204,7 @@ coverage with a kernel- or workload-conditional caveat (see footnote);
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td></tr>
-<tr><td>systemd <code>RestrictAddressFamilies=~AF_KEY</code> <em>(v2.0.2)</em></td>
+<tr><td>systemd <code>RestrictAddressFamilies=~AF_KEY</code></td>
     <td class="cls-n">&middot;</td><td class="cls-y">&#x2713;</td>
     <td class="cls-y">&#x2713;</td><td class="cls-n">&middot;</td>
     <td class="cls-y">&#x2713;</td>
@@ -405,7 +214,7 @@ coverage with a kernel- or workload-conditional caveat (see footnote);
     <td class="cls-n">&middot;</td><td class="cls-y">&#x2713;</td>
     <td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td></tr>
-<tr><td>systemd <code>RestrictAddressFamilies=~AF_RDS</code> <em>(v2.1.0)</em></td>
+<tr><td>systemd <code>RestrictAddressFamilies=~AF_RDS</code></td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td>
@@ -415,22 +224,22 @@ coverage with a kernel- or workload-conditional caveat (see footnote);
     <td class="cls-y">&#x2713;</td><td class="cls-n">&middot;</td>
     <td class="cls-y">&#x2713;</td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td></tr>
-<tr><td>sysctl <code>user.max_user_namespaces=0</code> <em>(v2.0.2)</em></td>
+<tr><td>sysctl <code>user.max_user_namespaces=0</code></td>
     <td class="cls-n">&middot;</td><td class="cls-y">&#x2713;</td>
     <td class="cls-y">&#x2713;</td><td class="cls-n">&middot;</td>
     <td class="cls-y">&#x2713;</td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td></tr>
-<tr><td>sysctl <code>kernel.yama.ptrace_scope=2</code> <em>(v2.1.0)</em></td>
+<tr><td>sysctl <code>kernel.yama.ptrace_scope=2</code></td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td><td class="cls-y">&#x2713;</td></tr>
-<tr><td>sysctl <code>kernel.io_uring_disabled=2</code> <em>(v2.1.1, auto-applied)</em></td>
+<tr><td>sysctl <code>kernel.io_uring_disabled=2</code></td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td>
     <td class="cls-y">&#x2713;&nbsp;&#8309;</td><td class="cls-n">&middot;</td></tr>
-<tr><td>auditd tripwire rules <em>(v2.0.2 + v2.1.0)</em></td>
+<tr><td>auditd tripwire rules</td>
     <td class="cls-fn">&sup3;</td><td class="cls-fn">&sup3;</td>
     <td class="cls-fn">&sup3;</td><td class="cls-fn">&sup3;</td>
     <td class="cls-fn">&sup3;</td>
@@ -440,307 +249,145 @@ coverage with a kernel- or workload-conditional caveat (see footnote);
 <sup>1</sup> Catches the <code>cksum</code> step in the public DF-RxRPC
 PoC, not the kernel sink itself; defense-in-depth, not a primary stop.<br>
 <sup>2</sup> No-op on RHEL stock kernels (<code>CRYPTO_USER_API*</code>
-is built-in, so the blacklist line cannot prevent load). Supported
-workaround: <code>grubby --update-kernel ALL --args
-"initcall_blacklist=algif_aead_init"</code> followed by a reboot.
-The auditor reports this state under MITIGATION.<br>
-<sup>3</sup> Detection, not mitigation: telemetry for
+built-in). Supported workaround: <code>grubby --update-kernel ALL
+--args "initcall_blacklist=algif_aead_init"</code> + reboot.<br>
+<sup>3</sup> Detection only, not mitigation. Telemetry for
 <code>socket(AF_ALG/AF_KEY/AF_RXRPC/AF_RDS)</code> and
-<code>pidfd_getfd</code> from unprivileged users. Real value on hosts
-where modprobe blacklists are auto-suppressed (IPsec / AFS / Oracle RDS
-workloads) and the kernel sink stays reachable; the rules become the
-residual tripwire. Query via
-<code>ausearch -k rfxn_afalg</code> / <code>rfxn_afkey</code> /
-<code>rfxn_afrxrpc</code> / <code>rfxn_afrds</code> /
-<code>rfxn_pidfd_getfd</code>.<br>
+<code>pidfd_getfd</code> from unprivileged users. Highest value on
+hosts where modprobe blacklists are auto-suppressed (IPsec / AFS /
+Oracle RDS workloads) and the kernel sink stays reachable. Query via
+<code>ausearch -k rfxn_{afalg,afkey,afrxrpc,afrds,pidfd_getfd}</code>.<br>
 <sup>4</sup> Functional on Ubuntu/Debian/Arch kernels and ELRepo
 kernel-ml swaps where <code>rds.ko</code> is loadable. No-op on stock
 RHEL/Alma/Rocky/Oracle UEK kernels (no <code>CONFIG_RDS=m</code>).
-Auto-suppressed on Oracle Grid / HPC hosts where RDS is in active use
-(detected via <code>/etc/oratab</code>, <code>crsctl</code> binary, or
-loaded <code>rds*.ko</code>).<br>
-<sup>5</sup> Auto-applied (v2.1.1+) on Linux 6.6+ hosts where no io_uring
-workload is detected (liburing.so in any /proc/*/maps, known-consumer
-binaries, io_uring-named systemd units). Suppressed on rootless /
-Flatpak / container-runtime hosts and kernels &lt; 6.6.
-Override: <code>CFD_FORCE_IOURING_DISABLE=1 copyfail-redetect</code> or
-<code>CFD_SUPPRESS_IOURING_DISABLE=1 copyfail-redetect</code>.
+Auto-suppressed on Oracle Grid / HPC hosts (signals:
+<code>/etc/oratab</code>, <code>crsctl</code>, loaded <code>rds*.ko</code>).<br>
+<sup>5</sup> Auto-applied on Linux 6.6+ hosts where no io_uring
+workload is detected (liburing.so in <code>/proc/*/maps</code>,
+known-consumer binaries, io_uring-named systemd units). Suppressed on
+rootless / Flatpak / container-runtime hosts and kernels &lt; 6.6.
+Override: <code>CFD_FORCE_IOURING_DISABLE=1 rfxn-redetect</code> or
+<code>CFD_SUPPRESS_IOURING_DISABLE=1 rfxn-redetect</code>.<br>
+<sup>6</sup> DirtyDecrypt (CVE-2026-31635, <code>rxgk_*</code> RXGK
+token-decrypt in-place crypto) is cross-stamped onto the DF-RxRPC
+column: every AF_RXRPC mitigation that covers DF-RxRPC also covers
+DirtyDecrypt.
 </p>
 
-<h3>Reference: kernel patches and audit signatures</h3>
+<h3>Audit keys (<code>-audit</code> subpackage)</h3>
 <table>
-<tr><th>Class</th><th>Upstream patch</th><th>Audit signature</th></tr>
-<tr><td>cf1</td>
-    <td><code>a664bf3d</code></td>
-    <td><code>socket(a0=38)</code> / <code>rfxn_afalg</code></td></tr>
-<tr><td>cf2</td>
-    <td><code>f4c50a4034</code></td>
-    <td><code>socket(a0=15)</code> / <code>rfxn_afkey</code> &middot; <code>unshare(NEWUSER)</code></td></tr>
-<tr><td>DF-ESP</td>
-    <td><code>f4c50a4034</code></td>
-    <td>same as cf2</td></tr>
-<tr><td>DF-RxRPC</td>
-    <td>none upstream</td>
-    <td><code>socket(a0=33)</code> / <code>rfxn_afrxrpc</code> &middot; <code>add_key("rxrpc",...)</code></td></tr>
-<tr><td>Fragnesia</td>
-    <td>netdev only (2026-05-13); not yet in stable trees</td>
-    <td>same as cf2 plus <code>setsockopt(TCP_ULP="espintcp")</code></td></tr>
-<tr><td>PinTheft <em>(v2.1.0)</em></td>
-    <td>not yet upstream (disclosed 2026-05; CVE pending)</td>
-    <td><code>socket(a0=21)</code> / <code>rfxn_afrds</code> plus
-        <code>io_uring_setup</code> + <code>io_uring_register</code>
-        with <code>IORING_OP_*</code> fixed-buffer ops on the same
-        page</td></tr>
-<tr><td>ssh-keysign-pwn <em>(v2.1.0; FD-theft class)</em></td>
-    <td>not yet in stable trees as of 2026-05; CVE-2026-46333</td>
-    <td><code>pidfd_open</code> &middot;
-        <code>pidfd_getfd</code> (syscall 438) /
-        <code>rfxn_pidfd_getfd</code>; PoC requires 100&ndash;2000
-        SUID spawns per successful race</td></tr>
+<tr><th>Key</th><th>Signature</th></tr>
+<tr><td><code>rfxn_afalg</code></td>
+    <td><code>socket(AF_ALG=38)</code> by unprivileged user (cf1)</td></tr>
+<tr><td><code>rfxn_afkey</code></td>
+    <td><code>socket(AF_KEY=15)</code> by unprivileged user (cf2 / DF-ESP / Fragnesia)</td></tr>
+<tr><td><code>rfxn_afrxrpc</code></td>
+    <td><code>socket(AF_RXRPC=33)</code> by unprivileged user (DF-RxRPC / DirtyDecrypt)</td></tr>
+<tr><td><code>rfxn_afrds</code></td>
+    <td><code>socket(AF_RDS=21)</code> by unprivileged user (PinTheft)</td></tr>
+<tr><td><code>rfxn_pidfd_getfd</code></td>
+    <td><code>pidfd_getfd()</code> syscall 438 by unprivileged user (ssh-keysign-pwn)</td></tr>
 </table>
 <p>
-The <code>copyfail_*</code> keys are installed by the
-<code>-audit</code> subpackage at
-<code>/etc/audit/rules.d/99-rfxn-defense.rules</code>: five keys
-post-v2.1.0 (<code>rfxn_afalg</code>, <code>rfxn_afkey</code>,
-<code>rfxn_afrxrpc</code> from v2.0.2; <code>rfxn_afrds</code>
-and <code>rfxn_pidfd_getfd</code> added in v2.1.0). The auditor
-probes page-cache integrity for <code>/usr/bin/su</code>,
-<code>/usr/libexec/openssh/ssh-keysign</code> (v2.1.0; ssh-keysign-pwn
-target), and the PAM stacks every class targets, as a cached-IOC for
-an in-flight exploit. See <code>--json</code>
-<code>posture.bug_classes[*].kernel_sink</code>.
+Rules ship at <code>/etc/audit/rules.d/99-rfxn-defense.rules</code>
+with <code>auid&ge;1000</code> filter on every key. The auditor probes
+page-cache integrity for <code>/usr/bin/su</code>,
+<code>/usr/libexec/openssh/ssh-keysign</code>, and the PAM stacks each
+class targets, as a cached-IOC for an in-flight exploit. See
+<code>--json</code> <code>posture.bug_classes[*].kernel_sink</code>.
 </p>
 
 <h3>Operator-applied (auditor-recommended)</h3>
 <p>
-The auditor flags these via <code>--emit-remediation</code>; no
-subpackage applies them, since each can break legitimate workloads on a
-busy fleet. Review before pasting.
+Flagged via <code>--emit-remediation</code>; no subpackage applies them,
+since each can break legitimate workloads on a busy fleet. Review before
+pasting.
 </p>
 <table>
 <tr><th>Action</th><th>Targets</th><th>When recommended</th></tr>
 <tr><td><code>chmod 4750 /usr/bin/su &amp;&amp; chgrp wheel /usr/bin/su</code></td>
     <td>cf2, DF-ESP</td>
-    <td>Suppressed when non-wheel/admin interactive users exist
-        (cPanel-style tenant fleets); chmod 4750 would break their
-        <code>su</code> workflow.</td></tr>
-<tr><td><code>auditd</code> rule <code>cf_userns</code>
-        (<code>unshare(CLONE_NEWUSER)</code>)</td>
+    <td>Suppressed when non-wheel/admin interactive users exist (cPanel-style tenant fleets); chmod 4750 would break their <code>su</code> workflow.</td></tr>
+<tr><td><code>auditd</code> rule <code>cf_userns</code> (<code>unshare(CLONE_NEWUSER)</code>)</td>
     <td>cf2, DF-ESP</td>
-    <td>Hosts where <code>auditd</code> is tuned for userns events
-        (otherwise high alert noise).</td></tr>
-<tr><td><code>auditd</code> rule <code>cf_addkey</code>
-        (<code>add_key("rxrpc",...)</code>)</td>
+    <td>Hosts where <code>auditd</code> is tuned for userns events (otherwise high alert noise).</td></tr>
+<tr><td><code>auditd</code> rule <code>cf_addkey</code> (<code>add_key("rxrpc",...)</code>)</td>
     <td>DF-RxRPC</td>
-    <td>Always; rxrpc keyring activity is rare enough that the
-        false-positive rate stays low.</td></tr>
-<tr><td><code>auditd</code> rule <code>afalg_attempt</code>
-        (<code>socket(a0=38)</code>)</td>
-    <td>cf1</td>
-    <td>Hosts already running <code>auditd</code>; pairs with the
-        LD_PRELOAD shim as a tripwire.</td></tr>
+    <td>Always; rxrpc keyring activity is rare enough that the false-positive rate stays low.</td></tr>
 </table>
 
 <h2 id="auto-detect">Auto-detection of conflicting workloads</h2>
 <p>
-v2.0.1+ inspects the host in <code>%posttrans</code> for workloads the
-default cuts would break, and <strong>suppresses the conflicting
-drop-in only</strong> while every other layer stays active. The intent
-is "do no harm to running production"; nothing else relaxes. The cf1
-LD_PRELOAD shim and the auditor are <strong>never</strong> suppressed,
-so <a href="https://nvd.nist.gov/vuln/detail/CVE-2026-31431">CVE-2026-31431</a>
+The installer inspects the host in <code>%posttrans</code> and
+<strong>suppresses any drop-in that would break a detected
+workload</strong>. Every other layer stays active. The cf1 LD_PRELOAD
+shim and audit tripwires are <strong>never</strong> suppressed, so cf1
+(<a href="https://nvd.nist.gov/vuln/detail/CVE-2026-31431">CVE-2026-31431</a>)
 coverage is unchanged on every host.
 </p>
 
-<h3>Why each workload triggers a carve-out</h3>
+<h3>Detection signals and suppression</h3>
 <table>
-<tr><th>Workload</th><th>Why the default would break it</th></tr>
+<tr><th>Workload</th><th>Signals (any of)</th><th>Suppresses</th></tr>
 <tr><td><strong>IPsec</strong> (strongSwan, libreswan, openswan)</td>
-    <td>The kernel <code>xfrm</code>/<code>esp</code> path <em>is</em>
-        the cf2 / Dirty Frag-ESP kernel sink. Blacklisting
-        <code>esp4</code>/<code>esp6</code>/<code>xfrm_user</code>/<code>xfrm_algo</code>
-        disables IPsec tunnels entirely (no SA install, no encrypted
-        traffic). Suppression keeps the modprobe drop off and leans on
-        systemd <code>RestrictNamespaces=~user ~net</code> to block the
-        <code>unshare(NEWUSER|NEWNET)</code> step that gates cf2.</td></tr>
+    <td>enabled systemd unit (strongswan/libreswan/openswan/ipsec/pluto); <code>/etc/ipsec.conf</code> <code>conn</code> stanza; non-empty <code>*.conf</code> under <code>/etc/swanctl/conf.d/</code>, <code>/etc/ipsec.d/</code>, <code>/etc/strongswan{,/conf.d}/</code></td>
+    <td><code>99-cf2-xfrm.conf</code> (esp4, esp6, xfrm_user, xfrm_algo blacklist). cf2/DF-ESP still blocked via the systemd <code>RestrictNamespaces=~user ~net</code> <code>unshare</code> gate.</td></tr>
 <tr><td><strong>AFS</strong> (openafs, kafs)</td>
-    <td><code>rxrpc</code> is both the DF-RxRPC kernel sink and the
-        transport AFS itself rides on; blacklisting it breaks
-        <code>openafs-client</code>. The per-unit
-        <code>RestrictAddressFamilies=~AF_RXRPC</code> would also
-        break AFS userspace tooling (<code>aklog</code>,
-        <code>kinit</code>-style PAGs) when invoked from any of the
-        five tenant units.</td></tr>
+    <td>enabled systemd unit (openafs-client/server, kafs, afsd); <code>/etc/openafs/{CellServDB,ThisCell}</code>; <code>/etc/krb5.conf.d/openafs*</code>; <code>/proc/fs/afs/</code> registered</td>
+    <td><code>99-rxrpc.conf</code> + <code>12-rxrpc-af.conf</code> (<code>~AF_RXRPC</code> on all 5 tenant units). DF-RxRPC residual coverage: auditd <code>rfxn_afrxrpc</code> tripwire.</td></tr>
 <tr><td><strong>Rootless containers</strong> (rootless podman/buildah)</td>
-    <td>Rootless <code>podman</code>/<code>buildah</code> needs
-        <code>CLONE_NEWUSER</code> under the calling
-        <code>user@.service</code>. Our default
-        <code>RestrictNamespaces=~user ~net</code> on
-        <code>user@.service</code> turns the
-        <code>unshare(2)</code> into <code>EPERM</code>, which kills
-        every rootless container. Suppression strips the userns
-        drop-in <strong>on <code>user@.service</code> only</strong>:
-        <code>sshd</code>/<code>cron</code>/<code>crond</code>/<code>atd</code>
-        retain it.</td></tr>
-<tr><td><strong>RDS workload</strong> (Oracle Grid Infrastructure, HPC; v2.1.0)</td>
-    <td>Oracle clusterware / RAC and certain HPC stacks legitimately use
-        <code>AF_RDS</code> sockets. Blacklisting <code>rds</code> /
-        <code>rds_tcp</code> / <code>rds_rdma</code> would prevent the
-        module from loading and break those workloads. Suppression
-        removes only the rds modprobe drop; the always-on
-        <code>~AF_RDS</code> systemd restriction on tenant units still
-        applies (tenant units do not legitimately speak RDS), and the
-        <code>rfxn_afrds</code> auditd rule still fires, so
-        unprivileged AF_RDS use from a non-Oracle process remains
-        visible.</td></tr>
-</table>
-
-<h3>Detection signals</h3>
-<table>
-<tr><th>Workload</th><th>Detection signals (any of)</th><th>Suppresses</th></tr>
-<tr><td><strong>IPsec</strong></td>
-    <td><code>systemctl is-enabled</code> returns enabled for
-        <code>strongswan</code>/<code>strongswan-starter</code>/<code>strongswan-swanctl</code>/<code>ipsec</code>/<code>libreswan</code>/<code>openswan</code>/<code>pluto</code>;
-        OR <code>/etc/ipsec.conf</code> has a <code>conn</code> stanza;
-        OR non-empty <code>*.conf</code> in
-        <code>/etc/swanctl/conf.d/</code>, <code>/etc/ipsec.d/</code>,
-        <code>/etc/strongswan/conf.d/</code>, or
-        <code>/etc/strongswan.d/</code>.</td>
-    <td><code>99-cf2-xfrm.conf</code> (esp4, esp6, xfrm_user,
-        xfrm_algo blacklist)</td></tr>
-<tr><td><strong>AFS</strong></td>
-    <td><code>systemctl is-enabled</code> for
-        <code>openafs-client</code>/<code>openafs-server</code>/<code>kafs</code>/<code>afsd</code>;
-        OR <code>/etc/openafs/CellServDB</code> or
-        <code>/etc/openafs/ThisCell</code> exists; OR
-        <code>/etc/krb5.conf.d/openafs*</code> present; OR
-        <code>/proc/fs/afs/</code> registered.</td>
-    <td><code>99-rxrpc.conf</code> (rxrpc modprobe blacklist) AND
-        <code>12-rxrpc-af.conf</code>
-        (<code>RestrictAddressFamilies=~AF_RXRPC</code> on all 5
-        tenant units)</td></tr>
-<tr><td><strong>Rootless containers</strong></td>
-    <td><code>/home/*/.local/share/containers/storage/overlay-containers/</code>
-        present with mtime within 180d; OR
-        <code>/var/lib/containers/storage/</code> non-empty with
-        mtime &lt;90d; OR <code>/run/user/&lt;UID&gt;/containers/</code>
-        present for any <code>UID &ge; 1000</code> (live rootless
-        tmpfs); OR <code>podman.socket</code> enabled (system-wide or
-        any per-user instance).</td>
-    <td><code>15-userns.conf</code> on <code>user@.service.d</code>
-        <strong>only</strong></td></tr>
-<tr><td><strong>RDS workload</strong> <em>(v2.1.0)</em></td>
-    <td><code>/etc/oratab</code> exists with at least one non-comment
-        non-blank entry; OR an Oracle Clusterware control binary
-        (<code>**/grid/bin/crsctl</code>) is reachable under
-        <code>/u01/app/oracle</code> or <code>/opt/oracle</code>; OR any
-        of <code>/sys/module/rds</code> /
-        <code>/sys/module/rds_tcp</code> /
-        <code>/sys/module/rds_rdma</code> is currently loaded in the
-        running kernel.</td>
-    <td><code>99-rfxn-defense-rds.conf</code>
-        (rds/rds_tcp/rds_rdma modprobe blacklist) on RDS-detected hosts
-        only; tenant-unit <code>~AF_RDS</code> stays applied; auditd
-        <code>rfxn_afrds</code> rule stays loaded.</td></tr>
+    <td><code>/home/*/.local/share/containers/storage/overlay-containers/</code> (mtime &le; 180d); <code>/var/lib/containers/storage/</code> non-empty (mtime &lt; 90d); <code>/run/user/&lt;UID&ge;1000&gt;/containers/</code>; <code>podman.socket</code> enabled (system or per-user)</td>
+    <td><code>15-userns.conf</code> on <strong><code>user@.service</code> only</strong> + host-wide userns sysctl. sshd/cron/crond/atd keep <code>RestrictNamespaces=~user ~net</code>.</td></tr>
+<tr><td><strong>Userns consumers</strong> (Flatpak, firejail, desktop browser)</td>
+    <td>non-empty <code>/var/lib/flatpak/{app,runtime}</code> or per-user <code>~/.local/share/flatpak/app</code> (mtime &le; 180d); <code>/usr/bin/firejail</code>; <code>/usr/bin/{chromium,chromium-browser,google-chrome,firefox,firefox-esr}</code></td>
+    <td><code>99-rfxn-defense-userns.conf</code> host-wide sysctl <strong>only</strong>; per-unit <code>RestrictNamespaces</code> stays active.</td></tr>
+<tr><td><strong>RDS workload</strong> (Oracle Grid Infrastructure, HPC)</td>
+    <td><code>/etc/oratab</code> non-comment non-blank entry; <code>**/grid/bin/crsctl</code> under <code>/u01/app/oracle</code> or <code>/opt/oracle</code>; any of <code>/sys/module/{rds,rds_tcp,rds_rdma}</code> currently loaded</td>
+    <td><code>99-rfxn-defense-rds.conf</code> modprobe drop only; tenant-unit <code>~AF_RDS</code> stays applied; <code>rfxn_afrds</code> auditd tripwire stays loaded.</td></tr>
+<tr><td><strong>io_uring workload</strong></td>
+    <td><code>liburing.so</code> in <code>/proc/*/maps</code>; known consumer binary executable (<code>postgres</code>, <code>scylla</code>, <code>mariadbd</code>, <code>dockerd</code>, <code>redis-server</code>, <code>nginx</code>, <code>envoy</code>, <code>rabbitmq-server</code>); io_uring-named systemd unit</td>
+    <td><code>99-rfxn-defense-iouring.conf</code> <strong>only</strong>. PinTheft primary cut (RDS modprobe) stays applied.</td></tr>
 </table>
 
 <p class="footnotes">
-False-positive guards baked into the detector:
-<code>/etc/subuid</code> populated by <code>useradd</code> is
-<strong>not</strong> a rootless signal: shadow-utils auto-populates
-subuid for every regular user regardless of container intent, which
-produced near-100% FPs on cPanel-shaped fleets in v2.0.1 rev 1.
-The rootful <code>/var/lib/containers/storage</code> signal is gated
-on <code>mtime &lt; 90d</code> so a long-purged podman install
-doesn't keep triggering suppression. The <code>/home</code> walk is
-bounded (<code>maxdepth 6</code>, <code>mtime -180</code>) so a
-pathological tenant home tree can't stall <code>%posttrans</code>.
-The <code>/run/user/&lt;UID&gt;/containers</code> signal requires
-<code>UID &ge; 1000</code> so system-account artifacts under
-<code>/run/user/0</code> don't trip detection.
+False-positive guards: <code>/etc/subuid</code> populated by
+<code>useradd</code> is <strong>not</strong> a rootless signal
+(shadow-utils auto-populates it for every regular user, which produced
+~100% FPs on cPanel-shaped fleets in v2.0.1 rev 1). Rootful container
+signal requires <code>mtime &lt; 90d</code>. <code>/home</code> walk
+bounded (<code>maxdepth 6</code>, <code>mtime -180</code>).
+<code>/run/user/&lt;UID&gt;/containers</code> requires <code>UID &ge; 1000</code>.
 </p>
-
-<h3>What stays protected after a suppression</h3>
-<table>
-<tr><th>Trigger</th><th>Layer dropped</th><th>Layers still active</th></tr>
-<tr><td><strong>IPsec</strong></td>
-    <td><code>99-cf2-xfrm.conf</code></td>
-    <td>cf1 LD_PRELOAD shim &middot; cf1 modprobe
-        (<code>algif_aead</code> family) &middot;
-        <code>RestrictNamespaces=~user ~net</code> on all 5 tenant
-        units (still blocks cf2/DF-ESP via the <code>unshare</code>
-        gate) &middot;
-        <code>RestrictAddressFamilies=~AF_ALG ~AF_RXRPC</code>
-        &middot; <code>99-rxrpc.conf</code> blacklist</td></tr>
-<tr><td><strong>AFS</strong></td>
-    <td><code>99-rxrpc.conf</code> + <code>12-rxrpc-af.conf</code>
-        (5 units)</td>
-    <td>cf1 LD_PRELOAD shim &middot; cf1 modprobe &middot;
-        <code>99-cf2-xfrm.conf</code> blacklist &middot;
-        <code>RestrictNamespaces=~user ~net</code> on all 5 units
-        (cf2/DF-ESP) &middot;
-        <code>RestrictAddressFamilies=~AF_ALG</code></td></tr>
-<tr><td><strong>Rootless containers</strong></td>
-    <td><code>15-userns.conf</code> on
-        <code>user@.service</code> only</td>
-    <td><code>sshd</code>/<code>cron</code>/<code>crond</code>/<code>atd</code>
-        keep <code>RestrictNamespaces=~user ~net</code>
-        (system-tier cf2/DF-ESP defense intact) &middot; cf1 shim
-        &middot; all modprobe blacklists &middot;
-        <code>AF_ALG</code>/<code>AF_RXRPC</code> restricts
-        everywhere</td></tr>
-</table>
 
 <h3>Inspect the decision</h3>
-<p>
-<code>%posttrans</code> writes a versioned JSON report to
-<code>/var/lib/rfxn-defense/auto-detect.json</code> after every
-install/upgrade and after every <code>copyfail-redetect</code> run:
-</p>
-<pre>{
-  "schema_version": "2",
-  "tool_version": "2.1.0",
-  "force_full": false,
-  "detected": {
-    "ipsec":               { "present": true,  "signals": ["systemctl: strongswan.service enabled"] },
-    "afs":                 { "present": false, "signals": [] },
-    "rootless_containers": { "present": true,  "signals": ["systemctl --user (alice): podman.socket enabled"] },
-    "userns_consumers":    { "present": true,  "signals": ["/usr/bin/firefox: desktop browser present"] },
-    "rds_workload":        { "present": false, "signals": [] }
-  },
-  "suppressed": {
-    "modprobe_cf2_xfrm":      true,
-    "modprobe_rxrpc":         false,
-    "modprobe_rds":           false,
-    "systemd_rxrpc_af":       false,
-    "systemd_userns_user_at": true,
-    "sysctl_userns":          true
-  },
-  "applied": { "modprobe_cf1": true, "modprobe_rds": true, "systemd_userns_sshd": true, "sysctl_userns": false, "...": "..." }
-}</pre>
-<p>Other inspection paths:</p>
-<pre># Per-action log lines from %posttrans / copyfail-redetect
+<pre>sudo cat /var/lib/rfxn-defense/auto-detect.json
 sudo journalctl -t rfxn-defense-detect --since today
+sudo rfxn-local-check --json | jq '.posture.auto_detect'</pre>
 
-# Auditor surface (SIEM-friendly)
-sudo copyfail-local-check --json | jq '.posture.auto_detect'
-# {"available": true, "suppressed_modprobe": ["cf2_xfrm"], "suppressed_systemd": ["userns_user_at"]}</pre>
+<p>
+<code>auto-detect.json</code> (schema v2) lists
+<code>detected.&lt;workload&gt;.signals</code>,
+<code>suppressed.&lt;dropin&gt;</code>, and
+<code>applied.&lt;dropin&gt;</code> flags for every drop-in the
+installer manages. Detection runs in <code>%posttrans</code> after
+every install/upgrade and on demand via <code>rfxn-redetect</code>.
+</p>
 
 <h3>Re-detect or force full coverage</h3>
 <pre># Re-run detection after enabling IPsec/AFS/rootless post-install
 sudo /usr/sbin/rfxn-redetect
 sudo systemctl daemon-reload
 sudo systemctl try-reload-or-restart sshd.service
+sudo sysctl --system   # if any sysctl drop-in was added or removed
 
 # Skip detection entirely - apply every drop-in unconditionally
-sudo mkdir -p /etc/copyfail
+sudo mkdir -p /etc/rfxn-defense
 sudo touch /etc/rfxn-defense/force-full
 sudo /usr/sbin/rfxn-redetect</pre>
 <p>
 The auditor reports <code>force-full sentinel active</code> when the
-sentinel is on. Remove the file and re-run
-<code>copyfail-redetect</code> to re-engage detection.
+sentinel is on. Remove the file and re-run <code>rfxn-redetect</code>
+to re-engage detection.
 </p>
 
 <h2 id="verify">Verify</h2>
@@ -748,17 +395,12 @@ sentinel is on. Remove the file and re-run
 python3 -c 'import socket; socket.socket(socket.AF_ALG, socket.SOCK_SEQPACKET, 0)'
 # expect: PermissionError [Errno 1] Operation not permitted
 
-# v2.1.0 ssh-keysign-pwn: ptrace_scope should be 2 on hardened host
+# ssh-keysign-pwn: ptrace_scope should be 2 on hardened host
 cat /proc/sys/kernel/yama/ptrace_scope
 # expect: 2
 
-# v2.1.0 PinTheft: rds module load should fail (or rds*.ko already loaded
-# on a host where detect.sh suppressed the blacklist - check auto-detect.json)
-sudo modprobe rds 2>&amp;1
-# expect: modprobe: ERROR: ../libkmod/libkmod-module.c ... (install rds /bin/false)
-
 # Holistic per-class coverage report
-sudo copyfail-local-check
+sudo rfxn-local-check
 # tail-of-output:
 #   Surface area / mitigation matrix:
 #     Class                  Sink reachable?  Mitigated?  Active layers
@@ -771,9 +413,17 @@ sudo copyfail-local-check
 
 <h2 id="overrides">Override paths</h2>
 <p>
-The default install applies <code>RestrictNamespaces=~user ~net</code>
-to <code>user@.service</code>. This <strong>breaks rootless
-podman/buildah</strong> under <code>user@.service</code>. Override:
+systemd drop-ins use the standard layered-override pattern: within a
+<code>&lt;unit&gt;.service.d/</code> directory, files merge in lex order
+and <strong>lower numbers lose to higher numbers</strong> for
+<code>=value</code> directives. rfxn-defense ships at <code>10-</code>,
+<code>12-</code>, <code>15-</code>; operator escape hatches sit at
+<code>20-</code> and <code>25-</code>.
+</p>
+<p>
+<strong><code>20-override.conf</code></strong> (neutralize a directive).
+Empty <code>=</code> clears the union for list-valued directives.
+Survives package upgrade (operator-owned, RPM does not manage it):
 </p>
 <pre>sudo install -d /etc/systemd/system/user@.service.d
 sudo tee /etc/systemd/system/user@.service.d/20-override.conf &gt;/dev/null &lt;&lt;'EOF'
@@ -783,53 +433,48 @@ RestrictAddressFamilies=
 EOF
 sudo systemctl daemon-reload</pre>
 <p>
-The <code>10-</code> prefix on package drop-ins and <code>99-</code>
-prefix on the modprobe drop are deliberate: any <code>20-*.conf</code>
-or numerically-later operator file overrides ours.
+<strong><code>25-additions.conf</code></strong> (add a directive on top
+of ours). Sorts after <code>20-</code>:
 </p>
+<pre>sudo tee /etc/systemd/system/sshd.service.d/25-additions.conf &gt;/dev/null &lt;&lt;'EOF'
+[Service]
+NoNewPrivileges=true
+EOF
+sudo systemctl daemon-reload
+sudo systemctl try-reload-or-restart sshd.service</pre>
 <p>
-If your fleet legitimately uses <strong>IPsec</strong> (strongSwan,
-libreswan, FRRouting), the modprobe blacklist breaks those workloads.
-Either skip the modprobe subpackage:
-</p>
-<pre>sudo dnf install rfxn-defense-shim rfxn-defense-systemd rfxn-defense-auditor
-# (omit rfxn-defense and rfxn-defense-modprobe)</pre>
-<p>
-&hellip;or remove the relevant entries from
-<code>/etc/modprobe.d/99-rfxn-defense.conf</code> (the file is
-<code>%config(noreplace)</code>, so your edit survives package upgrade).
-Same logic for <strong>AFS</strong> (<code>openafs</code>,
-<code>kafs</code>) and the <code>rxrpc</code> blacklist line.
+<strong>modprobe override:</strong> conditional <code>cf2-xfrm.conf</code>
+and <code>rxrpc.conf</code> are managed by detect.sh (cmp-and-skip).
+Hand-edit and detect.sh logs a WARN on the next
+<code>%posttrans</code>/<code>rfxn-redetect</code> and
+<strong>preserves your edits</strong>. The always-on
+<code>cf1.conf</code> is <code>%config(noreplace)</code>. Do not
+<code>chattr +i</code> a managed file: it breaks dnf via EPERM on
+<code>install -m 0644</code>.
 </p>
 
-<h2 id="json">Auditor JSON (v2.0 schema; additive in v2.1.0)</h2>
+<h2 id="json">Auditor JSON (v2.0 schema)</h2>
 <pre>{
   "schema_version": "2.0",
-  "covers": ["CVE-2026-31431", "cf2-xfrm-esp", "dirtyfrag-esp", "dirtyfrag-rxrpc", "pintheft", "keysign-pwn"],
+  "covers": ["cf1", "cf2", "dirtyfrag-esp", "dirtyfrag-rxrpc", "pintheft", "keysign-pwn"],
   "posture": {
     "verdict": "vulnerable_kernel_userspace_mitigated",
     "bug_classes_covered": ["cf1", "cf2", "dirtyfrag-esp", "pintheft", "keysign-pwn"],
     "bug_classes": {
-      "cf1":             { "applicable": true, "mitigated": true,  "kernel_sink": "...", "layers": {...} },
-      "cf2":             { "applicable": true, "mitigated": true,  "kernel_sink": "...", "layers": {...} },
-      "dirtyfrag-esp":   { "applicable": true, "mitigated": true,  "kernel_sink": "...", "layers": {...} },
-      "dirtyfrag-rxrpc": { "applicable": true, "mitigated": false, "kernel_sink": "...", "layers": {...} },
-      "pintheft":        { "applicable": true, "mitigated": true,  "kernel_sink": "rds zerocopy + io_uring fixed-buffer page-cache overwrite", "layers": {"rds_modprobe": true, "af_rds_restrict": true} },
-      "keysign-pwn":     { "applicable": true, "mitigated": true,  "kernel_sink": "__ptrace_may_access() race + pidfd_getfd on exiting SUID", "layers": {"ptrace_scope": true} }
+      "cf1":             { "applicable": true, "mitigated": true,  "layers": {} },
+      "pintheft":        { "applicable": true, "mitigated": true,  "layers": { "rds_modprobe": true, "af_rds_restrict": true, "io_uring_disabled": true } },
+      "keysign-pwn":     { "applicable": true, "mitigated": true,  "layers": { "ptrace_scope": true, "pidfd_getfd_auditd": true } }
     },
-    "layers": { ... }
+    "auto_detect": { "available": true, "suppressed_modprobe": [], "suppressed_systemd": [] }
   }
 }</pre>
 <p>
 <code>bug_classes_covered</code> is the SIEM-ergonomic single filter
-("is this host hardened?"). The <code>bug_classes</code> map exposes
-per-layer breakdown for finer dashboards. v2.1.0 adds
-<code>pintheft</code> and <code>keysign-pwn</code> entries; existing
-v2.0.x consumers ignore the new keys per established additive-schema
-protocol (<code>schema_version</code> stays <code>"2"</code>). Exit
-codes <code>0</code> clean, <code>2</code> VULN, <code>3</code>
-VULN-but-mitigated, <code>4</code> hardening recommendations only
-(unchanged from v1.0.x).
+("is this host hardened?"). <code>bug_classes</code> exposes per-layer
+breakdown for finer dashboards. <code>verdict</code> and <code>layers</code>
+from v1.0.x are preserved for backwards compat. Exit codes (unchanged):
+<code>0</code> clean, <code>2</code> VULN, <code>3</code>
+VULN-but-mitigated, <code>4</code> hardening recommendations only.
 </p>
 
 <h2 id="downloads">Direct downloads</h2>
@@ -837,122 +482,127 @@ VULN-but-mitigated, <code>4</code> hardening recommendations only
 Each release on
 <a href="https://github.com/rfxn/rfxn-defense/releases/latest">github.com/rfxn/rfxn-defense/releases</a>
 ships per-EL binary RPMs, an SRPM, the <code>.repo</code> file, and the
-public signing key as release assets. Only the current version is
-listed below; prior 2.0.x releases and the legacy
-<code>afalg-defense</code> 1.0.1 line remain in the dnf repodata so
+public signing key as release assets. v3.0.0 is the current line; older
+2.0.x / 2.1.x RPMs are archived under
+<code>repo/N/x86_64/archive/</code> in the dnf repodata so
 <code>dnf upgrade</code> resolves cleanly from any installed version.
-Pin a specific older release with
-<code>dnf install rfxn-defense-2.0.1*</code> if needed, or browse
-all of them on the
-<a href="https://github.com/rfxn/rfxn-defense/releases">GitHub releases page</a>.
 </p>
 <p>The <code>.repo</code> file (works on EL7/EL8/EL9/EL10):</p>
 <pre>sudo curl -sSL https://rfxn.github.io/rfxn-defense/rfxn-defense.repo \
   -o /etc/yum.repos.d/rfxn-defense.repo</pre>
-<p>And the public signing key (dnf imports this automatically on first install, but you can pre-import it):</p>
-<pre>sudo curl -sSL https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail \
+<p>The public signing key (dnf imports automatically on first install; pre-import for offline verification):</p>
+<pre>sudo curl -sSL https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-rfxn \
   | sudo rpm --import /dev/stdin</pre>
 
 <p>
 <strong>Per-EL binary RPMs are independently compiled against each
-distribution's glibc</strong> (EL7: 2.17 with split <code>libdl</code>;
-EL8: 2.28 with split <code>libdl</code>; EL9/EL10: 2.34+ with merged
-<code>libdl</code>); do not cross-install across ELs. v2.1.0 is the
-current line; v2.0.2 RPMs remain in the dnf repodata for legacy
-upgrade-path testing.
+distribution's glibc</strong> (EL7: 2.17 split <code>libdl</code>;
+EL8: 2.28 split <code>libdl</code>; EL9/EL10: 2.34+ merged
+<code>libdl</code>). Do not cross-install across ELs.
 </p>
 
-<h3>EL7 (CentOS 7 / RHEL 7, vault.centos.org build, new in v2.1.0)</h3>
+<h3>EL7 (CentOS 7 / RHEL 7, vault.centos.org build)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-2.1.0-1.el7.x86_64.rpm">rfxn-defense-2.1.0-1.el7.x86_64.rpm</a></td>
-    <td class="sha">cfafe9cbae0ed286da5b6a37439a44ec0f9dbc1770b831d50bdbb66b826a8450</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-audit-2.1.0-1.el7.noarch.rpm">rfxn-defense-audit-2.1.0-1.el7.noarch.rpm</a></td>
-    <td class="sha">241342b7bd29d23c458846e8e3481aabc292b3ca60bfa5991c0a4731ae2a10f9</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-auditor-2.1.0-1.el7.noarch.rpm">rfxn-defense-auditor-2.1.0-1.el7.noarch.rpm</a></td>
-    <td class="sha">b98085834fd2129c3b283ae2c9868800ca8bca86b7d0f658490f93e8cf52e350</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-modprobe-2.1.0-1.el7.noarch.rpm">rfxn-defense-modprobe-2.1.0-1.el7.noarch.rpm</a></td>
-    <td class="sha">ee413a0de2813bea6ac3b92bd8cd68f050832cacadfe9dc32f16a884c7b94979</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-shim-2.1.0-1.el7.x86_64.rpm">rfxn-defense-shim-2.1.0-1.el7.x86_64.rpm</a></td>
-    <td class="sha">68f7579762eedf5019d68ad92437847b50a35d98904cbba99dea805cf31f9bf1</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-sysctl-2.1.0-1.el7.noarch.rpm">rfxn-defense-sysctl-2.1.0-1.el7.noarch.rpm</a></td>
-    <td class="sha">d8b8c41e95764fc2e85aebc7b91eff399ebddc07fe70a3c5563cdbae8c3f23cf</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-systemd-2.1.0-1.el7.noarch.rpm">rfxn-defense-systemd-2.1.0-1.el7.noarch.rpm</a></td>
-    <td class="sha">548aa7a1bd5f06ea6e7d90ea0fe965758ec521f76991e5c2d4b60d64723765b6</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-2.1.0-1.el7.src.rpm">rfxn-defense-2.1.0-1.el7.src.rpm</a></td>
-    <td class="sha">6640631d39ead2633ca60693ae81d0cced75fd5b7be498262ed8d6968dbbe6c0</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-3.0.0-1.el7.x86_64.rpm">rfxn-defense-3.0.0-1.el7.x86_64.rpm</a></td>
+    <td class="sha">d6743e4e59869c540d2d6bfa6024d20a37101132924d06c6324ccd6c09237edd</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-audit-3.0.0-1.el7.noarch.rpm">rfxn-defense-audit-3.0.0-1.el7.noarch.rpm</a></td>
+    <td class="sha">0951642a52ec97634d657cdc0a509bf5afc05e4b7de9215820e5ccc2e656f250</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-auditor-3.0.0-1.el7.noarch.rpm">rfxn-defense-auditor-3.0.0-1.el7.noarch.rpm</a></td>
+    <td class="sha">912abdf39083ed6983670dc064b06f21acbf0afc1815d6b33d30592a8417efbb</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-autoupdate-3.0.0-1.el7.noarch.rpm">rfxn-defense-autoupdate-3.0.0-1.el7.noarch.rpm</a></td>
+    <td class="sha">25c08b9e2a24486c1e0285b3bc61584e0616f95664a9220fd9e878a6e061443d</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-modprobe-3.0.0-1.el7.noarch.rpm">rfxn-defense-modprobe-3.0.0-1.el7.noarch.rpm</a></td>
+    <td class="sha">97c057310f16821e537ccd3debc2eb6334bb609619fa89bf345a57453e30bed9</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-shim-3.0.0-1.el7.x86_64.rpm">rfxn-defense-shim-3.0.0-1.el7.x86_64.rpm</a></td>
+    <td class="sha">dad4b2e154fa55d472b8ad0ebf0eaef1a0bde19491be886def92763e462e09bc</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-sysctl-3.0.0-1.el7.noarch.rpm">rfxn-defense-sysctl-3.0.0-1.el7.noarch.rpm</a></td>
+    <td class="sha">113a93a5504b2d33b2293ee924cb7f163bf11eda44a44b7e672aa8e49aeccb56</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-systemd-3.0.0-1.el7.noarch.rpm">rfxn-defense-systemd-3.0.0-1.el7.noarch.rpm</a></td>
+    <td class="sha">e0b07298a356b2c9f2f3b1c302d5eff01a8d5c08b4a77b437b95918a8b5c2ddf</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-3.0.0-1.el7.src.rpm">rfxn-defense-3.0.0-1.el7.src.rpm</a></td>
+    <td class="sha">f2596b63a47df7b84f66628442bbb2e7786c88fdd53af2da15346bf8550eae91</td></tr>
 </table>
 
 <h3>EL8 (RHEL/Alma/Rocky/CentOS Stream 8)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-2.1.0-1.el8.x86_64.rpm">rfxn-defense-2.1.0-1.el8.x86_64.rpm</a></td>
-    <td class="sha">2206703d26d409885372bb83c3a71e1989d6fbd8e806559b8996c239f9ce78cf</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-audit-2.1.0-1.el8.noarch.rpm">rfxn-defense-audit-2.1.0-1.el8.noarch.rpm</a></td>
-    <td class="sha">227776a0fa0dd61d0d3d35afaef3e8effa65216b11a22d76924b335bfa7e4f90</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-auditor-2.1.0-1.el8.noarch.rpm">rfxn-defense-auditor-2.1.0-1.el8.noarch.rpm</a></td>
-    <td class="sha">91ab71dc4e329ec3effff8156cef28a1a1a172853e80c0509846a1d9f92c0c99</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-modprobe-2.1.0-1.el8.noarch.rpm">rfxn-defense-modprobe-2.1.0-1.el8.noarch.rpm</a></td>
-    <td class="sha">9bdd511522aca2d48a7c6edaed66447be1110eff4695d4874d32529fae2b45ff</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-shim-2.1.0-1.el8.x86_64.rpm">rfxn-defense-shim-2.1.0-1.el8.x86_64.rpm</a></td>
-    <td class="sha">1448b919fcab0e5ea31fb719e95bcf0a492dfdb7803788947d898f7cb06512b1</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-sysctl-2.1.0-1.el8.noarch.rpm">rfxn-defense-sysctl-2.1.0-1.el8.noarch.rpm</a></td>
-    <td class="sha">cef85f2931dbb1ea772baf505fe3a555a18b54458924f3198f58132a22a49a01</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-systemd-2.1.0-1.el8.noarch.rpm">rfxn-defense-systemd-2.1.0-1.el8.noarch.rpm</a></td>
-    <td class="sha">870d950db1fad5d7bbce18097dc95ec448ff1bcf802d77bfbcc757f188b9a846</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-2.1.0-1.el8.src.rpm">rfxn-defense-2.1.0-1.el8.src.rpm</a></td>
-    <td class="sha">fe61d375581a9f3838f1327bcfd4e7b8c6365420fdf31f409b51e7a197cad83b</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-3.0.0-1.el8.x86_64.rpm">rfxn-defense-3.0.0-1.el8.x86_64.rpm</a></td>
+    <td class="sha">589706efa1dcb99a525156b1cdd320f78563681615ffa0a0ba4d21d3713fd45a</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-audit-3.0.0-1.el8.noarch.rpm">rfxn-defense-audit-3.0.0-1.el8.noarch.rpm</a></td>
+    <td class="sha">96e7d76db2ce0077c911c7bfe8a6d22889f9e2a15c6ea27ce3b3178a23fcd5a2</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-auditor-3.0.0-1.el8.noarch.rpm">rfxn-defense-auditor-3.0.0-1.el8.noarch.rpm</a></td>
+    <td class="sha">fb06d34e1ea0c4110e2386dce200d83bec9a04a52e117ae8962dc43ad831bdbf</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-autoupdate-3.0.0-1.el8.noarch.rpm">rfxn-defense-autoupdate-3.0.0-1.el8.noarch.rpm</a></td>
+    <td class="sha">39f5c8560cf362d0829f0adaa5a2cb0446162fc478680dd53e506c114d519405</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-modprobe-3.0.0-1.el8.noarch.rpm">rfxn-defense-modprobe-3.0.0-1.el8.noarch.rpm</a></td>
+    <td class="sha">1a673f8a7a242923141461597c20a7afc7c2587a49b2d67150c2ae04ec8e84eb</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-shim-3.0.0-1.el8.x86_64.rpm">rfxn-defense-shim-3.0.0-1.el8.x86_64.rpm</a></td>
+    <td class="sha">a8c98c074c7ddb80a97dd66d0f2344234e188e67d96337f7026974f79ca5192a</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-sysctl-3.0.0-1.el8.noarch.rpm">rfxn-defense-sysctl-3.0.0-1.el8.noarch.rpm</a></td>
+    <td class="sha">5a148d8b03057e6346f8c1c192a8cf62e0a5098ff2d41215469562f3e413f42f</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-systemd-3.0.0-1.el8.noarch.rpm">rfxn-defense-systemd-3.0.0-1.el8.noarch.rpm</a></td>
+    <td class="sha">3c23bc55d2fef0b2df7b084597783d545bf73b522147ef9755a5ec9d6c80e008</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-3.0.0-1.el8.src.rpm">rfxn-defense-3.0.0-1.el8.src.rpm</a></td>
+    <td class="sha">5de9dfe6bf9ce0f329cafdb5e9af7841de406203bd11b7a090e26e26b0290621</td></tr>
 </table>
 
 <h3>EL9 (RHEL/Alma/Rocky/CentOS Stream 9)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-2.1.0-1.el9.x86_64.rpm">rfxn-defense-2.1.0-1.el9.x86_64.rpm</a></td>
-    <td class="sha">e13498af81d896ed0e9a7b2673be9a80a83491cdc13d79fe774f56729ebe1c84</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-audit-2.1.0-1.el9.noarch.rpm">rfxn-defense-audit-2.1.0-1.el9.noarch.rpm</a></td>
-    <td class="sha">24a6421c29597ca516b8a658b7cd53d6be9a161d26529fc32c102a3fd1734703</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-auditor-2.1.0-1.el9.noarch.rpm">rfxn-defense-auditor-2.1.0-1.el9.noarch.rpm</a></td>
-    <td class="sha">dfd6da0e7031e30276973e7896c613d31b4c6b6be7422ea226b5eab2a71e9bf0</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-modprobe-2.1.0-1.el9.noarch.rpm">rfxn-defense-modprobe-2.1.0-1.el9.noarch.rpm</a></td>
-    <td class="sha">d98186d4d583a2c5c0a897b0bfbfc6583de295a2e42cda7f40225dffb474cb8b</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-shim-2.1.0-1.el9.x86_64.rpm">rfxn-defense-shim-2.1.0-1.el9.x86_64.rpm</a></td>
-    <td class="sha">89919412c09e0e4d687523f0960b49a2e9a931b59b7a64ccbd8f56759e582e14</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-sysctl-2.1.0-1.el9.noarch.rpm">rfxn-defense-sysctl-2.1.0-1.el9.noarch.rpm</a></td>
-    <td class="sha">1ddc7decdc52415cc6eefcc3486d6b7fb6acc5364ef7b7572cca00c595524dbc</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-systemd-2.1.0-1.el9.noarch.rpm">rfxn-defense-systemd-2.1.0-1.el9.noarch.rpm</a></td>
-    <td class="sha">0516c0a5cb256bd9fb24e7dc29c689c7dc5b31375f7644249a7abd5cef1ac58d</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-2.1.0-1.el9.src.rpm">rfxn-defense-2.1.0-1.el9.src.rpm</a></td>
-    <td class="sha">a17cf428e2d6eb9d7f61c10624592ad498f7e0d4224d684642865c60a1c7261d</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-3.0.0-1.el9.x86_64.rpm">rfxn-defense-3.0.0-1.el9.x86_64.rpm</a></td>
+    <td class="sha">acfec3373b4fa232dec3f49c933843414db55d83b4e2ef430afd6018551aa74e</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-audit-3.0.0-1.el9.noarch.rpm">rfxn-defense-audit-3.0.0-1.el9.noarch.rpm</a></td>
+    <td class="sha">7b3868dc48e4478dfc136e0b52b0e638953dd964032ebf188eb35f4a41071183</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-auditor-3.0.0-1.el9.noarch.rpm">rfxn-defense-auditor-3.0.0-1.el9.noarch.rpm</a></td>
+    <td class="sha">3bbeefa00ce8df4d54c23b04cca66f8a6a8ce5f5e6bdde4f4258aaf12055be85</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-autoupdate-3.0.0-1.el9.noarch.rpm">rfxn-defense-autoupdate-3.0.0-1.el9.noarch.rpm</a></td>
+    <td class="sha">88ea3f805f9851ade2c3bf494188dc01f4d52488b6c23e3c95d27e4736f276f8</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-modprobe-3.0.0-1.el9.noarch.rpm">rfxn-defense-modprobe-3.0.0-1.el9.noarch.rpm</a></td>
+    <td class="sha">650c7547ed1362f0566683d8672de53ba475ee57060abecbec0a1fb0bdbf50dc</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-shim-3.0.0-1.el9.x86_64.rpm">rfxn-defense-shim-3.0.0-1.el9.x86_64.rpm</a></td>
+    <td class="sha">438fae53a62d0780ab0f4e2d045d70a55792a212fe93b258e59cc7b7fd7a79b8</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-sysctl-3.0.0-1.el9.noarch.rpm">rfxn-defense-sysctl-3.0.0-1.el9.noarch.rpm</a></td>
+    <td class="sha">507303da673bb669d759a5520f560304c14e58e638cba7a1be03893b504ec3cb</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-systemd-3.0.0-1.el9.noarch.rpm">rfxn-defense-systemd-3.0.0-1.el9.noarch.rpm</a></td>
+    <td class="sha">c84cd07e84512d1e0bd5e47a93befb40d10d7940174e7db98f54bec3d9c0a7e9</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-3.0.0-1.el9.src.rpm">rfxn-defense-3.0.0-1.el9.src.rpm</a></td>
+    <td class="sha">3ace1af112040bf56a771d3e87425f76cc79748bd545526437ca02381179383e</td></tr>
 </table>
 
 <h3>EL10 (RHEL 10 / CentOS Stream 10 / AlmaLinux Kitten)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-2.1.0-1.el10.x86_64.rpm">rfxn-defense-2.1.0-1.el10.x86_64.rpm</a></td>
-    <td class="sha">0ba7d2ef2bee825afaa3dc5381fcdd642c3b1865b6c399aa59535585b53b08f7</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-audit-2.1.0-1.el10.noarch.rpm">rfxn-defense-audit-2.1.0-1.el10.noarch.rpm</a></td>
-    <td class="sha">c21df8341fe6a46fcf3406ee8ea344f74e12082632e5fb80856f796c9b1e5f1c</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-auditor-2.1.0-1.el10.noarch.rpm">rfxn-defense-auditor-2.1.0-1.el10.noarch.rpm</a></td>
-    <td class="sha">1380308e0c3a7184a82151488bbd0447b60316891accf6ad75c5b8506038d117</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-modprobe-2.1.0-1.el10.noarch.rpm">rfxn-defense-modprobe-2.1.0-1.el10.noarch.rpm</a></td>
-    <td class="sha">0697f042bb85c3b241d25e097d26694ee7f2e4ace6fb6d4cce1548e4af0dd439</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-shim-2.1.0-1.el10.x86_64.rpm">rfxn-defense-shim-2.1.0-1.el10.x86_64.rpm</a></td>
-    <td class="sha">36e4087c48b958e9a212d006b677c2cbbef0f56272e9bc02bb97ae969552068b</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-sysctl-2.1.0-1.el10.noarch.rpm">rfxn-defense-sysctl-2.1.0-1.el10.noarch.rpm</a></td>
-    <td class="sha">0d185864cbe5d177bf03aaa5f1a9160cfb94b202f2d9d1b88d4b68f0a98a7ea1</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-systemd-2.1.0-1.el10.noarch.rpm">rfxn-defense-systemd-2.1.0-1.el10.noarch.rpm</a></td>
-    <td class="sha">cad6ceaeec57087b833bf38760982748a910dcb047cb20c361405b5393a25b26</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-2.1.0-1.el10.src.rpm">rfxn-defense-2.1.0-1.el10.src.rpm</a></td>
-    <td class="sha">91c6d9a8d75b0632e07749f66e0e3fd10d31a58af3ae5e198fb41d1200d911c6</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-3.0.0-1.el10.x86_64.rpm">rfxn-defense-3.0.0-1.el10.x86_64.rpm</a></td>
+    <td class="sha">670cb4d21228d37b64ca6249862d352bb1133906b8bf6b9842413f571316f4e8</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-audit-3.0.0-1.el10.noarch.rpm">rfxn-defense-audit-3.0.0-1.el10.noarch.rpm</a></td>
+    <td class="sha">a6c70f1c8d5ae8aa735c973515822339e6018ef884c3bba49f900d03275d6186</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-auditor-3.0.0-1.el10.noarch.rpm">rfxn-defense-auditor-3.0.0-1.el10.noarch.rpm</a></td>
+    <td class="sha">736a5760912750f25f2f5bb02799bf8aed6d7923dff21e69f3f489e2550bf1ce</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-autoupdate-3.0.0-1.el10.noarch.rpm">rfxn-defense-autoupdate-3.0.0-1.el10.noarch.rpm</a></td>
+    <td class="sha">812dc0460f14772ebb6f48567831a0503de60f9eb6c86211474e8097064b6a52</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-modprobe-3.0.0-1.el10.noarch.rpm">rfxn-defense-modprobe-3.0.0-1.el10.noarch.rpm</a></td>
+    <td class="sha">6e09cca3470e658f5368039072cd1e609e0b8f63535ef1a32c34719ac160f8c1</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-shim-3.0.0-1.el10.x86_64.rpm">rfxn-defense-shim-3.0.0-1.el10.x86_64.rpm</a></td>
+    <td class="sha">1d5256f92763e1b987114436818299f9a6f4fc669bd4a6549c3296a66ea90add</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-sysctl-3.0.0-1.el10.noarch.rpm">rfxn-defense-sysctl-3.0.0-1.el10.noarch.rpm</a></td>
+    <td class="sha">5a53359420b37d480440fa92c40e726053cca3d1b98874cadb9309cf9bc3bc04</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-systemd-3.0.0-1.el10.noarch.rpm">rfxn-defense-systemd-3.0.0-1.el10.noarch.rpm</a></td>
+    <td class="sha">10074153f547f3ad9182bc36a976d3f3b02a2a0b43b6560f5ee60e8d2db5f230</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-3.0.0-1.el10.src.rpm">rfxn-defense-3.0.0-1.el10.src.rpm</a></td>
+    <td class="sha">6d8f8e9b3aed1b23a446187b59d571e536b517ed71fbd6151e498fce7177a4bb</td></tr>
 </table>
 
 <h2 id="signing">Signing</h2>
 <p>
-v1.0.1 and later are signed by the <strong>Copyfail Project Signing Key</strong>:
+v1.0.1 and later are signed by the <strong>Copyfail Project Signing
+Key</strong> (retained as the project's canonical signing identity
+through the v3.0.0 rfxn-defense rename):
 </p>
 <pre>fingerprint: 6001 1CDC EA2F F52D 975A  FDEE 6D30 F32C D5E8 0F80
 uid:         Copyfail Project Signing Key &lt;proj@rfxn.com&gt;
-key file:    <a href="RPM-GPG-KEY-copyfail">/RPM-GPG-KEY-copyfail</a></pre>
+key file:    <a href="RPM-GPG-KEY-rfxn">/RPM-GPG-KEY-rfxn</a>
+             (legacy alias: <a href="RPM-GPG-KEY-copyfail">/RPM-GPG-KEY-copyfail</a>, identical content)</pre>
 <p>
 The <code>rfxn-defense.repo</code> sets both <code>gpgcheck=1</code>
 (verifies each RPM) and <code>repo_gpgcheck=1</code> (verifies
@@ -961,11 +611,11 @@ we publish alongside it). dnf imports the public key from
 <code>gpgkey=</code> on first use.
 </p>
 <p>Verify out-of-band:</p>
-<pre>curl -sSL https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail | gpg --import
+<pre>curl -sSL https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-rfxn | gpg --import
 gpg --fingerprint proj@rfxn.com
 # expect: 6001 1CDC EA2F F52D 975A  FDEE 6D30 F32C D5E8 0F80
-rpm --import https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail
-rpm -K /path/to/rfxn-defense-2.1.0-1.el9.x86_64.rpm
+rpm --import https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-rfxn
+rpm -K /path/to/rfxn-defense-3.0.0-1.el9.x86_64.rpm
 # expect: digests signatures OK</pre>
 
 <h2 id="defense">Defense in depth</h2>
@@ -976,26 +626,90 @@ defeats one does not necessarily defeat the next.
 <table>
 <tr><th>Rung</th><th>Where it fails</th><th>What the next rung covers</th></tr>
 <tr><td>Kernel patch (vendor)</td>
-    <td>EL7 reached EOL 2024-06-30 (no vendor patches for new CVEs); rollout on supported ELs lags disclosure days-to-weeks; reboot may not be available; <strong>Dirty Frag-RxRPC has no upstream patch</strong>; <strong>Fragnesia is on netdev only as of 2026-05-13</strong>, not yet in stable trees; <strong>PinTheft and ssh-keysign-pwn (CVE-2026-46333) are pre-upstream as of 2026-05</strong></td>
-    <td>Userspace cuts close the window without a reboot, the entire rfxn-defense rung set is a kernel-patch-free coverage path</td></tr>
+    <td>EL7 EOL; rollout on supported ELs lags disclosure days-to-weeks; reboot may not be available; <strong>DF-RxRPC, PinTheft, ssh-keysign-pwn have no upstream patch as of v3.0.0</strong></td>
+    <td>Userspace cuts close the window without a reboot; rfxn-defense is a kernel-patch-free coverage path</td></tr>
 <tr><td><code>modprobe</code> blacklist</td>
-    <td>No-op when relevant module is <strong>builtin</strong> (RHEL <code>algif_aead</code> is); no effect on already-resident modules</td>
-    <td>Functional for <code>esp4</code>/<code>esp6</code>/<code>xfrm_user</code>/<code>xfrm_algo</code>/<code>rxrpc</code> on stock RHEL kernels. RHEL <code>algif_aead</code>: use <code>grubby --update-kernel ALL --args "initcall_blacklist=algif_aead_init"</code> + reboot.</td></tr>
+    <td>No-op when relevant module is <strong>builtin</strong> (RHEL <code>algif_aead</code>); no effect on already-resident modules</td>
+    <td>Functional for <code>esp4</code>/<code>esp6</code>/<code>xfrm_user</code>/<code>xfrm_algo</code>/<code>rxrpc</code>/<code>rds*</code> on stock RHEL kernels</td></tr>
 <tr><td>systemd <code>RestrictAddressFamilies</code> / <code>RestrictNamespaces</code></td>
-    <td>Reaches only services systemd starts post-restriction. Misses cron-as-root, sshd-pre-restriction, container payloads with own pid 1, interactive shell users running an exploit binary</td>
-    <td>Host-wide userns sysctl (v2.0.2) catches the interactive-shell case; LD_PRELOAD shim covers every dyn-linked process regardless of init</td></tr>
-<tr><td>Host-wide userns sysctl <em>(v2.0.2)</em></td>
-    <td>Auto-suppressed on rootless containers / Flatpak / firejail / desktop browsers. Setting only affects <code>unshare(2)</code> calls made <strong>after</strong> the sysctl took effect; in-flight processes that already grabbed a userns retain it until exit</td>
-    <td>Per-unit <code>RestrictNamespaces</code> still applies on the five tenant units even when the host-wide sysctl is suppressed; auditd rules log post-suppression userns prep</td></tr>
+    <td>Reaches only services systemd starts post-restriction. Misses cron-as-root, sshd-pre-restriction, container payloads with own pid 1, interactive shell exploit binary</td>
+    <td>Host-wide userns sysctl catches the interactive-shell case; LD_PRELOAD shim covers every dyn-linked process regardless of init</td></tr>
+<tr><td>Host-wide userns / ptrace / io_uring sysctls</td>
+    <td>Auto-suppressed on rootless / Flatpak / firejail / browsers (userns); io_uring workloads; pre-6.6 kernels (io_uring). In-flight processes retain a userns they already grabbed</td>
+    <td>Per-unit <code>RestrictNamespaces</code> still applies on tenant units; auditd logs post-suppression userns prep</td></tr>
 <tr><td><strong>LD_PRELOAD shim</strong></td>
     <td>Static binaries; direct <code>syscall</code> instruction; SUID strip</td>
     <td>seccomp at unit/runtime level catches direct-syscall path</td></tr>
-<tr><td>seccomp filter</td>
-    <td>Per-service. Operationally heavy: each unit/runtime needs explicit policy</td>
-    <td>This package's systemd subpackage ships a one-line filter for the highest-leverage tenant units</td></tr>
-<tr><td>auditd tripwire rules <em>(v2.0.2)</em></td>
-    <td>Detection only, not mitigation. Fails when auditd is not running, the rules are unloaded, or the attacker arrives via a path that bypasses syscall auditing (kprobe-disabled kernels)</td>
-    <td>Becomes the residual signal on hosts where modprobe blacklists are auto-suppressed (IPsec / AFS workloads) and the kernel sink stays reachable</td></tr>
+<tr><td>auditd tripwire rules</td>
+    <td>Detection only, not mitigation. Fails when auditd is not running or rules are unloaded</td>
+    <td>Becomes the residual signal on hosts where modprobe blacklists are auto-suppressed (IPsec / AFS / RDS workloads) and the kernel sink stays reachable</td></tr>
+</table>
+<p>
+Where the shim itself fails (static binaries, direct <code>syscall</code>,
+SUID stripping) is <strong>attacker engineering territory</strong>. The
+other rungs fail under <strong>routine operator reality</strong>:
+vendors haven't shipped yet, the kernel was built with builtin crypto,
+the threat surface includes a cron job. That asymmetry is the case
+for deploying every rung.
+</p>
+
+<h2 id="changelog">Changelog</h2>
+<p>
+Per-release notes (full detail):
+<a href="https://github.com/rfxn/rfxn-defense/releases">github.com/rfxn/rfxn-defense/releases</a>.
+Per-commit history:
+<a href="https://github.com/rfxn/rfxn-defense/commits/main">github.com/rfxn/rfxn-defense/commits</a>.
+</p>
+<table>
+<tr><th>Version</th><th>Date</th><th>Summary</th></tr>
+<tr><td><strong>v3.0.0</strong></td>
+    <td>2026-05-23</td>
+    <td>Project rename <code>copyfail-defense</code> &rarr;
+        <code>rfxn-defense</code>; reframe as general-purpose responsive
+        defense layer. New <code>-autoupdate</code> subpackage: 4-hourly
+        cron + flock wrapper, lands new mitigations within 4 hours of a
+        release tag. DirtyDecrypt (CVE-2026-31635) cross-stamped onto
+        DF-RxRPC coverage. Double Obsoletes/Provides chain handles v2.x
+        upgrade; state migrates via <code>%pretrans mv -n</code>.</td></tr>
+<tr><td>v2.1.1</td>
+    <td>2026-05-23</td>
+    <td>io_uring sysctl promoted from opt-in to auto-applied with
+        layered suppression. New
+        <code>99-rfxn-defense-iouring.conf</code> drop-in (Linux 6.6+
+        only). Older RPMs moved to <code>repo/N/x86_64/archive/</code>.</td></tr>
+<tr><td>v2.1.0</td>
+    <td>2026-05-22</td>
+    <td>PinTheft (CVE pending) Copy Fail extension via RDS + io_uring;
+        ssh-keysign-pwn (CVE-2026-46333) FD-theft class.
+        <code>kernel.yama.ptrace_scope=2</code> sysctl;
+        <code>rfxn_afrds</code> + <code>rfxn_pidfd_getfd</code> auditd
+        rules. EL7 build target via <code>vault.centos.org</code>.</td></tr>
+<tr><td>v2.0.2</td>
+    <td>2026-05-13</td>
+    <td>Fragnesia / Dirty Frag-ESP coverage. New
+        <code>-sysctl</code> subpackage
+        (<code>user.max_user_namespaces=0</code>); new
+        <code>-audit</code> subpackage (<code>~AF_KEY</code> closes the
+        PF_KEYv2 SA-config path). CVE cross-stamping for cf2
+        (CVE-2026-43284) and DF-RxRPC (CVE-2026-43500).</td></tr>
+<tr><td>v2.0.1</td>
+    <td>2026-05-08</td>
+    <td>Workload auto-detection: IPsec / AFS / rootless-container
+        suppression in <code>%posttrans</code>; per-host state at
+        <code>/var/lib/rfxn-defense/auto-detect.json</code>. File-layout
+        split (3 modprobe files, 3 systemd drop-in layers).</td></tr>
+<tr><td>v2.0.0</td>
+    <td>2026-05-08</td>
+    <td>Umbrella rename <code>afalg-defense</code> &rarr;
+        <code>copyfail-defense</code>; expanded to the Copy Fail bug
+        class. New <code>-modprobe</code> and <code>-systemd</code>
+        subpackages.</td></tr>
+<tr><td>v1.0.1</td>
+    <td>2026-04-29</td>
+    <td>Initial signed release. <code>afalg-defense-shim</code>
+        (LD_PRELOAD <code>AF_ALG</code> block) and
+        <code>afalg-defense-auditor</code> (read-only host posture
+        auditor). RPMs and repodata GPG-signed.</td></tr>
 </table>
 
 <h2>Reporting issues</h2>
