@@ -139,7 +139,7 @@ explicit operator step (<code>copyfail-shim-enable</code>).
 </div>
 
 <div class="note">
-<strong>EL7 (CentOS 7 / RHEL 7) support &mdash; v2.1.0.</strong>
+<strong>EL7 (CentOS 7 / RHEL 7) support, v2.1.0.</strong>
 CentOS 7 reached EOL 2024-06-30. v2.1.0 RPMs are built against
 <code>vault.centos.org/centos/7.9.2009/</code> via a custom mock chroot
 and signed with the same project key as EL8/9/10. The auditor's
@@ -212,7 +212,7 @@ Per-release notes: <a href="https://github.com/rfxn/copyfail/releases">github.co
 
 <h3>v2.1.1 (2026-05-23) &middot; io_uring auto-detect with layered suppression</h3>
 <ul>
-<li><strong>io_uring sysctl auto-applied</strong> &mdash; promotes
+<li><strong>io_uring sysctl auto-applied</strong>, promotes
     <code>kernel.io_uring_disabled=2</code> from v2.1.0 operator opt-in
     to auto-applied with layered suppression. New
     <code>/etc/sysctl.d/99-copyfail-defense-iouring.conf</code> drop-in
@@ -234,7 +234,7 @@ Per-release notes: <a href="https://github.com/rfxn/copyfail/releases">github.co
 
 <h3>v2.1.0 (2026-05-22) &middot; PinTheft + ssh-keysign-pwn + EL7 build target</h3>
 <ul>
-<li><strong>PinTheft</strong> (CVE pending) &mdash; Copy Fail class
+<li><strong>PinTheft</strong> (CVE pending), Copy Fail class
     extension. New
     <code>/etc/modprobe.d/99-copyfail-defense-rds.conf</code> blocks
     <code>rds</code> / <code>rds_tcp</code> / <code>rds_rdma</code>
@@ -242,17 +242,17 @@ Per-release notes: <a href="https://github.com/rfxn/copyfail/releases">github.co
     <code>10-*</code> systemd drop-in on all 5 tenant units; new
     <code>copyfail_afrds</code> auditd rule fires on
     <code>socket(AF_RDS=21)</code> from <code>auid&ge;1000</code>.</li>
-<li><strong>ssh-keysign-pwn (CVE-2026-46333)</strong> &mdash; FD-theft
+<li><strong>ssh-keysign-pwn (CVE-2026-46333)</strong>, FD-theft
     class, first member. New
     <code>kernel.yama.ptrace_scope=2</code> sysctl key in
     <code>99-copyfail-defense-userns.conf</code> closes the
     <code>pidfd_getfd</code> path without breaking root debugging;
     new <code>copyfail_pidfd_getfd</code> auditd rule on syscall
-    <code>438</code> (numeric form &mdash; EL7+EL8 audit-userspace do
+    <code>438</code> (numeric form, EL7+EL8 audit-userspace do
     not recognise the name string).</li>
 <li>Operator opt-in commented-out
     <code>kernel.io_uring_disabled=2</code> (PinTheft secondary
-    mitigation; Linux 6.6+ only) &mdash; promoted to auto-applied with
+    mitigation; Linux 6.6+ only), promoted to auto-applied with
     layered suppression in v2.1.1.</li>
 <li>Auto-detect gains <code>detect_rds_workload()</code>: signals
     <code>/etc/oratab</code> non-comment entry, Oracle
@@ -269,7 +269,7 @@ Per-release notes: <a href="https://github.com/rfxn/copyfail/releases">github.co
 <li><strong>EL7 build target added.</strong> RPMs built against
     <code>vault.centos.org/centos/7.9.2009/</code> via custom mock
     chroot config; same signing key as EL8/9/10. EL7's rpm-4.11
-    lacks the <code>Recommends:</code> tag &mdash;
+    lacks the <code>Recommends:</code> tag
     <code>-audit</code> is a hard <code>Requires:</code> there.</li>
 <li>Operator-facing changes: README, gh-pages landing, STATE.md /
     BRIEF.md / SPEC.md updated with PinTheft + ssh-keysign-pwn rows
@@ -425,7 +425,7 @@ applicable; superscripts mark caveated coverage (notes below).
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td><td class="cls-n">&middot;</td>
     <td class="cls-n">&middot;</td>
-    <td class="cls-fn">&#8309;</td><td class="cls-n">&middot;</td></tr>
+    <td class="cls-y">&#x2713; <sup>5</sup></td><td class="cls-n">&middot;</td></tr>
 <tr><td>auditd tripwire rules <em>(v2.0.2 + v2.1.0)</em></td>
     <td class="cls-fn">&sup3;</td><td class="cls-fn">&sup3;</td>
     <td class="cls-fn">&sup3;</td><td class="cls-fn">&sup3;</td>
@@ -587,7 +587,7 @@ coverage is unchanged on every host.
         removes only the rds modprobe drop; the always-on
         <code>~AF_RDS</code> systemd restriction on tenant units still
         applies (tenant units do not legitimately speak RDS), and the
-        <code>copyfail_afrds</code> auditd rule still fires &mdash; so
+        <code>copyfail_afrds</code> auditd rule still fires, so
         unprivileged AF_RDS use from a non-Oracle process remains
         visible.</td></tr>
 </table>
@@ -858,7 +858,7 @@ current line; v2.0.2 RPMs remain in the dnf repodata for legacy
 upgrade-path testing.
 </p>
 
-<h3>EL7 (CentOS 7 / RHEL 7 &mdash; vault.centos.org build, new in v2.1.0)</h3>
+<h3>EL7 (CentOS 7 / RHEL 7, vault.centos.org build, new in v2.1.0)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
 <tr><td><a href="repo/7/x86_64/copyfail-defense-2.1.0-1.el7.x86_64.rpm">copyfail-defense-2.1.0-1.el7.x86_64.rpm</a></td>
@@ -973,7 +973,7 @@ defeats one does not necessarily defeat the next.
 <tr><th>Rung</th><th>Where it fails</th><th>What the next rung covers</th></tr>
 <tr><td>Kernel patch (vendor)</td>
     <td>EL7 reached EOL 2024-06-30 (no vendor patches for new CVEs); rollout on supported ELs lags disclosure days-to-weeks; reboot may not be available; <strong>Dirty Frag-RxRPC has no upstream patch</strong>; <strong>Fragnesia is on netdev only as of 2026-05-13</strong>, not yet in stable trees; <strong>PinTheft and ssh-keysign-pwn (CVE-2026-46333) are pre-upstream as of 2026-05</strong></td>
-    <td>Userspace cuts close the window without a reboot &mdash; the entire copyfail-defense rung set is a kernel-patch-free coverage path</td></tr>
+    <td>Userspace cuts close the window without a reboot, the entire copyfail-defense rung set is a kernel-patch-free coverage path</td></tr>
 <tr><td><code>modprobe</code> blacklist</td>
     <td>No-op when relevant module is <strong>builtin</strong> (RHEL <code>algif_aead</code> is); no effect on already-resident modules</td>
     <td>Functional for <code>esp4</code>/<code>esp6</code>/<code>xfrm_user</code>/<code>xfrm_algo</code>/<code>rxrpc</code> on stock RHEL kernels. RHEL <code>algif_aead</code>: use <code>grubby --update-kernel ALL --args "initcall_blacklist=algif_aead_init"</code> + reboot.</td></tr>
