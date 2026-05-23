@@ -65,7 +65,7 @@ import tempfile
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 
 # --- splice(2) wrapper ----------------------------------------------------
 # os.splice was added in Python 3.10. EL7/8/9 default Pythons are 3.6/3.6/3.9
@@ -1488,8 +1488,16 @@ def check_auto_detect_state():
     suppressed = data.get("suppressed") or {}
     if not isinstance(suppressed, dict):
         suppressed = {}
+    # v2.1.1: suppressed.sysctl_iouring is a dict {suppressed, reason};
+    # all other entries are plain bool. Handle both shapes.
+    def _is_supp(v):
+        if v is True:
+            return True
+        if isinstance(v, dict) and v.get("suppressed") is True:
+            return True
+        return False
     suppressed_mits = sorted([
-        k for k, v in suppressed.items() if v is True
+        k for k, v in suppressed.items() if _is_supp(v)
     ])
     force_full = bool(data.get("force_full"))
 
@@ -1802,6 +1810,66 @@ def check_ptrace_scope():
                  remediation="sysctl -w kernel.yama.ptrace_scope=2 ; "
                              "ensure /etc/sysctl.d/"
                              "99-copyfail-defense-userns.conf is loaded")
+
+def check_io_uring_disabled():
+    """v2.1.1 MITIGATION: PinTheft secondary mitigation reporter.
+
+    kernel.io_uring_disabled=2 closes io_uring as an exfil/IPC primitive.
+    Auto-applied on hosts where no io_uring workload is detected and
+    kernel >= 6.6. Suppressed elsewhere (rootless, userns consumers,
+    io_uring workload signals, kernel too old).
+    """
+    raw = read_text_safe("/var/lib/copyfail-defense/auto-detect.json")
+    try:
+        detect_state = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        detect_state = {}
+    sup_blob = (detect_state or {}).get("suppressed", {}).get("sysctl_iouring")
+    # sysctl_iouring is a dict {suppressed, reason} (v2.1.1+) or
+    # absent (older detect.sh) — handle both.
+    if isinstance(sup_blob, dict):
+        suppressed = bool(sup_blob.get("suppressed", False))
+        reason = sup_blob.get("reason", "unknown")
+    else:
+        suppressed = None
+        reason = "no_detect_state"
+
+    kernel_val = read_text_safe("/proc/sys/kernel/io_uring_disabled")
+    key_present = kernel_val is not None
+
+    if not key_present:
+        # Kernel < 6.6 or built without io_uring. Sysctl drop-in is a
+        # no-op courtesy of the '-' prefix.
+        return Check("io_uring_disabled", "MITIGATION", Status.SKIP,
+                     "/proc/sys/kernel/io_uring_disabled not present "
+                     "(kernel < 6.6 or CONFIG_IO_URING=n)",
+                     details={"detect_reason": reason})
+
+    v = kernel_val.strip()
+    if v in ("1", "2"):
+        return Check("io_uring_disabled", "MITIGATION", Status.OK,
+                     "kernel.io_uring_disabled={} (PinTheft secondary "
+                     "mitigation active)".format(v),
+                     details={"value": v, "detect_reason": reason})
+
+    # v == "0" — io_uring enabled.
+    if suppressed is True:
+        return Check("io_uring_disabled", "MITIGATION", Status.INFO,
+                     "io_uring_disabled=0; auto-suppressed (reason={}) "
+                     "- PinTheft secondary mitigation off by design".format(reason),
+                     details={"value": v, "detect_reason": reason})
+    if suppressed is False:
+        return Check("io_uring_disabled", "MITIGATION", Status.FAIL,
+                     "io_uring_disabled=0 but auto-detect chose to apply "
+                     "(reason={}); /etc/sysctl.d/99-copyfail-defense-iouring.conf "
+                     "missing or unreadable".format(reason),
+                     details={"value": v, "detect_reason": reason},
+                     remediation="sysctl -p /etc/sysctl.d/99-copyfail-defense-iouring.conf "
+                                 "; run copyfail-redetect")
+    # suppressed is None — older detect.sh or no install.
+    return Check("io_uring_disabled", "MITIGATION", Status.INFO,
+                 "io_uring_disabled=0; detect.sh state unavailable",
+                 details={"value": v, "detect_reason": reason})
 
 def check_apparmor_userns_restrict():
     """ENV: Ubuntu/Debian apparmor userns posture.
@@ -2199,6 +2267,9 @@ def run_all_checks(args):
     add_one(check_rds_modprobe(), "MITIGATION")
     PROGRESS.step("checking AF_RDS systemd restriction (pintheft)")
     add_one(check_af_rds_restrict(), "MITIGATION")
+    # v2.1.1: pintheft - io_uring disable (secondary mitigation)
+    PROGRESS.step("checking kernel.io_uring_disabled (pintheft secondary)")
+    add_one(check_io_uring_disabled(), "MITIGATION")
     PROGRESS.step("checking kernel.modules_disabled")
     add_one(check_modules_disabled(), "MITIGATION")
     # v2.0.0: initcall_blacklist= GRUB-line check (CERT-EU 2026-005 +
