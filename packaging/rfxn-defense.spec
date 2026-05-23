@@ -360,10 +360,10 @@ Requires:       audit
 %description audit
 auditd tripwire rules dropped to /etc/audit/rules.d/99-rfxn-defense.rules
 catching the userspace prep steps of the Copy Fail bug class:
-  - socket(AF_ALG,  ...) - cf1 (CVE-2026-31431)        - tag copyfail_afalg
-  - socket(AF_KEY,  ...) - cf2 / DF-ESP / Fragnesia    - tag copyfail_afkey
+  - socket(AF_ALG,  ...) - cf1 (CVE-2026-31431)        - tag rfxn_afalg
+  - socket(AF_KEY,  ...) - cf2 / DF-ESP / Fragnesia    - tag rfxn_afkey
   - socket(AF_RXRPC,...) - Dirty Frag-RxRPC (CVE-2026-43500)
-                                                       - tag copyfail_afrxrpc
+                                                       - tag rfxn_afrxrpc
 
 Filters auid>=1000 + auid!=-1 to skip unattended system services;
 unprivileged-user exploitation is the precise case these rules catch.
@@ -373,15 +373,15 @@ Real value is on hosts where the modprobe blacklist is suppressed
 reachable - the rules become the residual tripwire.
 
 Query examples:
-    ausearch -k copyfail_afalg     --start today
-    ausearch -k copyfail_afkey     --start today
-    ausearch -k copyfail_afrxrpc   --start today
+    ausearch -k rfxn_afalg     --start today
+    ausearch -k rfxn_afkey     --start today
+    ausearch -k rfxn_afrxrpc   --start today
 
 x86_64 native ABI only (b64); i386-compat socket() rides socketcall()
 on b32 and is intentionally out of scope.
 
-v2.1.0 adds copyfail_afrds (PinTheft - AF_RDS=21) and
-copyfail_pidfd_getfd (ssh-keysign-pwn / CVE-2026-46333 - syscall 438)
+v2.1.0 adds rfxn_afrds (PinTheft - AF_RDS=21) and
+rfxn_pidfd_getfd (ssh-keysign-pwn / CVE-2026-46333 - syscall 438)
 tripwire rules. v3.0.0 renames these audit keys to rfxn_afrds and
 rfxn_pidfd_getfd (and the cf-class ones to rfxn_afalg / rfxn_afkey /
 rfxn_afrxrpc). SIEM operators upgrading from 2.x must update ausearch
@@ -1091,12 +1091,14 @@ exit 0
   journald (logger -t rfxn-defense-update). Opt out without removing
   the package by touching /etc/rfxn-defense/auto-update.disabled.
   Hard-Required by the meta package: delivery is core to the reframe.
-- Audit-key rename: copyfail_afalg/afkey/afrxrpc/afrds/pidfd_getfd ->
-  rfxn_*. SIEM operators with ausearch -k queries on the legacy keys
-  MUST update on deployment of v3.0.0. The rule file path also moves
-  from /etc/audit/rules.d/99-copyfail-defense.rules to
-  /etc/audit/rules.d/99-rfxn-defense.rules; %pretrans audit stops
-  auditd before the rename, %posttrans audit restarts.
+- Audit-key rename: legacy copyfail_{afalg,afkey,afrxrpc,afrds,pidfd_getfd}
+  -> rfxn_{afalg,afkey,afrxrpc,afrds,pidfd_getfd}. SIEM operators with
+  ausearch -k queries on the legacy keys MUST update on deployment of
+  v3.0.0. The rule file path also moves from /etc/audit/rules.d/99-
+  copyfail-defense.rules to /etc/audit/rules.d/99-rfxn-defense.rules;
+  the existing %posttrans audit runs augenrules --load which replaces
+  the kernel rule set atomically, so old keys are flushed and new keys
+  loaded in one auditctl -R cycle without an auditd restart.
 - Path migration: %pretrans (meta) moves /var/lib/copyfail-defense ->
   /var/lib/rfxn-defense and /etc/copyfail -> /etc/rfxn-defense via
   mv -n (no-clobber). Operator state (auto-detect.json, force-full,
@@ -1153,10 +1155,10 @@ exit 0
 
 * Fri May 22 2026 Ryan MacDonald <ryan@rfxn.com> 2.1.0-1
 - Add PinTheft (RDS + io_uring) coverage: rds/rds_tcp/rds_rdma modprobe
-  blacklist, ~AF_RDS in always-on systemd 10-* drop-in, copyfail_afrds
+  blacklist, ~AF_RDS in always-on systemd 10-* drop-in, rfxn_afrds
   auditd rule on AF_RDS=21 socket creation.
 - Add ssh-keysign-pwn (CVE-2026-46333) coverage: kernel.yama.ptrace_scope=2
-  sysctl key, copyfail_pidfd_getfd auditd rule on syscall 438 numeric.
+  sysctl key, rfxn_pidfd_getfd auditd rule on syscall 438 numeric.
 - Add commented-out kernel.io_uring_disabled=2 secondary mitigation
   (operator opt-in; Linux 6.6+ only).
 - Bug-class taxonomy gains pintheft (Copy Fail class) and keysign-pwn
@@ -1207,8 +1209,8 @@ exit 0
   where modprobe blacklist is suppressed by auto-detection
   (IPsec / AFS workloads) and the kernel sink is intentionally
   reachable - the rules become the residual tripwire. Query via
-  `ausearch -k copyfail_afalg` / `copyfail_afkey` /
-  `copyfail_afrxrpc`. x86_64 native ABI only (b64); i386-compat
+  `ausearch -k rfxn_afalg` / `rfxn_afkey` /
+  `rfxn_afrxrpc`. x86_64 native ABI only (b64); i386-compat
   socketcall is intentionally out of scope.
 - systemd drop-in 10-rfxn-defense.conf adds ~AF_KEY to
   RestrictAddressFamilies, closing the legacy PF_KEYv2 SA-config

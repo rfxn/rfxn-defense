@@ -214,11 +214,11 @@ grep -q '^-user.max_user_namespaces' /etc/sysctl.d/99-copyfail-defense-userns.co
 # v2.0.2: audit rules file landed via -audit (pulled by meta Recommends).
 test -f /etc/audit/rules.d/99-copyfail-defense.rules \
     || fail "audit rules file missing on clean host"
-grep -qE 'a0=38 .* -k copyfail_afalg' /etc/audit/rules.d/99-copyfail-defense.rules \
+grep -qE 'a0=38 .* -k rfxn_afalg' /etc/audit/rules.d/99-copyfail-defense.rules \
     || fail "audit rules missing AF_ALG (a0=38) tag"
-grep -qE 'a0=15 .* -k copyfail_afkey' /etc/audit/rules.d/99-copyfail-defense.rules \
+grep -qE 'a0=15 .* -k rfxn_afkey' /etc/audit/rules.d/99-copyfail-defense.rules \
     || fail "audit rules missing AF_KEY (a0=15) tag"
-grep -qE 'a0=33 .* -k copyfail_afrxrpc' /etc/audit/rules.d/99-copyfail-defense.rules \
+grep -qE 'a0=33 .* -k rfxn_afrxrpc' /etc/audit/rules.d/99-copyfail-defense.rules \
     || fail "audit rules missing AF_RXRPC (a0=33) tag"
 
 # v2.0.2: AF_KEY token in always-on systemd 10-* drop-in (alongside AF_ALG).
@@ -240,17 +240,17 @@ grep -qE '^[[:space:]]*-?kernel\.yama\.ptrace_scope[[:space:]]*=[[:space:]]*2' \
     /etc/sysctl.d/99-copyfail-defense-userns.conf \
     || fail "sysctl conf missing kernel.yama.ptrace_scope=2 (ssh-keysign-pwn)"
 
-# v2.1.0: PinTheft copyfail_afrds audit rule
-grep -qE 'a0=21 .* -k copyfail_afrds' \
+# v2.1.0: PinTheft rfxn_afrds audit rule
+grep -qE 'a0=21 .* -k rfxn_afrds' \
     /etc/audit/rules.d/99-copyfail-defense.rules \
-    || fail "audit rules missing AF_RDS (a0=21) -k copyfail_afrds"
+    || fail "audit rules missing AF_RDS (a0=21) -k rfxn_afrds"
 
-# v2.1.0: ssh-keysign-pwn copyfail_pidfd_getfd audit rule.
+# v2.1.0: ssh-keysign-pwn rfxn_pidfd_getfd audit rule.
 # Use -- to terminate grep option parsing; '-S 438' starts with a dash and
 # grep would otherwise treat -S as an unknown flag (exit 2).
-grep -qE -- '-S 438 .* -k copyfail_pidfd_getfd' \
+grep -qE -- '-S 438 .* -k rfxn_pidfd_getfd' \
     /etc/audit/rules.d/99-copyfail-defense.rules \
-    || fail "audit rules missing pidfd_getfd (-S 438) -k copyfail_pidfd_getfd"
+    || fail "audit rules missing pidfd_getfd (-S 438) -k rfxn_pidfd_getfd"
 
 # v2.1.0: RDS systemd template ships under conditional/systemd/
 test -f /usr/share/copyfail-defense/conditional/systemd/13-copyfail-defense-rds.conf \

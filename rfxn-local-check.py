@@ -2025,7 +2025,7 @@ def check_pidfd_getfd_auditd_rule():
 
     pidfd_getfd(2) lets a tracer steal an open fd from a tracee, the
     primitive behind the pintheft class (extract live TLS pins, agent
-    socket fds, keyring handles). The rule key copyfail_pidfd_getfd is
+    socket fds, keyring handles). The rule key rfxn_pidfd_getfd is
     written by --emit-remediation and matches the canonical augenrules
     snippet shipped by the operator-side guidance."""
     rc, out, err = run_cmd(["auditctl", "-l"], timeout=3)
@@ -2033,7 +2033,7 @@ def check_pidfd_getfd_auditd_rule():
         return Check("pidfd_getfd_auditd_rule", "DETECTION", Status.SKIP,
                      "auditctl unavailable or returned error")
     text = out.decode("utf-8", errors="replace") if out else ""
-    key = "copyfail_pidfd_getfd"
+    key = "rfxn_pidfd_getfd"
     found = False
     for line in text.splitlines():
         if re.search(r"-k\s+" + re.escape(key) + r"\b", line) or \

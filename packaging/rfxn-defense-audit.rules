@@ -9,9 +9,9 @@
 ## unprivileged-user exploitation is the precise case these rules catch.
 ##
 ## Query with:
-##   ausearch -k copyfail_afalg     # cf1 socket prep
-##   ausearch -k copyfail_afkey     # cf2 / DF-ESP SA-config via legacy AF_KEY
-##   ausearch -k copyfail_afrxrpc   # DF-RxRPC socket prep
+##   ausearch -k rfxn_afalg     # cf1 socket prep
+##   ausearch -k rfxn_afkey     # cf2 / DF-ESP SA-config via legacy AF_KEY
+##   ausearch -k rfxn_afrxrpc   # DF-RxRPC socket prep
 ##
 ## socket() syscall: domain in arg0. AF_ALG=38, AF_KEY=15, AF_RXRPC=33.
 ## ExclusiveArch is x86_64; rules cover the native ABI only. i386-compat
@@ -21,14 +21,14 @@
 ## alongside an existing audit ruleset. The file is loaded by augenrules
 ## (RHEL/Fedora) or auditctl -R (Debian).
 
--a always,exit -F arch=b64 -S socket -F a0=38 -F auid>=1000 -F auid!=-1 -k copyfail_afalg
--a always,exit -F arch=b64 -S socket -F a0=15 -F auid>=1000 -F auid!=-1 -k copyfail_afkey
--a always,exit -F arch=b64 -S socket -F a0=33 -F auid>=1000 -F auid!=-1 -k copyfail_afrxrpc
+-a always,exit -F arch=b64 -S socket -F a0=38 -F auid>=1000 -F auid!=-1 -k rfxn_afalg
+-a always,exit -F arch=b64 -S socket -F a0=15 -F auid>=1000 -F auid!=-1 -k rfxn_afkey
+-a always,exit -F arch=b64 -S socket -F a0=33 -F auid>=1000 -F auid!=-1 -k rfxn_afrxrpc
 
 ## PinTheft (CVE pending): unprivileged AF_RDS socket creation. RDS is
 ## the entry point for the RDS zerocopy double-free chained to io_uring
 ## fixed buffers. AF_RDS=21 per <linux/socket.h>.
--a always,exit -F arch=b64 -S socket -F a0=21 -F auid>=1000 -F auid!=-1 -k copyfail_afrds
+-a always,exit -F arch=b64 -S socket -F a0=21 -F auid>=1000 -F auid!=-1 -k rfxn_afrds
 
 ## ssh-keysign-pwn (CVE-2026-46333): unprivileged pidfd_getfd().
 ## Public PoC needs 100-2000 spawns per success; this rule fires loudly
@@ -36,4 +36,4 @@
 ## (b64) rather than name 'pidfd_getfd': EL7+EL8 audit-userspace do not
 ## recognise the name. The numeric form parses cleanly on every EL
 ## kernel-userspace combination.
--a always,exit -F arch=b64 -S 438 -F auid>=1000 -F auid!=-1 -k copyfail_pidfd_getfd
+-a always,exit -F arch=b64 -S 438 -F auid>=1000 -F auid!=-1 -k rfxn_pidfd_getfd
