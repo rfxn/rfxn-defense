@@ -1665,6 +1665,15 @@ assert_no_scriptlet_fail() {
     fi
 }
 
+# Skip on kernels <6.6: kernel_too_old takes priority over io_uring_workload
+# in decide_suppressions(), so the reason assertion below would fail.
+rel=$(uname -r)
+major=${rel%%.*}; minor=${rel#*.}; minor=${minor%%.*}
+if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 6 ]; }; then
+    echo "SKIP: kernel ${rel} < 6.6; consumer scenario asserts io_uring_workload reason (kernel gate supersedes)"
+    exit 77
+fi
+
 # Stage a fake liburing.so.2 mapping in a long-running Python process
 # so /proc/<pid>/maps holds the substring detect.sh signal 1 keys on.
 # Use a tempfile-driven python invocation (NOT a nested heredoc) to
