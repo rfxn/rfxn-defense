@@ -1669,7 +1669,7 @@ auditor JSON schema (v2) are unchanged. v2.1.0 layers new mitigation
 rungs onto the existing six subpackages, no subpackage rename, no
 new subpackage. **[D-59]**
 
-- **PinTheft** (CVE pending), RDS zerocopy double-free + io_uring
+- **PinTheft** (CVE-2026-43494), RDS zerocopy double-free + io_uring
   fixed-buffer page-cache overwrite of SUID binary. Same outcome as
   cf1; different entry path. Covered by a new `-modprobe` blacklist
   for `rds`/`rds_tcp`/`rds_rdma`, a new `RestrictAddressFamilies=~AF_RDS`

@@ -238,7 +238,7 @@ before pasting.
 | cf2 / Dirty Frag-ESP | CVE-2026-43284 | `esp_input` `skip_cow` |
 | Dirty Frag-RxRPC | CVE-2026-43500 | `rxkad_verify_packet_1` |
 | Fragnesia | (no CVE yet; same surface as CVE-2026-43284) | `espintcp` ULP after splice |
-| PinTheft | CVE pending | RDS zerocopy double-free + io_uring fixed-buffer |
+| PinTheft | [CVE-2026-43494](https://nvd.nist.gov/vuln/detail/CVE-2026-43494) | RDS zerocopy double-free + io_uring fixed-buffer |
 | DirtyDecrypt | CVE-2026-31635 | `rxgk_*` RXGK token-decrypt in-place crypto |
 | ssh-keysign-pwn | [CVE-2026-46333](https://nvd.nist.gov/vuln/detail/CVE-2026-46333) | `__ptrace_may_access()` race + `pidfd_getfd` on exiting SUID |
 

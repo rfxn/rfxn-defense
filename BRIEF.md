@@ -151,7 +151,7 @@ Any tenant on a vulnerable node can root the box with the published PoC. Both Th
 - Debian tracker: https://security-tracker.debian.org/tracker/CVE-2026-31431
 - Reference Ansible playbook (m3nu): https://gist.github.com/m3nu/c19269ef4fd6fa53b03eb388f77464da
 
-## PinTheft (CVE pending; disclosed 2026-05)
+## PinTheft (CVE-2026-43494; disclosed 2026-05)
 
 RDS zerocopy double-free + io_uring fixed-buffer page-cache overwrite
 of SUID binary. Direct successor to cf1's primitive: same outcome
