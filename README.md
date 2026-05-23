@@ -162,8 +162,10 @@ operator's hand-edits to systemd drop-ins survive package upgrade.
 
 ## Coverage matrix
 
-Which rung blocks which bug class. **✅** = primary mitigation; **·** =
-not applicable; superscripts mark caveated coverage (notes below).
+Which rung blocks which bug class. **✅** = primary mitigation, applied
+without caveat; **✅ ⁿ** = active coverage with a kernel- or workload-
+conditional caveat (see footnote); **ⁿ** alone = detection only, no
+mitigation (see footnote); **·** = not applicable.
 
 Rows below are mitigation rungs the package installs. Operator-applied
 hardening (suid lockdown, auditd rules) is in its own table below
@@ -172,11 +174,11 @@ recommends them conditionally.
 
 | Mitigation rung                                  | cf1 | cf2 | DF-ESP | DF-RxRPC | Fragnesia | PinTheft | keysign-pwn |
 |---                                               |:---:|:---:|:---:   |:---:     |:---:      |:---:     |:---:        |
-| LD_PRELOAD shim (`AF_ALG` hook)                  | ✅  |  ·  |   ·    |    ¹     |    ·      |    ·     |     ·       |
-| modprobe `algif_aead` family                     | ²   |  ·  |   ·    |    ·     |    ·      |    ·     |     ·       |
+| LD_PRELOAD shim (`AF_ALG` hook)                  | ✅  |  ·  |   ·    |   ✅ ¹    |    ·      |    ·     |     ·       |
+| modprobe `algif_aead` family                     | ✅ ² |  ·  |   ·    |    ·     |    ·      |    ·     |     ·       |
 | modprobe `esp4 esp6 xfrm_user xfrm_algo`         |  ·  | ✅  |  ✅    |    ·     |   ✅      |    ·     |     ·       |
 | modprobe `rxrpc`                                 |  ·  |  ·  |   ·    |   ✅     |    ·      |    ·     |     ·       |
-| modprobe `rds rds_tcp rds_rdma` *(v2.1.0)*       |  ·  |  ·  |   ·    |    ·     |    ·      |   ✅     |     ·       |
+| modprobe `rds rds_tcp rds_rdma` *(v2.1.0)*       |  ·  |  ·  |   ·    |    ·     |    ·      |   ✅ ⁵   |     ·       |
 | systemd `RestrictAddressFamilies=~AF_ALG`        | ✅  |  ·  |   ·    |    ·     |    ·      |    ·     |     ·       |
 | systemd `RestrictAddressFamilies=~AF_KEY` *(v2.0.2)* |  ·  | ✅  |  ✅    |    ·     |   ✅      |    ·     |     ·       |
 | systemd `RestrictAddressFamilies=~AF_RXRPC`      |  ·  |  ·  |   ·    |   ✅     |    ·      |    ·     |     ·       |
@@ -215,6 +217,11 @@ or `CFD_FORCE_IOURING_DISABLE=1` (force-apply). PinTheft's primary
 cut is the `rds`/`rds_tcp`/`rds_rdma` modprobe blacklist; io_uring
 is the secondary layer for hosts where RDS is intentionally
 reachable.
+⁵ Functional on Ubuntu/Debian/Arch kernels and ELRepo kernel-ml
+swaps where `rds.ko` is loadable. No-op on stock RHEL/Alma/Rocky/Oracle
+UEK kernels (no `CONFIG_RDS=m`). Auto-suppressed on Oracle Grid /
+HPC hosts where RDS is in active use (detected via `/etc/oratab`,
+`crsctl` binary, or loaded `rds*.ko`).
 
 ### Reference: kernel patches and detection signatures
 
