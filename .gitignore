@@ -1,0 +1,4 @@
+rpmbuild/
+gh-pages-staging/
+__pycache__/
+*.pyc

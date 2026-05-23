@@ -1,0 +1,52 @@
+# /etc/yum.repos.d/rfxn-defense.repo
+#
+# DNF/YUM repository for the rfxn-defense packages (v3.0.0+).
+# Hosted on GitHub Pages; RPMs and repodata served directly by the
+# rfxn/rfxn-defense repository.
+#
+# One repo definition works for EL7, EL8, EL9, and EL10: $releasever
+# expands to the major release number on RHEL/Alma/Rocky/CentOS Stream,
+# which is the same key the published repo tree is indexed by.
+#
+# Install:
+#   curl -sSL https://rfxn.github.io/rfxn-defense/rfxn-defense.repo \
+#     | sudo tee /etc/yum.repos.d/rfxn-defense.repo
+#   sudo dnf install -y rfxn-defense
+#
+# After install, activate the LD_PRELOAD shim explicitly:
+#   sudo /usr/sbin/rfxn-shim-enable
+#
+# Upgrading from copyfail-defense (v2.x) or afalg-defense (v1.0.x):
+#   sudo dnf upgrade -y rfxn-defense
+#   # Obsoletes/Provides metadata performs the rename automatically.
+#
+# Auto-update cadence: the rfxn-defense-autoupdate subpackage (hard
+# Required by the meta) installs a 4-hourly cron that runs a flock +
+# timeout protected dnf upgrade of rfxn-defense*. Touch
+# /etc/rfxn-defense/auto-update.disabled to opt out without removing
+# the package.
+#
+# Signing key fingerprint (1.0.1+, unchanged through v3.0.0):
+#   6001 1CDC EA2F F52D 975A  FDEE 6D30 F32C D5E8 0F80
+#
+# Two GPG key URLs are listed for the 3.0.x transition: dnf accepts
+# either. RPM-GPG-KEY-copyfail is retained for hosts upgrading from
+# v2.x with the legacy copyfail.repo still installed; both files carry
+# the same key bytes, only the filename differs.
+#
+# Both the RPMs (gpgcheck) and the repodata (repo_gpgcheck) are verified
+# against this key. dnf will pull the public key from gpgkey= the first
+# time the repo is enabled.
+
+[rfxn-defense]
+name=rfxn-defense (EL$releasever)
+baseurl=https://rfxn.github.io/rfxn-defense/repo/$releasever/$basearch/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-rfxn
+       https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail
+metadata_expire=1h
+# skip_if_unavailable lets dnf operations on unrelated packages succeed
+# even if rfxn.github.io is briefly unreachable.
+skip_if_unavailable=1

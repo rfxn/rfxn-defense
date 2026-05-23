@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>copyfail-defense: DNF repository</title>
-<meta name="description" content="Defense-in-depth toolkit for the Copy Fail Linux kernel bug class (CVE-2026-31431 / cf1, cf2 / xfrm-ESP, Dirty Frag, Fragnesia, PinTheft / RDS+io_uring) and the FD-theft class (ssh-keysign-pwn / CVE-2026-46333 / pidfd_getfd ptrace exit-race). LD_PRELOAD shim, kernel-module entry-point cuts, systemd RestrictAddressFamilies + RestrictNamespaces drop-ins, auditd tripwires, kernel.yama.ptrace_scope sysctl, and a read-only host posture auditor with per-class coverage report. Packaged for EL7/EL8/EL9/EL10.">
+<title>rfxn-defense: responsive defense layer for Linux</title>
+<meta name="description" content="rfxn-defense is a responsive defense layer for Linux that ships kernel-LPE mitigations as 0days land, closing the delta between public CVE disclosure and the kernel/software vendor patch set. Coverage: Copy Fail page-cache family (cf1 / CVE-2026-31431, cf2 / Dirty Frag-ESP / CVE-2026-43284, DF-RxRPC / CVE-2026-43500, Fragnesia, PinTheft, DirtyDecrypt / CVE-2026-31635) and FD-theft class (ssh-keysign-pwn / CVE-2026-46333). Primitives: LD_PRELOAD AF_ALG shim, modprobe blacklists, systemd RestrictAddressFamilies + RestrictNamespaces, sysctl drop-ins, auditd tripwires, host posture auditor, and a 4-hourly auto-update cron. Packaged for EL7/EL8/EL9/EL10.">
 <style>
  body{font-family:system-ui,sans-serif;max-width:52rem;margin:2rem auto;padding:0 1rem;line-height:1.5;color:#222}
  h1,h2{font-weight:600}
@@ -38,24 +38,25 @@
 </head>
 <body>
 
-<h1>copyfail-defense</h1>
+<h1>rfxn-defense</h1>
 <div class="badges">
-  <a class="badge" href="https://github.com/rfxn/copyfail/releases/latest">Latest: v2.1.1</a>
+  <a class="badge" href="https://github.com/rfxn/rfxn-defense/releases/latest">Latest: v3.0.0</a>
   <span class="badge alt">EL7 / EL8 / EL9 / EL10</span>
   <span class="badge alt">x86_64</span>
   <a class="badge cve" href="https://nvd.nist.gov/vuln/detail/CVE-2026-31431">CVE-2026-31431</a>
   <a class="badge cve" href="https://nvd.nist.gov/vuln/detail/CVE-2026-46333">CVE-2026-46333</a>
-  <span class="badge alt">cf2 / Dirty Frag / Fragnesia / PinTheft / ssh-keysign-pwn</span>
+  <a class="badge cve" href="https://nvd.nist.gov/vuln/detail/CVE-2026-31635">CVE-2026-31635</a>
+  <span class="badge alt">cf2 / Dirty Frag / Fragnesia / PinTheft / DirtyDecrypt / ssh-keysign-pwn</span>
   <span class="badge alt">GPL v2</span>
 </div>
 <div class="source-link">
-source: <a href="https://github.com/rfxn/copyfail">github.com/rfxn/copyfail</a>
+source: <a href="https://github.com/rfxn/rfxn-defense">github.com/rfxn/rfxn-defense</a>
 &nbsp;|&nbsp;
 deep dive: <a href="https://www.rfxn.com/research/copyfail-cve-2026-31431">rfxn.com/research/copyfail</a>
 &nbsp;|&nbsp;
-report a problem: <a href="https://github.com/rfxn/copyfail/issues/new/choose">file a GitHub issue</a>
+report a problem: <a href="https://github.com/rfxn/rfxn-defense/issues/new/choose">file a GitHub issue</a>
 &nbsp;|&nbsp;
-<a href="https://github.com/rfxn/copyfail/releases">changelog</a>
+<a href="https://github.com/rfxn/rfxn-defense/releases">changelog</a>
 </div>
 
 <nav class="page-nav">
@@ -131,9 +132,9 @@ for the cf1 kernel mechanics deep-dive.
 <div class="note">
 <strong>Upgrading from any 2.0.x / 2.1.x or
 <code>afalg-defense</code> v1.0.x?</strong>
-<code>dnf upgrade copyfail-defense</code> handles every prior layout
+<code>dnf upgrade rfxn-defense</code> handles every prior layout
 change (rename, file split, new subpackages) automatically. Auto-detect
-re-runs on each upgrade; review <code>journalctl -t copyfail-defense</code>
+re-runs on each upgrade; review <code>journalctl -t rfxn-defense</code>
 afterward to see what was suppressed. Shim activation remains the
 explicit operator step (<code>copyfail-shim-enable</code>).
 </div>
@@ -151,33 +152,33 @@ kernel-userspace combination.
 
 <h2 id="install">Install</h2>
 <p>
-A single <code>copyfail.repo</code> file works for EL7/EL8/EL9/EL10:
+A single <code>rfxn-defense.repo</code> file works for EL7/EL8/EL9/EL10:
 dnf expands <code>$releasever</code> + <code>$basearch</code> per host.
 RPMs are GPG-signed and the metadata itself is verified via detached
 <code>repomd.xml.asc</code> (<code>gpgcheck=1</code> +
 <code>repo_gpgcheck=1</code>).
 </p>
-<pre>sudo curl -sSL https://rfxn.github.io/copyfail/copyfail.repo \
-  -o /etc/yum.repos.d/copyfail.repo
-sudo dnf install -y copyfail-defense
-sudo /usr/sbin/copyfail-shim-enable</pre>
+<pre>sudo curl -sSL https://rfxn.github.io/rfxn-defense/rfxn-defense.repo \
+  -o /etc/yum.repos.d/rfxn-defense.repo
+sudo dnf install -y rfxn-defense
+sudo /usr/sbin/rfxn-shim-enable</pre>
 
 <p>The meta pulls six subpackages (<code>-audit</code> as soft dep on
 EL8/9/10, hard dep on EL7 since rpm-4.11 has no <code>Recommends:</code>
 mechanism):</p>
 <table>
 <tr><th>Subpackage</th><th>Coverage</th></tr>
-<tr><td><code>copyfail-defense-shim</code></td>
+<tr><td><code>rfxn-defense-shim</code></td>
     <td>LD_PRELOAD <code>AF_ALG</code> block (cf1 primary)</td></tr>
-<tr><td><code>copyfail-defense-modprobe</code></td>
+<tr><td><code>rfxn-defense-modprobe</code></td>
     <td>kernel-module entry-point cuts (cf1 + cf2 + Dirty Frag + Fragnesia
     + <strong>rds/rds_tcp/rds_rdma for PinTheft, v2.1.0</strong>)</td></tr>
-<tr><td><code>copyfail-defense-systemd</code></td>
+<tr><td><code>rfxn-defense-systemd</code></td>
     <td>per-unit <code>RestrictAddressFamilies=~AF_ALG ~AF_KEY ~AF_RXRPC
     <strong>~AF_RDS</strong></code> (~AF_RDS added v2.1.0 for PinTheft)
     + <code>RestrictNamespaces=~user ~net</code> on user@/sshd/cron/crond/atd
     + opt-in container-runtime examples + RDS opt-in template (v2.1.0)</td></tr>
-<tr><td><code>copyfail-defense-sysctl</code> <em>(v2.0.2)</em></td>
+<tr><td><code>rfxn-defense-sysctl</code> <em>(v2.0.2)</em></td>
     <td>host-wide <code>user.max_user_namespaces=0</code> sysctl drop-in
     (suppressed on rootless containers / Flatpak / firejail / desktop
     browsers); <strong>v2.1.0 adds
@@ -185,7 +186,7 @@ mechanism):</p>
     primary mitigation) and a commented-out
     <code>kernel.io_uring_disabled=2</code> for operator opt-in on
     Linux 6.6+ (PinTheft secondary)</td></tr>
-<tr><td><code>copyfail-defense-auditor</code></td>
+<tr><td><code>rfxn-defense-auditor</code></td>
     <td>read-only host posture auditor with per-class coverage report;
     v2.1.0 extends to 6 bug classes including <code>pintheft</code> and
     <code>keysign-pwn</code> with 4 new checks
@@ -193,21 +194,21 @@ mechanism):</p>
     <code>check_pidfd_getfd_auditd_rule</code>,
     <code>check_rds_modprobe</code>,
     <code>check_af_rds_restrict</code>)</td></tr>
-<tr><td><code>copyfail-defense-audit</code> <em>(v2.0.2)</em></td>
+<tr><td><code>rfxn-defense-audit</code> <em>(v2.0.2)</em></td>
     <td>auditd tripwire rules for
     <code>socket(AF_ALG/AF_KEY/AF_RXRPC)</code> from
     <code>auid&ge;1000</code> (cf-class userspace prep); <strong>v2.1.0
     adds <code>socket(AF_RDS=21)</code> /
-    <code>copyfail_afrds</code></strong> (PinTheft) and
+    <code>rfxn_afrds</code></strong> (PinTheft) and
     <strong><code>pidfd_getfd</code> syscall 438 /
-    <code>copyfail_pidfd_getfd</code></strong> (ssh-keysign-pwn)</td></tr>
+    <code>rfxn_pidfd_getfd</code></strong> (ssh-keysign-pwn)</td></tr>
 </table>
 
 <h2 id="changelog">Changelog</h2>
 <p>
 Per-version summary. Full per-commit history:
-<a href="https://github.com/rfxn/copyfail/commits/main">github.com/rfxn/copyfail/commits</a>.
-Per-release notes: <a href="https://github.com/rfxn/copyfail/releases">github.com/rfxn/copyfail/releases</a>.
+<a href="https://github.com/rfxn/rfxn-defense/commits/main">github.com/rfxn/rfxn-defense/commits</a>.
+Per-release notes: <a href="https://github.com/rfxn/rfxn-defense/releases">github.com/rfxn/rfxn-defense/releases</a>.
 </p>
 
 <h3>v2.1.1 (2026-05-23) &middot; io_uring auto-detect with layered suppression</h3>
@@ -215,7 +216,7 @@ Per-release notes: <a href="https://github.com/rfxn/copyfail/releases">github.co
 <li><strong>io_uring sysctl auto-applied</strong>, promotes
     <code>kernel.io_uring_disabled=2</code> from v2.1.0 operator opt-in
     to auto-applied with layered suppression. New
-    <code>/etc/sysctl.d/99-copyfail-defense-iouring.conf</code> drop-in
+    <code>/etc/sysctl.d/99-rfxn-defense-iouring.conf</code> drop-in
     (split from userns file so io_uring suppresses independently).
     Suppression signals: liburing.so in any /proc/*/maps, known consumer
     binaries (postgres, scylla, mariadbd, dockerd, redis-server, nginx,
@@ -236,18 +237,18 @@ Per-release notes: <a href="https://github.com/rfxn/copyfail/releases">github.co
 <ul>
 <li><strong>PinTheft</strong> (CVE pending), Copy Fail class
     extension. New
-    <code>/etc/modprobe.d/99-copyfail-defense-rds.conf</code> blocks
+    <code>/etc/modprobe.d/99-rfxn-defense-rds.conf</code> blocks
     <code>rds</code> / <code>rds_tcp</code> / <code>rds_rdma</code>
     module load; <code>~AF_RDS</code> added to the always-on
     <code>10-*</code> systemd drop-in on all 5 tenant units; new
-    <code>copyfail_afrds</code> auditd rule fires on
+    <code>rfxn_afrds</code> auditd rule fires on
     <code>socket(AF_RDS=21)</code> from <code>auid&ge;1000</code>.</li>
 <li><strong>ssh-keysign-pwn (CVE-2026-46333)</strong>, FD-theft
     class, first member. New
     <code>kernel.yama.ptrace_scope=2</code> sysctl key in
-    <code>99-copyfail-defense-userns.conf</code> closes the
+    <code>99-rfxn-defense-userns.conf</code> closes the
     <code>pidfd_getfd</code> path without breaking root debugging;
-    new <code>copyfail_pidfd_getfd</code> auditd rule on syscall
+    new <code>rfxn_pidfd_getfd</code> auditd rule on syscall
     <code>438</code> (numeric form, EL7+EL8 audit-userspace do
     not recognise the name string).</li>
 <li>Operator opt-in commented-out
@@ -280,13 +281,13 @@ Per-release notes: <a href="https://github.com/rfxn/copyfail/releases">github.co
 
 <h3>v2.0.2 (2026-05-13) &middot; Fragnesia / Dirty Frag-ESP coverage</h3>
 <ul>
-<li>New <code>copyfail-defense-sysctl</code>: host-wide
+<li>New <code>rfxn-defense-sysctl</code>: host-wide
     <code>user.max_user_namespaces=0</code> sysctl drop-in. Auto-suppressed
     on rootless containers, Flatpak, firejail, desktop browsers.</li>
-<li>New <code>copyfail-defense-audit</code> (soft-dep): auditd rules
+<li>New <code>rfxn-defense-audit</code> (soft-dep): auditd rules
     tripping on <code>socket(AF_ALG/AF_KEY/AF_RXRPC)</code> at
     <code>auid&ge;1000</code>. Query:
-    <code>ausearch -k copyfail_afalg|copyfail_afkey|copyfail_afrxrpc</code>.</li>
+    <code>ausearch -k rfxn_afalg|rfxn_afkey|rfxn_afrxrpc</code>.</li>
 <li>systemd 10-* drop-in adds <code>~AF_KEY</code> to
     <code>RestrictAddressFamilies</code>. Closes the PF_KEYv2 SA-config
     path used by Dirty Frag / Fragnesia.</li>
@@ -316,19 +317,19 @@ Per-release notes: <a href="https://github.com/rfxn/copyfail/releases">github.co
 <li><code>%posttrans</code> detection of IPsec / AFS / rootless-container
     workloads. Conflicting drop-ins are suppressed automatically; every
     other layer stays active. State written to
-    <code>/var/lib/copyfail-defense/auto-detect.json</code>.</li>
+    <code>/var/lib/rfxn-defense/auto-detect.json</code>.</li>
 <li>File-layout split: monolithic modprobe + systemd drop files become
     three modprobe files (<code>-cf1</code>, <code>-cf2-xfrm</code>,
     <code>-rxrpc</code>) and three systemd drop-in layers (10-* always-on,
     12-* AF_RXRPC, 15-* userns).</li>
 <li>New <code>copyfail-redetect</code> helper re-runs detection on demand.
-    <code>/etc/copyfail/force-full</code> sentinel bypasses detection.</li>
+    <code>/etc/rfxn-defense/force-full</code> sentinel bypasses detection.</li>
 </ul>
 
-<h3>v2.0.0 (2026-05-08) &middot; copyfail-defense umbrella</h3>
+<h3>v2.0.0 (2026-05-08) &middot; rfxn-defense umbrella</h3>
 <ul>
 <li>Package family renamed <code>afalg-defense</code> &rarr;
-    <code>copyfail-defense</code>. Scope expanded to the Copy Fail bug
+    <code>rfxn-defense</code>. Scope expanded to the Copy Fail bug
     class (cf1 + cf2 + Dirty Frag).</li>
 <li>New <code>-modprobe</code> subpackage: kernel-module entry-point cuts.</li>
 <li>New <code>-systemd</code> subpackage: per-unit
@@ -449,9 +450,9 @@ The auditor reports this state under MITIGATION.<br>
 where modprobe blacklists are auto-suppressed (IPsec / AFS / Oracle RDS
 workloads) and the kernel sink stays reachable; the rules become the
 residual tripwire. Query via
-<code>ausearch -k copyfail_afalg</code> / <code>copyfail_afkey</code> /
-<code>copyfail_afrxrpc</code> / <code>copyfail_afrds</code> /
-<code>copyfail_pidfd_getfd</code>.<br>
+<code>ausearch -k rfxn_afalg</code> / <code>rfxn_afkey</code> /
+<code>rfxn_afrxrpc</code> / <code>rfxn_afrds</code> /
+<code>rfxn_pidfd_getfd</code>.<br>
 <sup>4</sup> Functional on Ubuntu/Debian/Arch kernels and ELRepo
 kernel-ml swaps where <code>rds.ko</code> is loadable. No-op on stock
 RHEL/Alma/Rocky/Oracle UEK kernels (no <code>CONFIG_RDS=m</code>).
@@ -471,22 +472,22 @@ Override: <code>CFD_FORCE_IOURING_DISABLE=1 copyfail-redetect</code> or
 <tr><th>Class</th><th>Upstream patch</th><th>Audit signature</th></tr>
 <tr><td>cf1</td>
     <td><code>a664bf3d</code></td>
-    <td><code>socket(a0=38)</code> / <code>copyfail_afalg</code></td></tr>
+    <td><code>socket(a0=38)</code> / <code>rfxn_afalg</code></td></tr>
 <tr><td>cf2</td>
     <td><code>f4c50a4034</code></td>
-    <td><code>socket(a0=15)</code> / <code>copyfail_afkey</code> &middot; <code>unshare(NEWUSER)</code></td></tr>
+    <td><code>socket(a0=15)</code> / <code>rfxn_afkey</code> &middot; <code>unshare(NEWUSER)</code></td></tr>
 <tr><td>DF-ESP</td>
     <td><code>f4c50a4034</code></td>
     <td>same as cf2</td></tr>
 <tr><td>DF-RxRPC</td>
     <td>none upstream</td>
-    <td><code>socket(a0=33)</code> / <code>copyfail_afrxrpc</code> &middot; <code>add_key("rxrpc",...)</code></td></tr>
+    <td><code>socket(a0=33)</code> / <code>rfxn_afrxrpc</code> &middot; <code>add_key("rxrpc",...)</code></td></tr>
 <tr><td>Fragnesia</td>
     <td>netdev only (2026-05-13); not yet in stable trees</td>
     <td>same as cf2 plus <code>setsockopt(TCP_ULP="espintcp")</code></td></tr>
 <tr><td>PinTheft <em>(v2.1.0)</em></td>
     <td>not yet upstream (disclosed 2026-05; CVE pending)</td>
-    <td><code>socket(a0=21)</code> / <code>copyfail_afrds</code> plus
+    <td><code>socket(a0=21)</code> / <code>rfxn_afrds</code> plus
         <code>io_uring_setup</code> + <code>io_uring_register</code>
         with <code>IORING_OP_*</code> fixed-buffer ops on the same
         page</td></tr>
@@ -494,16 +495,16 @@ Override: <code>CFD_FORCE_IOURING_DISABLE=1 copyfail-redetect</code> or
     <td>not yet in stable trees as of 2026-05; CVE-2026-46333</td>
     <td><code>pidfd_open</code> &middot;
         <code>pidfd_getfd</code> (syscall 438) /
-        <code>copyfail_pidfd_getfd</code>; PoC requires 100&ndash;2000
+        <code>rfxn_pidfd_getfd</code>; PoC requires 100&ndash;2000
         SUID spawns per successful race</td></tr>
 </table>
 <p>
 The <code>copyfail_*</code> keys are installed by the
 <code>-audit</code> subpackage at
-<code>/etc/audit/rules.d/99-copyfail-defense.rules</code>: five keys
-post-v2.1.0 (<code>copyfail_afalg</code>, <code>copyfail_afkey</code>,
-<code>copyfail_afrxrpc</code> from v2.0.2; <code>copyfail_afrds</code>
-and <code>copyfail_pidfd_getfd</code> added in v2.1.0). The auditor
+<code>/etc/audit/rules.d/99-rfxn-defense.rules</code>: five keys
+post-v2.1.0 (<code>rfxn_afalg</code>, <code>rfxn_afkey</code>,
+<code>rfxn_afrxrpc</code> from v2.0.2; <code>rfxn_afrds</code>
+and <code>rfxn_pidfd_getfd</code> added in v2.1.0). The auditor
 probes page-cache integrity for <code>/usr/bin/su</code>,
 <code>/usr/libexec/openssh/ssh-keysign</code> (v2.1.0; ssh-keysign-pwn
 target), and the PAM stacks every class targets, as a cached-IOC for
@@ -590,7 +591,7 @@ coverage is unchanged on every host.
         removes only the rds modprobe drop; the always-on
         <code>~AF_RDS</code> systemd restriction on tenant units still
         applies (tenant units do not legitimately speak RDS), and the
-        <code>copyfail_afrds</code> auditd rule still fires, so
+        <code>rfxn_afrds</code> auditd rule still fires, so
         unprivileged AF_RDS use from a non-Oracle process remains
         visible.</td></tr>
 </table>
@@ -638,10 +639,10 @@ coverage is unchanged on every host.
         <code>/sys/module/rds_tcp</code> /
         <code>/sys/module/rds_rdma</code> is currently loaded in the
         running kernel.</td>
-    <td><code>99-copyfail-defense-rds.conf</code>
+    <td><code>99-rfxn-defense-rds.conf</code>
         (rds/rds_tcp/rds_rdma modprobe blacklist) on RDS-detected hosts
         only; tenant-unit <code>~AF_RDS</code> stays applied; auditd
-        <code>copyfail_afrds</code> rule stays loaded.</td></tr>
+        <code>rfxn_afrds</code> rule stays loaded.</td></tr>
 </table>
 
 <p class="footnotes">
@@ -694,7 +695,7 @@ The <code>/run/user/&lt;UID&gt;/containers</code> signal requires
 <h3>Inspect the decision</h3>
 <p>
 <code>%posttrans</code> writes a versioned JSON report to
-<code>/var/lib/copyfail-defense/auto-detect.json</code> after every
+<code>/var/lib/rfxn-defense/auto-detect.json</code> after every
 install/upgrade and after every <code>copyfail-redetect</code> run:
 </p>
 <pre>{
@@ -720,7 +721,7 @@ install/upgrade and after every <code>copyfail-redetect</code> run:
 }</pre>
 <p>Other inspection paths:</p>
 <pre># Per-action log lines from %posttrans / copyfail-redetect
-sudo journalctl -t copyfail-defense-detect --since today
+sudo journalctl -t rfxn-defense-detect --since today
 
 # Auditor surface (SIEM-friendly)
 sudo copyfail-local-check --json | jq '.posture.auto_detect'
@@ -728,14 +729,14 @@ sudo copyfail-local-check --json | jq '.posture.auto_detect'
 
 <h3>Re-detect or force full coverage</h3>
 <pre># Re-run detection after enabling IPsec/AFS/rootless post-install
-sudo /usr/sbin/copyfail-redetect
+sudo /usr/sbin/rfxn-redetect
 sudo systemctl daemon-reload
 sudo systemctl try-reload-or-restart sshd.service
 
 # Skip detection entirely - apply every drop-in unconditionally
 sudo mkdir -p /etc/copyfail
-sudo touch /etc/copyfail/force-full
-sudo /usr/sbin/copyfail-redetect</pre>
+sudo touch /etc/rfxn-defense/force-full
+sudo /usr/sbin/rfxn-redetect</pre>
 <p>
 The auditor reports <code>force-full sentinel active</code> when the
 sentinel is on. Remove the file and re-run
@@ -765,8 +766,8 @@ sudo copyfail-local-check
 #     cf2 (xfrm-ESP)         YES              yes         modprobe_blacklist, systemd_restrict_ns
 #     Dirty Frag-ESP         YES              yes         modprobe_blacklist, systemd_restrict_ns
 #     Dirty Frag-RxRPC       YES              yes         modprobe_blacklist, systemd_af_rxrpc
-#     PinTheft (AF_RDS)      YES              yes         rds_modprobe, af_rds_restrict, copyfail_afrds
-#     keysign-pwn (ptrace)   YES              yes         ptrace_scope, copyfail_pidfd_getfd</pre>
+#     PinTheft (AF_RDS)      YES              yes         rds_modprobe, af_rds_restrict, rfxn_afrds
+#     keysign-pwn (ptrace)   YES              yes         ptrace_scope, rfxn_pidfd_getfd</pre>
 
 <h2 id="overrides">Override paths</h2>
 <p>
@@ -791,11 +792,11 @@ If your fleet legitimately uses <strong>IPsec</strong> (strongSwan,
 libreswan, FRRouting), the modprobe blacklist breaks those workloads.
 Either skip the modprobe subpackage:
 </p>
-<pre>sudo dnf install copyfail-defense-shim copyfail-defense-systemd copyfail-defense-auditor
-# (omit copyfail-defense and copyfail-defense-modprobe)</pre>
+<pre>sudo dnf install rfxn-defense-shim rfxn-defense-systemd rfxn-defense-auditor
+# (omit rfxn-defense and rfxn-defense-modprobe)</pre>
 <p>
 &hellip;or remove the relevant entries from
-<code>/etc/modprobe.d/99-copyfail-defense.conf</code> (the file is
+<code>/etc/modprobe.d/99-rfxn-defense.conf</code> (the file is
 <code>%config(noreplace)</code>, so your edit survives package upgrade).
 Same logic for <strong>AFS</strong> (<code>openafs</code>,
 <code>kafs</code>) and the <code>rxrpc</code> blacklist line.
@@ -834,22 +835,22 @@ VULN-but-mitigated, <code>4</code> hardening recommendations only
 <h2 id="downloads">Direct downloads</h2>
 <p>
 Each release on
-<a href="https://github.com/rfxn/copyfail/releases/latest">github.com/rfxn/copyfail/releases</a>
+<a href="https://github.com/rfxn/rfxn-defense/releases/latest">github.com/rfxn/rfxn-defense/releases</a>
 ships per-EL binary RPMs, an SRPM, the <code>.repo</code> file, and the
 public signing key as release assets. Only the current version is
 listed below; prior 2.0.x releases and the legacy
 <code>afalg-defense</code> 1.0.1 line remain in the dnf repodata so
 <code>dnf upgrade</code> resolves cleanly from any installed version.
 Pin a specific older release with
-<code>dnf install copyfail-defense-2.0.1*</code> if needed, or browse
+<code>dnf install rfxn-defense-2.0.1*</code> if needed, or browse
 all of them on the
-<a href="https://github.com/rfxn/copyfail/releases">GitHub releases page</a>.
+<a href="https://github.com/rfxn/rfxn-defense/releases">GitHub releases page</a>.
 </p>
 <p>The <code>.repo</code> file (works on EL7/EL8/EL9/EL10):</p>
-<pre>sudo curl -sSL https://rfxn.github.io/copyfail/copyfail.repo \
-  -o /etc/yum.repos.d/copyfail.repo</pre>
+<pre>sudo curl -sSL https://rfxn.github.io/rfxn-defense/rfxn-defense.repo \
+  -o /etc/yum.repos.d/rfxn-defense.repo</pre>
 <p>And the public signing key (dnf imports this automatically on first install, but you can pre-import it):</p>
-<pre>sudo curl -sSL https://rfxn.github.io/copyfail/RPM-GPG-KEY-copyfail \
+<pre>sudo curl -sSL https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail \
   | sudo rpm --import /dev/stdin</pre>
 
 <p>
@@ -864,84 +865,84 @@ upgrade-path testing.
 <h3>EL7 (CentOS 7 / RHEL 7, vault.centos.org build, new in v2.1.0)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
-<tr><td><a href="repo/7/x86_64/copyfail-defense-2.1.0-1.el7.x86_64.rpm">copyfail-defense-2.1.0-1.el7.x86_64.rpm</a></td>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-2.1.0-1.el7.x86_64.rpm">rfxn-defense-2.1.0-1.el7.x86_64.rpm</a></td>
     <td class="sha">cfafe9cbae0ed286da5b6a37439a44ec0f9dbc1770b831d50bdbb66b826a8450</td></tr>
-<tr><td><a href="repo/7/x86_64/copyfail-defense-audit-2.1.0-1.el7.noarch.rpm">copyfail-defense-audit-2.1.0-1.el7.noarch.rpm</a></td>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-audit-2.1.0-1.el7.noarch.rpm">rfxn-defense-audit-2.1.0-1.el7.noarch.rpm</a></td>
     <td class="sha">241342b7bd29d23c458846e8e3481aabc292b3ca60bfa5991c0a4731ae2a10f9</td></tr>
-<tr><td><a href="repo/7/x86_64/copyfail-defense-auditor-2.1.0-1.el7.noarch.rpm">copyfail-defense-auditor-2.1.0-1.el7.noarch.rpm</a></td>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-auditor-2.1.0-1.el7.noarch.rpm">rfxn-defense-auditor-2.1.0-1.el7.noarch.rpm</a></td>
     <td class="sha">b98085834fd2129c3b283ae2c9868800ca8bca86b7d0f658490f93e8cf52e350</td></tr>
-<tr><td><a href="repo/7/x86_64/copyfail-defense-modprobe-2.1.0-1.el7.noarch.rpm">copyfail-defense-modprobe-2.1.0-1.el7.noarch.rpm</a></td>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-modprobe-2.1.0-1.el7.noarch.rpm">rfxn-defense-modprobe-2.1.0-1.el7.noarch.rpm</a></td>
     <td class="sha">ee413a0de2813bea6ac3b92bd8cd68f050832cacadfe9dc32f16a884c7b94979</td></tr>
-<tr><td><a href="repo/7/x86_64/copyfail-defense-shim-2.1.0-1.el7.x86_64.rpm">copyfail-defense-shim-2.1.0-1.el7.x86_64.rpm</a></td>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-shim-2.1.0-1.el7.x86_64.rpm">rfxn-defense-shim-2.1.0-1.el7.x86_64.rpm</a></td>
     <td class="sha">68f7579762eedf5019d68ad92437847b50a35d98904cbba99dea805cf31f9bf1</td></tr>
-<tr><td><a href="repo/7/x86_64/copyfail-defense-sysctl-2.1.0-1.el7.noarch.rpm">copyfail-defense-sysctl-2.1.0-1.el7.noarch.rpm</a></td>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-sysctl-2.1.0-1.el7.noarch.rpm">rfxn-defense-sysctl-2.1.0-1.el7.noarch.rpm</a></td>
     <td class="sha">d8b8c41e95764fc2e85aebc7b91eff399ebddc07fe70a3c5563cdbae8c3f23cf</td></tr>
-<tr><td><a href="repo/7/x86_64/copyfail-defense-systemd-2.1.0-1.el7.noarch.rpm">copyfail-defense-systemd-2.1.0-1.el7.noarch.rpm</a></td>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-systemd-2.1.0-1.el7.noarch.rpm">rfxn-defense-systemd-2.1.0-1.el7.noarch.rpm</a></td>
     <td class="sha">548aa7a1bd5f06ea6e7d90ea0fe965758ec521f76991e5c2d4b60d64723765b6</td></tr>
-<tr><td><a href="repo/7/x86_64/copyfail-defense-2.1.0-1.el7.src.rpm">copyfail-defense-2.1.0-1.el7.src.rpm</a></td>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-2.1.0-1.el7.src.rpm">rfxn-defense-2.1.0-1.el7.src.rpm</a></td>
     <td class="sha">6640631d39ead2633ca60693ae81d0cced75fd5b7be498262ed8d6968dbbe6c0</td></tr>
 </table>
 
 <h3>EL8 (RHEL/Alma/Rocky/CentOS Stream 8)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
-<tr><td><a href="repo/8/x86_64/copyfail-defense-2.1.0-1.el8.x86_64.rpm">copyfail-defense-2.1.0-1.el8.x86_64.rpm</a></td>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-2.1.0-1.el8.x86_64.rpm">rfxn-defense-2.1.0-1.el8.x86_64.rpm</a></td>
     <td class="sha">2206703d26d409885372bb83c3a71e1989d6fbd8e806559b8996c239f9ce78cf</td></tr>
-<tr><td><a href="repo/8/x86_64/copyfail-defense-audit-2.1.0-1.el8.noarch.rpm">copyfail-defense-audit-2.1.0-1.el8.noarch.rpm</a></td>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-audit-2.1.0-1.el8.noarch.rpm">rfxn-defense-audit-2.1.0-1.el8.noarch.rpm</a></td>
     <td class="sha">227776a0fa0dd61d0d3d35afaef3e8effa65216b11a22d76924b335bfa7e4f90</td></tr>
-<tr><td><a href="repo/8/x86_64/copyfail-defense-auditor-2.1.0-1.el8.noarch.rpm">copyfail-defense-auditor-2.1.0-1.el8.noarch.rpm</a></td>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-auditor-2.1.0-1.el8.noarch.rpm">rfxn-defense-auditor-2.1.0-1.el8.noarch.rpm</a></td>
     <td class="sha">91ab71dc4e329ec3effff8156cef28a1a1a172853e80c0509846a1d9f92c0c99</td></tr>
-<tr><td><a href="repo/8/x86_64/copyfail-defense-modprobe-2.1.0-1.el8.noarch.rpm">copyfail-defense-modprobe-2.1.0-1.el8.noarch.rpm</a></td>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-modprobe-2.1.0-1.el8.noarch.rpm">rfxn-defense-modprobe-2.1.0-1.el8.noarch.rpm</a></td>
     <td class="sha">9bdd511522aca2d48a7c6edaed66447be1110eff4695d4874d32529fae2b45ff</td></tr>
-<tr><td><a href="repo/8/x86_64/copyfail-defense-shim-2.1.0-1.el8.x86_64.rpm">copyfail-defense-shim-2.1.0-1.el8.x86_64.rpm</a></td>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-shim-2.1.0-1.el8.x86_64.rpm">rfxn-defense-shim-2.1.0-1.el8.x86_64.rpm</a></td>
     <td class="sha">1448b919fcab0e5ea31fb719e95bcf0a492dfdb7803788947d898f7cb06512b1</td></tr>
-<tr><td><a href="repo/8/x86_64/copyfail-defense-sysctl-2.1.0-1.el8.noarch.rpm">copyfail-defense-sysctl-2.1.0-1.el8.noarch.rpm</a></td>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-sysctl-2.1.0-1.el8.noarch.rpm">rfxn-defense-sysctl-2.1.0-1.el8.noarch.rpm</a></td>
     <td class="sha">cef85f2931dbb1ea772baf505fe3a555a18b54458924f3198f58132a22a49a01</td></tr>
-<tr><td><a href="repo/8/x86_64/copyfail-defense-systemd-2.1.0-1.el8.noarch.rpm">copyfail-defense-systemd-2.1.0-1.el8.noarch.rpm</a></td>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-systemd-2.1.0-1.el8.noarch.rpm">rfxn-defense-systemd-2.1.0-1.el8.noarch.rpm</a></td>
     <td class="sha">870d950db1fad5d7bbce18097dc95ec448ff1bcf802d77bfbcc757f188b9a846</td></tr>
-<tr><td><a href="repo/8/x86_64/copyfail-defense-2.1.0-1.el8.src.rpm">copyfail-defense-2.1.0-1.el8.src.rpm</a></td>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-2.1.0-1.el8.src.rpm">rfxn-defense-2.1.0-1.el8.src.rpm</a></td>
     <td class="sha">fe61d375581a9f3838f1327bcfd4e7b8c6365420fdf31f409b51e7a197cad83b</td></tr>
 </table>
 
 <h3>EL9 (RHEL/Alma/Rocky/CentOS Stream 9)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
-<tr><td><a href="repo/9/x86_64/copyfail-defense-2.1.0-1.el9.x86_64.rpm">copyfail-defense-2.1.0-1.el9.x86_64.rpm</a></td>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-2.1.0-1.el9.x86_64.rpm">rfxn-defense-2.1.0-1.el9.x86_64.rpm</a></td>
     <td class="sha">e13498af81d896ed0e9a7b2673be9a80a83491cdc13d79fe774f56729ebe1c84</td></tr>
-<tr><td><a href="repo/9/x86_64/copyfail-defense-audit-2.1.0-1.el9.noarch.rpm">copyfail-defense-audit-2.1.0-1.el9.noarch.rpm</a></td>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-audit-2.1.0-1.el9.noarch.rpm">rfxn-defense-audit-2.1.0-1.el9.noarch.rpm</a></td>
     <td class="sha">24a6421c29597ca516b8a658b7cd53d6be9a161d26529fc32c102a3fd1734703</td></tr>
-<tr><td><a href="repo/9/x86_64/copyfail-defense-auditor-2.1.0-1.el9.noarch.rpm">copyfail-defense-auditor-2.1.0-1.el9.noarch.rpm</a></td>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-auditor-2.1.0-1.el9.noarch.rpm">rfxn-defense-auditor-2.1.0-1.el9.noarch.rpm</a></td>
     <td class="sha">dfd6da0e7031e30276973e7896c613d31b4c6b6be7422ea226b5eab2a71e9bf0</td></tr>
-<tr><td><a href="repo/9/x86_64/copyfail-defense-modprobe-2.1.0-1.el9.noarch.rpm">copyfail-defense-modprobe-2.1.0-1.el9.noarch.rpm</a></td>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-modprobe-2.1.0-1.el9.noarch.rpm">rfxn-defense-modprobe-2.1.0-1.el9.noarch.rpm</a></td>
     <td class="sha">d98186d4d583a2c5c0a897b0bfbfc6583de295a2e42cda7f40225dffb474cb8b</td></tr>
-<tr><td><a href="repo/9/x86_64/copyfail-defense-shim-2.1.0-1.el9.x86_64.rpm">copyfail-defense-shim-2.1.0-1.el9.x86_64.rpm</a></td>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-shim-2.1.0-1.el9.x86_64.rpm">rfxn-defense-shim-2.1.0-1.el9.x86_64.rpm</a></td>
     <td class="sha">89919412c09e0e4d687523f0960b49a2e9a931b59b7a64ccbd8f56759e582e14</td></tr>
-<tr><td><a href="repo/9/x86_64/copyfail-defense-sysctl-2.1.0-1.el9.noarch.rpm">copyfail-defense-sysctl-2.1.0-1.el9.noarch.rpm</a></td>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-sysctl-2.1.0-1.el9.noarch.rpm">rfxn-defense-sysctl-2.1.0-1.el9.noarch.rpm</a></td>
     <td class="sha">1ddc7decdc52415cc6eefcc3486d6b7fb6acc5364ef7b7572cca00c595524dbc</td></tr>
-<tr><td><a href="repo/9/x86_64/copyfail-defense-systemd-2.1.0-1.el9.noarch.rpm">copyfail-defense-systemd-2.1.0-1.el9.noarch.rpm</a></td>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-systemd-2.1.0-1.el9.noarch.rpm">rfxn-defense-systemd-2.1.0-1.el9.noarch.rpm</a></td>
     <td class="sha">0516c0a5cb256bd9fb24e7dc29c689c7dc5b31375f7644249a7abd5cef1ac58d</td></tr>
-<tr><td><a href="repo/9/x86_64/copyfail-defense-2.1.0-1.el9.src.rpm">copyfail-defense-2.1.0-1.el9.src.rpm</a></td>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-2.1.0-1.el9.src.rpm">rfxn-defense-2.1.0-1.el9.src.rpm</a></td>
     <td class="sha">a17cf428e2d6eb9d7f61c10624592ad498f7e0d4224d684642865c60a1c7261d</td></tr>
 </table>
 
 <h3>EL10 (RHEL 10 / CentOS Stream 10 / AlmaLinux Kitten)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
-<tr><td><a href="repo/10/x86_64/copyfail-defense-2.1.0-1.el10.x86_64.rpm">copyfail-defense-2.1.0-1.el10.x86_64.rpm</a></td>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-2.1.0-1.el10.x86_64.rpm">rfxn-defense-2.1.0-1.el10.x86_64.rpm</a></td>
     <td class="sha">0ba7d2ef2bee825afaa3dc5381fcdd642c3b1865b6c399aa59535585b53b08f7</td></tr>
-<tr><td><a href="repo/10/x86_64/copyfail-defense-audit-2.1.0-1.el10.noarch.rpm">copyfail-defense-audit-2.1.0-1.el10.noarch.rpm</a></td>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-audit-2.1.0-1.el10.noarch.rpm">rfxn-defense-audit-2.1.0-1.el10.noarch.rpm</a></td>
     <td class="sha">c21df8341fe6a46fcf3406ee8ea344f74e12082632e5fb80856f796c9b1e5f1c</td></tr>
-<tr><td><a href="repo/10/x86_64/copyfail-defense-auditor-2.1.0-1.el10.noarch.rpm">copyfail-defense-auditor-2.1.0-1.el10.noarch.rpm</a></td>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-auditor-2.1.0-1.el10.noarch.rpm">rfxn-defense-auditor-2.1.0-1.el10.noarch.rpm</a></td>
     <td class="sha">1380308e0c3a7184a82151488bbd0447b60316891accf6ad75c5b8506038d117</td></tr>
-<tr><td><a href="repo/10/x86_64/copyfail-defense-modprobe-2.1.0-1.el10.noarch.rpm">copyfail-defense-modprobe-2.1.0-1.el10.noarch.rpm</a></td>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-modprobe-2.1.0-1.el10.noarch.rpm">rfxn-defense-modprobe-2.1.0-1.el10.noarch.rpm</a></td>
     <td class="sha">0697f042bb85c3b241d25e097d26694ee7f2e4ace6fb6d4cce1548e4af0dd439</td></tr>
-<tr><td><a href="repo/10/x86_64/copyfail-defense-shim-2.1.0-1.el10.x86_64.rpm">copyfail-defense-shim-2.1.0-1.el10.x86_64.rpm</a></td>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-shim-2.1.0-1.el10.x86_64.rpm">rfxn-defense-shim-2.1.0-1.el10.x86_64.rpm</a></td>
     <td class="sha">36e4087c48b958e9a212d006b677c2cbbef0f56272e9bc02bb97ae969552068b</td></tr>
-<tr><td><a href="repo/10/x86_64/copyfail-defense-sysctl-2.1.0-1.el10.noarch.rpm">copyfail-defense-sysctl-2.1.0-1.el10.noarch.rpm</a></td>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-sysctl-2.1.0-1.el10.noarch.rpm">rfxn-defense-sysctl-2.1.0-1.el10.noarch.rpm</a></td>
     <td class="sha">0d185864cbe5d177bf03aaa5f1a9160cfb94b202f2d9d1b88d4b68f0a98a7ea1</td></tr>
-<tr><td><a href="repo/10/x86_64/copyfail-defense-systemd-2.1.0-1.el10.noarch.rpm">copyfail-defense-systemd-2.1.0-1.el10.noarch.rpm</a></td>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-systemd-2.1.0-1.el10.noarch.rpm">rfxn-defense-systemd-2.1.0-1.el10.noarch.rpm</a></td>
     <td class="sha">cad6ceaeec57087b833bf38760982748a910dcb047cb20c361405b5393a25b26</td></tr>
-<tr><td><a href="repo/10/x86_64/copyfail-defense-2.1.0-1.el10.src.rpm">copyfail-defense-2.1.0-1.el10.src.rpm</a></td>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-2.1.0-1.el10.src.rpm">rfxn-defense-2.1.0-1.el10.src.rpm</a></td>
     <td class="sha">91c6d9a8d75b0632e07749f66e0e3fd10d31a58af3ae5e198fb41d1200d911c6</td></tr>
 </table>
 
@@ -953,18 +954,18 @@ v1.0.1 and later are signed by the <strong>Copyfail Project Signing Key</strong>
 uid:         Copyfail Project Signing Key &lt;proj@rfxn.com&gt;
 key file:    <a href="RPM-GPG-KEY-copyfail">/RPM-GPG-KEY-copyfail</a></pre>
 <p>
-The <code>copyfail.repo</code> sets both <code>gpgcheck=1</code>
+The <code>rfxn-defense.repo</code> sets both <code>gpgcheck=1</code>
 (verifies each RPM) and <code>repo_gpgcheck=1</code> (verifies
 <code>repomd.xml</code> via the detached <code>repomd.xml.asc</code>
 we publish alongside it). dnf imports the public key from
 <code>gpgkey=</code> on first use.
 </p>
 <p>Verify out-of-band:</p>
-<pre>curl -sSL https://rfxn.github.io/copyfail/RPM-GPG-KEY-copyfail | gpg --import
+<pre>curl -sSL https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail | gpg --import
 gpg --fingerprint proj@rfxn.com
 # expect: 6001 1CDC EA2F F52D 975A  FDEE 6D30 F32C D5E8 0F80
-rpm --import https://rfxn.github.io/copyfail/RPM-GPG-KEY-copyfail
-rpm -K /path/to/copyfail-defense-2.1.0-1.el9.x86_64.rpm
+rpm --import https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail
+rpm -K /path/to/rfxn-defense-2.1.0-1.el9.x86_64.rpm
 # expect: digests signatures OK</pre>
 
 <h2 id="defense">Defense in depth</h2>
@@ -976,7 +977,7 @@ defeats one does not necessarily defeat the next.
 <tr><th>Rung</th><th>Where it fails</th><th>What the next rung covers</th></tr>
 <tr><td>Kernel patch (vendor)</td>
     <td>EL7 reached EOL 2024-06-30 (no vendor patches for new CVEs); rollout on supported ELs lags disclosure days-to-weeks; reboot may not be available; <strong>Dirty Frag-RxRPC has no upstream patch</strong>; <strong>Fragnesia is on netdev only as of 2026-05-13</strong>, not yet in stable trees; <strong>PinTheft and ssh-keysign-pwn (CVE-2026-46333) are pre-upstream as of 2026-05</strong></td>
-    <td>Userspace cuts close the window without a reboot, the entire copyfail-defense rung set is a kernel-patch-free coverage path</td></tr>
+    <td>Userspace cuts close the window without a reboot, the entire rfxn-defense rung set is a kernel-patch-free coverage path</td></tr>
 <tr><td><code>modprobe</code> blacklist</td>
     <td>No-op when relevant module is <strong>builtin</strong> (RHEL <code>algif_aead</code> is); no effect on already-resident modules</td>
     <td>Functional for <code>esp4</code>/<code>esp6</code>/<code>xfrm_user</code>/<code>xfrm_algo</code>/<code>rxrpc</code> on stock RHEL kernels. RHEL <code>algif_aead</code>: use <code>grubby --update-kernel ALL --args "initcall_blacklist=algif_aead_init"</code> + reboot.</td></tr>
@@ -1000,7 +1001,7 @@ defeats one does not necessarily defeat the next.
 <h2>Reporting issues</h2>
 <p>
 Bugs, packaging problems, false positives, missing distros: please
-<a href="https://github.com/rfxn/copyfail/issues/new/choose">file a
+<a href="https://github.com/rfxn/rfxn-defense/issues/new/choose">file a
 GitHub issue</a>. Include the auditor's <code>--json</code> output if
 the report is about detection, and the output of
 <code>uname -a</code> + <code>cat /etc/os-release</code> for any
