@@ -1,6 +1,72 @@
 # Outstanding follow-ups
 
-Snapshot: **2026-05-13** (post v2.0.2 ship)
+Snapshot: **2026-05-23** (post v3.0.0 ship)
+
+## Shipped in v3.0.0 (2026-05-23)
+
+Project rename + reframe. The package family was renamed `copyfail-
+defense` → `rfxn-defense` to reflect the umbrella scope (kernel-LPE
+defense, not just the Copy Fail page-cache family) and to support the
+narrative reframe as a **responsive defense layer** — one that ships
+mitigations as 0days land, closing the delta between public disclosure
+and the kernel/software vendor patch set.
+
+- **Rename mechanics**, 19 packaging files + the auditor renamed via
+  `git mv`. Content swept inside renamed files (paths, LOGGER_TAG,
+  TOOL_VERSION 2.1.1 → 3.0.0). Spec rewritten end-to-end: `Name:`,
+  `Version:`, Sources 14-16 (RDS + io_uring) preserved, Sources 17-18
+  added for autoupdate cron + wrapper, all `%install`/`%files` paths
+  updated, double Obsoletes/Provides chain on every subpackage
+  (copyfail-defense + afalg-defense where applicable), new
+  `%pretrans` meta migration block for `/var/lib/` and `/etc/` path
+  moves via `mv -n` (idempotent).
+- **NEW `rfxn-defense-autoupdate` subpackage**, hard-Required by meta.
+  4-hourly cron drop-in at `/etc/cron.d/rfxn-defense-update` + wrapper
+  at `/usr/libexec/rfxn-defense/update.sh`. flock-protected single
+  runner, 0-600s random jitter, 600s timeout cap, targeted
+  `dnf upgrade rfxn-defense*` via `--disablerepo='*'
+  --enablerepo='rfxn-defense'`, journald logging. Opt out via touch
+  `/etc/rfxn-defense/auto-update.disabled`. The auto-update cadence
+  operationalizes the responsive-defense-layer pitch.
+- **Audit-key rename**, `copyfail_{afalg,afkey,afrxrpc,afrds,pidfd_
+  getfd}` → `rfxn_*`. SIEM operators MUST update `ausearch -k`
+  queries on deploy. README + CHANGELOG document the mapping with
+  a sed recipe.
+- **GPG key sibling**, `RPM-GPG-KEY-rfxn` ships alongside the retained
+  `RPM-GPG-KEY-copyfail` (same RSA-4096 key bytes; only filename
+  differs). v3.0.0 `.repo` lists both `gpgkey=` URLs so dnf accepts
+  either.
+- **BRIEF.md DirtyDecrypt (CVE-2026-31635) cross-stamp** confirms
+  coverage by existing rxrpc cuts; no new primitive needed. Escalation
+  path documented if future variant surfaces non-AF_RXRPC entry.
+- **GitHub repo rename**, `rfxn/copyfail` → `rfxn/rfxn-defense`.
+  GitHub auto-redirects old URL ~6 months. gh-pages branch travels;
+  `https://rfxn.github.io/copyfail/` 301-redirects to
+  `https://rfxn.github.io/rfxn-defense/`.
+- **Docs**, README + STATE + SPEC + BRIEF + FOLLOWUPS rewritten
+  with the responsive-defense-layer reframe. SPEC.md gains §14
+  (v3.0.0 architecture + decision index D-68..D-75).
+
+## v3.0.0 watch list
+
+- [ ] **Drop `RPM-GPG-KEY-copyfail`** from the spec Source list in
+  3.1.0 once 2.x dnf clients have all refreshed their `.repo` files.
+- [ ] **Drop `copyfail.repo`** from gh-pages in 3.1.0 (same trigger).
+- [ ] **Drop `Obsoletes: afalg-defense*` chain** from spec in 3.1.0
+  (1.0.x lineage has been carried through 3.0.x — long enough).
+- [ ] **Drop `Obsoletes: copyfail-defense*` chain** in 4.0.0 (one
+  major release of compat from the 2.x line).
+- [ ] **Rename operator env knobs** `CFD_FORCE_IOURING_DISABLE` /
+  `CFD_SUPPRESS_IOURING_DISABLE` → `RFXN_*` in 3.1.0 with deprecation
+  cycle (the `CFD_*` form documented as legacy-compat in 3.0.x).
+- [ ] **rfxn.com `/projects/copyfail/` page redirect** — set up
+  301-redirect to `/projects/rfxn-defense/` once the rfxn-website-2026
+  repo is updated. Out-of-band from this release.
+- [ ] **Live-URL canary post-rename** — `gh repo rename` is irreversible
+  enough to want a fresh `dnf install rfxn-defense` from the renamed
+  URL on EL7/8/9/10 as a final smoke. The meta-RPM glob-gap incident
+  from v2.1.0 (insight 2026-05-23T03:57:03Z) makes the live canary
+  load-bearing.
 
 ## Shipped in v2.0.2 (2026-05-13)
 
@@ -11,7 +77,7 @@ Wiz, Sysdig, Red Hat RHSB-2026-003, AWS, Microsoft, Tenable):
 - New subpackage `copyfail-defense-sysctl`, host-wide
   `user.max_user_namespaces=0` (+ `kernel.unprivileged_userns_clone=0`,
   + `kernel.apparmor_restrict_unprivileged_userns=1`) drop-in to
-  `/etc/sysctl.d/99-copyfail-defense-userns.conf`. Keys are
+  `/etc/sysctl.d/99-rfxn-defense-userns.conf`. Keys are
   `-`-prefixed so unknown keys silently skip (sysctl.d(5)). Closes
   the userns prerequisite of the cf2 / DF-ESP / Fragnesia chain
   host-wide, complementing the per-unit `RestrictNamespaces`. **This
@@ -22,7 +88,7 @@ Wiz, Sysdig, Red Hat RHSB-2026-003, AWS, Microsoft, Tenable):
   the "blast radius documented loudly" requirement is satisfied by
   detection rather than operator gating.
 - New subpackage `copyfail-defense-audit`, auditd rules at
-  `/etc/audit/rules.d/99-copyfail-defense.rules` catching
+  `/etc/audit/rules.d/99-rfxn-defense.rules` catching
   `socket(AF_ALG/AF_KEY/AF_RXRPC)` syscalls from `auid>=1000`.
   Meta pulls it via `Recommends` (soft) so minimal hosts without
   auditd skip the auditd transitive pull. Real value on hosts where
@@ -46,7 +112,7 @@ Wiz, Sysdig, Red Hat RHSB-2026-003, AWS, Microsoft, Tenable):
 
 ## Documentation drift to apply elsewhere
 
-- [ ] **rfxn.com research article**, extend the article at <https://www.rfxn.com/research/copyfail-cve-2026-31431> with cf2 (xfrm-ESP) and Dirty Frag (V4bel) sections, matching the cf-class framing now in README.md. Article source lives in `rfxn/rfxn-website-2026` (private). The full v2.0.1 coverage matrix from STATE.md should land in the article's mitigation section. Include a note on the v2.0.1 auto-detection feature (IPsec/AFS/rootless workload detection, `copyfail-redetect` helper).
+- [ ] **rfxn.com research article**, extend the article at <https://www.rfxn.com/research/copyfail-cve-2026-31431> with cf2 (xfrm-ESP) and Dirty Frag (V4bel) sections, matching the cf-class framing now in README.md. Article source lives in `rfxn/rfxn-website-2026` (private). The full v2.0.1 coverage matrix from STATE.md should land in the article's mitigation section. Include a note on the v2.0.1 auto-detection feature (IPsec/AFS/rootless workload detection, `rfxn-redetect` helper).
 
 ## Cron entries from the backup runbook (documented but not installed)
 
@@ -133,7 +199,7 @@ were folded into the v2.0.1 ship, see SPEC §12 D-51..D-58):
   retention. The narrative could read either way (hotfix vs yank);
   pick before the next blog post.
 - [ ] **`%{_libexecdir}` macro adoption** (reviewer L-2), v2.0.1
-  hard-codes `/usr/libexec/copyfail-defense/` in the spec. Convert
+  hard-codes `/usr/libexec/rfxn-defense/` in the spec. Convert
   to `%{_libexecdir}/copyfail-defense/` macro form in v2.0.2 for
   distro-portability cleanliness. The hard-coded path is FHS-correct
   on EL but the macro is the conventional spec idiom.
@@ -169,7 +235,7 @@ were folded into the v2.0.1 ship, see SPEC §12 D-51..D-58):
   `%pretrans` needs explicit branches for both lineages.
 
   Recommended forward-compatible signal: write a plain-text file
-  `/var/lib/copyfail-defense/installed-version` from v2.0.1
+  `/var/lib/rfxn-defense/installed-version` from v2.0.1
   `%posttrans` containing the version string. v2.1.0's `%pretrans`
   reads this file to decide which migration path to take, instead
   of re-querying `rpm -q copyfail-defense-modprobe --qf '%{version}'`
@@ -221,7 +287,7 @@ v2.0.2" above, landed early as `copyfail-defense-sysctl`.)
   kernel < 6.6 gate, operator env knobs.
 - **DirtyDecrypt (CVE-2026-31635) formal verification.** v2.1.0 ships
   under the assumption that the RXGK/RxRPC primitive is covered by the
-  existing rxrpc cuts (modprobe blacklist + ~AF_RXRPC + copyfail_afrxrpc
+  existing rxrpc cuts (modprobe blacklist + ~AF_RXRPC + rfxn_afrxrpc
   audit rule). Verify against the public advisory post-publish; if the
   entry primitive is not AF_RXRPC-mediated, open a v2.1.1 hotfix.
 - **EL7 mock vault availability.** vault.centos.org and

@@ -1,10 +1,20 @@
 <div align="center">
 
-# copyfail-defense
+# rfxn-defense
 
-**Defense-in-depth toolkit for the Copy Fail Linux kernel bug class.**
-Covers three live LPE chains that share the same `splice()` →
-`MSG_SPLICE_PAGES` → in-place page-cache write primitive:
+**Responsive defense layer for Linux — ships mitigations as 0days land,
+closing the delta between public CVE disclosure and the kernel/software
+vendor patch set landing on hosts.**
+
+Each release pairs a disclosed kernel-LPE bug class with the on-disk
+primitives that cut the attack path *without* waiting for a kernel
+reboot or an upstream patch: modprobe blacklists, kernel-enforced
+systemd `RestrictAddressFamilies` / `RestrictNamespaces`, sysctl
+drop-ins, auditd tripwires, an `LD_PRELOAD` entry-point shim, and a
+read-only host posture auditor. A 4-hourly auto-update cron keeps
+hosts current with each new release — install once, stay covered.
+
+Current coverage (Copy Fail page-cache family + FD-theft class):
 
 | | CVE | Sink | Primitive |
 |---|---|---|---|
@@ -13,23 +23,20 @@ Covers three live LPE chains that share the same `splice()` →
 | **Dirty Frag-RxRPC** | CVE-2026-43500 | `rxkad_verify_packet_1` | 4-byte and 8-byte STORE |
 | **Fragnesia** | (no CVE yet, same surface as CVE-2026-43284) | `espintcp` ULP after splice | byte STORE in cached page |
 | **PinTheft** *(v2.1.0)* | CVE pending | RDS zerocopy double-free + io_uring fixed-buffer | page-cache overwrite of SUID binary |
+| **DirtyDecrypt** *(v3.0.0 cross-stamp)* | CVE-2026-31635 | `rxgk_*` RXGK token-decrypt in-place crypto | page-cache overwrite via AF_RXRPC |
 | **ssh-keysign-pwn** *(v2.1.0, FD-theft class)* | CVE-2026-46333 | `__ptrace_may_access()` race + `pidfd_getfd` on exiting SUID | open-fd theft from ssh-keysign / chage |
 
-Userspace primitives stack into a single `dnf install`: an `LD_PRELOAD`
-shim, a kernel-module-entry-point cut, kernel-enforced systemd
-restrictions, and a read-only host posture auditor that reports
-per-class coverage. Signed RPMs for EL7 / EL8 / EL9 / EL10.
+Signed RPMs for EL7 / EL8 / EL9 / EL10 (x86_64). One `dnf install`,
+one auditor, one 4-hourly update cron.
 
-Supported: EL7, EL8, EL9, EL10 (x86_64).
-
-<a href="https://rfxn.github.io/copyfail/"><img src="https://img.shields.io/badge/%F0%9F%93%A6%20yum%2Fdnf%20repo-rfxn.github.io%2Fcopyfail-22d3ee?style=for-the-badge&labelColor=09090b" alt="copyfail-defense yum/dnf package repo"></a>
+<a href="https://rfxn.github.io/rfxn-defense/"><img src="https://img.shields.io/badge/%F0%9F%93%A6%20yum%2Fdnf%20repo-rfxn.github.io%2Frfxn--defense-22d3ee?style=for-the-badge&labelColor=09090b" alt="rfxn-defense yum/dnf package repo"></a>
 <a href="https://www.rfxn.com/research/copyfail-cve-2026-31431"><img src="https://img.shields.io/badge/%F0%9F%94%AC%20deep%20dive-rfxn.com%2Fresearch-d97757?style=for-the-badge&labelColor=09090b" alt="Deep-dive research article on rfxn.com"></a>
 
-[![Bug class](https://img.shields.io/badge/Copy%20Fail%20bug%20class-cf1%20%2F%20cf2%20%2F%20Dirty%20Frag-d97757?labelColor=09090b)](#what-this-protects-against)
+[![Bug class](https://img.shields.io/badge/coverage-cf1%20%2F%20cf2%20%2F%20Dirty%20Frag%20%2F%20PinTheft%20%2F%20DirtyDecrypt%20%2F%20keysign--pwn-d97757?labelColor=09090b)](#what-this-protects-against)
 [![Severity](https://img.shields.io/badge/severity-LOCAL%20PRIVESC-d44d4d?labelColor=09090b)](#what-this-protects-against)
 [![License](https://img.shields.io/badge/license-GPL--2.0-22d3ee?labelColor=09090b)](LICENSE)
-[![EL7/8/9/10](https://img.shields.io/badge/EL-7%20%2F%208%20%2F%209%20%2F%2010-4ade80?labelColor=09090b)](https://rfxn.github.io/copyfail/)
-[![Latest release](https://img.shields.io/github/v/release/rfxn/copyfail?label=release&color=22d3ee&labelColor=09090b)](https://github.com/rfxn/copyfail/releases/latest)
+[![EL7/8/9/10](https://img.shields.io/badge/EL-7%20%2F%208%20%2F%209%20%2F%2010-4ade80?labelColor=09090b)](https://rfxn.github.io/rfxn-defense/)
+[![Latest release](https://img.shields.io/github/v/release/rfxn/rfxn-defense?label=release&color=22d3ee&labelColor=09090b)](https://github.com/rfxn/rfxn-defense/releases/latest)
 
 [Install](#install) · [Verify](#verify) · [Coverage](#coverage-matrix) · [Defense in depth](#defense-in-depth) · [Audit](#audit-the-host) · [Subpackages](#subpackages) · [Overrides](#override-paths) · [Signatures](#verifying-signatures) · [Limitations](#limitations)
 
@@ -38,8 +45,8 @@ Supported: EL7, EL8, EL9, EL10 (x86_64).
 ---
 
 > [!NOTE]
-> Upgrading from `afalg-defense` v1.0.x or any `copyfail-defense`
-> 2.0.x release is a single command: `sudo dnf upgrade -y copyfail-defense`.
+> Upgrading from `afalg-defense` v1.0.x or any `rfxn-defense`
+> 2.0.x release is a single command: `sudo dnf upgrade -y rfxn-defense`.
 > Auto-detection re-runs on every upgrade and suppresses any
 > conflicting drop-ins detected on your host (IPsec, AFS, rootless
 > containers, Flatpak, firejail, desktop browsers, RDS / Oracle
@@ -52,10 +59,10 @@ Supported: EL7, EL8, EL9, EL10 (x86_64).
 ## Install
 
 ```sh
-sudo curl -sSL https://rfxn.github.io/copyfail/copyfail.repo \
-  -o /etc/yum.repos.d/copyfail.repo
-sudo dnf install -y copyfail-defense
-sudo /usr/sbin/copyfail-shim-enable
+sudo curl -sSL https://rfxn.github.io/rfxn-defense/rfxn-defense.repo \
+  -o /etc/yum.repos.d/rfxn-defense.repo
+sudo dnf install -y rfxn-defense
+sudo /usr/sbin/rfxn-shim-enable
 ```
 
 One repo file works on EL7/EL8/EL9/EL10. RPMs are GPG-signed; dnf
@@ -66,22 +73,49 @@ when prompted:
 6001 1CDC EA2F F52D 975A  FDEE 6D30 F32C D5E8 0F80
 ```
 
-The meta package pulls six subpackages (with `-audit` as a soft dep so
+After install the 4-hourly auto-update cron keeps the host current; new
+mitigations land within 4 hours of a release tag without any operator
+action. Opt out by touching `/etc/rfxn-defense/auto-update.disabled`.
+
+The meta package pulls seven subpackages (with `-audit` as a soft dep so
 minimal hosts without auditd skip the pull-in):
 
 | Subpackage | Coverage |
 |---|---|
-| `copyfail-defense-shim` | LD_PRELOAD AF_ALG block (cf1 primary) |
-| `copyfail-defense-modprobe` | kernel-module entry-point cuts (cf1 + cf2 + Dirty Frag) |
-| `copyfail-defense-systemd` | per-unit `RestrictAddressFamilies=~AF_ALG ~AF_KEY ~AF_RXRPC` + `RestrictNamespaces=~user ~net` (all bug classes) |
-| `copyfail-defense-sysctl` *(v2.0.2)* | host-wide `user.max_user_namespaces=0` sysctl (cf2 / DF-ESP / Fragnesia) |
-| `copyfail-defense-auditor` | read-only host posture auditor with per-class coverage report |
-| `copyfail-defense-audit` *(v2.0.2, soft-dep)* | auditd tripwire rules for `socket(AF_ALG/AF_KEY/AF_RXRPC)` syscalls |
+| `rfxn-defense-shim` | LD_PRELOAD AF_ALG block (cf1 primary) |
+| `rfxn-defense-modprobe` | kernel-module entry-point cuts (cf1 + cf2 + Dirty Frag + PinTheft + DirtyDecrypt) |
+| `rfxn-defense-systemd` | per-unit `RestrictAddressFamilies=~AF_ALG ~AF_KEY ~AF_RXRPC ~AF_RDS` + `RestrictNamespaces=~user ~net` (all bug classes) |
+| `rfxn-defense-sysctl` *(v2.0.2)* | host-wide `user.max_user_namespaces=0`, `kernel.yama.ptrace_scope=2`, `kernel.io_uring_disabled=2` sysctls |
+| `rfxn-defense-auditor` | read-only host posture auditor with per-class coverage report |
+| `rfxn-defense-audit` | auditd tripwire rules (`rfxn_afalg/afkey/afrxrpc/afrds/pidfd_getfd`) |
+| `rfxn-defense-autoupdate` *(v3.0.0)* | 4-hourly responsive auto-update cron + flock-protected wrapper |
+
+> [!IMPORTANT]
+> **Upgrading from v2.x (`copyfail-defense`):** `sudo dnf upgrade -y
+> rfxn-defense`. The double Obsoletes/Provides chain handles the rename
+> automatically; operator state under `/var/lib/copyfail-defense/` and
+> `/etc/copyfail/` migrates to `/var/lib/rfxn-defense/` and
+> `/etc/rfxn-defense/` via `%pretrans` `mv -n` (idempotent). Audit-key
+> rename — SIEM operators MUST update queries:
+>
+> ```
+> ausearch -k copyfail_afalg        →  ausearch -k rfxn_afalg
+> ausearch -k copyfail_afkey        →  ausearch -k rfxn_afkey
+> ausearch -k copyfail_afrxrpc      →  ausearch -k rfxn_afrxrpc
+> ausearch -k copyfail_afrds        →  ausearch -k rfxn_afrds
+> ausearch -k copyfail_pidfd_getfd  →  ausearch -k rfxn_pidfd_getfd
+> ```
+>
+> The legacy gh-pages URL `https://rfxn.github.io/copyfail/` 301-redirects
+> to `https://rfxn.github.io/rfxn-defense/`; existing `copyfail.repo`
+> files continue to resolve through the redirect. New installs should
+> use the new URL above.
+| `rfxn-defense-audit` *(v2.0.2, soft-dep)* | auditd tripwire rules for `socket(AF_ALG/AF_KEY/AF_RXRPC)` syscalls |
 
 Auditor only (no `LD_PRELOAD`, for hot infrastructure):
 
 ```sh
-sudo dnf install -y copyfail-defense-auditor
+sudo dnf install -y rfxn-defense-auditor
 ```
 
 > [!NOTE]
@@ -103,7 +137,7 @@ python3 -c 'import socket; socket.socket(socket.AF_ALG, socket.SOCK_SEQPACKET, 0
 # expect: PermissionError [Errno 1] Operation not permitted
 
 # Holistic per-class coverage report
-sudo copyfail-local-check
+sudo rfxn-local-check
 ```
 
 The auditor renders a surface-area matrix at the bottom showing, per
@@ -124,9 +158,9 @@ Bug-class coverage: cf1=mitigated cf2=mitigated dirtyfrag-esp=mitigated dirtyfra
 ## Audit the host
 
 ```sh
-sudo copyfail-local-check                # human-readable, only flags non-OK
-sudo copyfail-local-check --json         # SIEM ingestion (posture.bug_classes_covered)
-sudo copyfail-local-check --emit-remediation   # bash script of suggested fixes
+sudo rfxn-local-check                # human-readable, only flags non-OK
+sudo rfxn-local-check --json         # SIEM ingestion (posture.bug_classes_covered)
+sudo rfxn-local-check --emit-remediation   # bash script of suggested fixes
 ```
 
 Read-only by design: writes only to `mkdtemp()` sentinels, never modifies
@@ -150,8 +184,8 @@ JSON output (`--json`) includes:
 ## Remove
 
 ```sh
-sudo /usr/sbin/copyfail-shim-disable
-sudo dnf remove copyfail-defense
+sudo /usr/sbin/rfxn-shim-disable
+sudo dnf remove rfxn-defense
 ```
 
 `%preun` scrubs `/etc/ld.so.preload` on full erase as a safety net,
@@ -188,8 +222,8 @@ recommends them conditionally.
 | sysctl `kernel.yama.ptrace_scope=2` *(v2.1.0)*   |  ·  |  ·  |   ·    |    ·     |    ·      |    ·     |    ✅       |
 | sysctl `kernel.io_uring_disabled=2` *(v2.1.1)* ⁴ |  ·  |  ·  |   ·    |    ·     |    ·      |   ✅ ⁴   |     ·       |
 | auditd tripwire rules *(v2.0.2)*                 | ³   | ³   |  ³     |   ³      |   ³       |    ·     |     ·       |
-| auditd `copyfail_afrds` *(v2.1.0)*               |  ·  |  ·  |   ·    |    ·     |    ·      |   ³      |     ·       |
-| auditd `copyfail_pidfd_getfd` *(v2.1.0)*         |  ·  |  ·  |   ·    |    ·     |    ·      |    ·     |    ³        |
+| auditd `rfxn_afrds` *(v2.1.0)*               |  ·  |  ·  |   ·    |    ·     |    ·      |   ³      |     ·       |
+| auditd `rfxn_pidfd_getfd` *(v2.1.0)*         |  ·  |  ·  |   ·    |    ·     |    ·      |    ·     |    ³        |
 
 ¹ Catches the `cksum` step in the public DF-RxRPC PoC, not the kernel
 sink itself. Useful as defense-in-depth, not as a primary stop.
@@ -204,10 +238,10 @@ this state under MITIGATION.
 from unprivileged users. Real value is on hosts where modprobe
 blacklists are auto-suppressed (IPsec / AFS / RDS workloads) and the
 kernel sink is intentionally reachable; rules become the residual
-tripwire. Query via `ausearch -k copyfail_afalg` / `copyfail_afkey`
-/ `copyfail_afrxrpc` / `copyfail_afrds` / `copyfail_pidfd_getfd`.
+tripwire. Query via `ausearch -k rfxn_afalg` / `rfxn_afkey`
+/ `rfxn_afrxrpc` / `rfxn_afrds` / `rfxn_pidfd_getfd`.
 ⁴ `kernel.io_uring_disabled=2` is auto-applied by v2.1.1 in a
-separate `/etc/sysctl.d/99-copyfail-defense-iouring.conf` drop-in
+separate `/etc/sysctl.d/99-rfxn-defense-iouring.conf` drop-in
 (Linux 6.6+ only). Auto-detect suppresses it on rootless-container,
 Flatpak/firejail/browser, and io_uring-workload hosts (liburing.so
 in `/proc/*/maps`, known consumer binaries, or io_uring-named systemd
@@ -227,32 +261,32 @@ HPC hosts where RDS is in active use (detected via `/etc/oratab`,
 
 | Class       | Upstream patch  | Audit signature                |
 |---          |---              |---                             |
-| cf1         | `a664bf3d`      | `socket(a0=38)` / `copyfail_afalg`   |
-| cf2         | `f4c50a4034`    | `socket(a0=15)` / `copyfail_afkey` · `unshare(NEWUSER)` |
+| cf1         | `a664bf3d`      | `socket(a0=38)` / `rfxn_afalg`   |
+| cf2         | `f4c50a4034`    | `socket(a0=15)` / `rfxn_afkey` · `unshare(NEWUSER)` |
 | DF-ESP      | `f4c50a4034`    | same as cf2                    |
-| DF-RxRPC    | none upstream   | `socket(a0=33)` / `copyfail_afrxrpc` · `add_key("rxrpc",...)` |
+| DF-RxRPC    | none upstream   | `socket(a0=33)` / `rfxn_afrxrpc` · `add_key("rxrpc",...)` |
 | Fragnesia   | netdev only (2026-05-13); not yet in stable trees | same as cf2 + `setsockopt(TCP_ULP="espintcp")` |
-| PinTheft    | none upstream as of v2.1.0 ship  | `socket(a0=21)` / `copyfail_afrds` |
-| keysign-pwn | none upstream (CVE-2026-46333)   | `pidfd_getfd` syscall 438 / `copyfail_pidfd_getfd` |
+| PinTheft    | none upstream as of v2.1.0 ship  | `socket(a0=21)` / `rfxn_afrds` |
+| keysign-pwn | none upstream (CVE-2026-46333)   | `pidfd_getfd` syscall 438 / `rfxn_pidfd_getfd` |
 
 ### Audit keys (`-audit` subpackage)
 
-The `copyfail-defense-audit` subpackage installs auditd tripwire
+The `rfxn-defense-audit` subpackage installs auditd tripwire
 rules under these keys. Existing keys are unchanged in v2.1.0; the
 v2.1.0 cut adds the two `*v2.1.0*` rows at the bottom.
 
 | Key                       | Signature                                                              |
 |---                        |---                                                                     |
-| `copyfail_afalg`          | `socket(AF_ALG=38)` by unprivileged user (cf1)                         |
-| `copyfail_afkey`          | `socket(AF_KEY=15)` by unprivileged user (cf2 / DF-ESP / Fragnesia)    |
-| `copyfail_afrxrpc`        | `socket(AF_RXRPC=33)` by unprivileged user (DF-RxRPC)                  |
-| `copyfail_afrds` *(v2.1.0)*       | `socket(AF_RDS=21)` by unprivileged user (PinTheft)            |
-| `copyfail_pidfd_getfd` *(v2.1.0)* | `pidfd_getfd()` syscall 438 by unprivileged user (ssh-keysign-pwn) |
+| `rfxn_afalg`          | `socket(AF_ALG=38)` by unprivileged user (cf1)                         |
+| `rfxn_afkey`          | `socket(AF_KEY=15)` by unprivileged user (cf2 / DF-ESP / Fragnesia)    |
+| `rfxn_afrxrpc`        | `socket(AF_RXRPC=33)` by unprivileged user (DF-RxRPC)                  |
+| `rfxn_afrds` *(v2.1.0)*       | `socket(AF_RDS=21)` by unprivileged user (PinTheft)            |
+| `rfxn_pidfd_getfd` *(v2.1.0)* | `pidfd_getfd()` syscall 438 by unprivileged user (ssh-keysign-pwn) |
 
 SIEM consumers querying by audit key: existing keys
-(`copyfail_afalg`, `copyfail_afkey`, `copyfail_afrxrpc`) are
-unchanged in v2.1.0. Two new keys (`copyfail_afrds`,
-`copyfail_pidfd_getfd`) are additive; existing `ausearch -k <key>`
+(`rfxn_afalg`, `rfxn_afkey`, `rfxn_afrxrpc`) are
+unchanged in v2.1.0. Two new keys (`rfxn_afrds`,
+`rfxn_pidfd_getfd`) are additive; existing `ausearch -k <key>`
 queries continue to work without modification.
 
 The auditor emits a page-cache integrity probe (cached IOC) for every
@@ -338,19 +372,19 @@ deploying every rung this package ships.
 
 | Package | Arch | Contents |
 |---|---|---|
-| `copyfail-defense` | x86_64 | meta, pulls all six below (`-audit` as Recommends) |
-| `copyfail-defense-shim` | x86_64 | `/usr/lib64/no-afalg.so` + `copyfail-shim-{enable,disable}` |
-| `copyfail-defense-modprobe` | noarch | `/etc/modprobe.d/99-copyfail-defense-{cf1,cf2-xfrm,rxrpc}.conf` (cf-class entry-point cuts) |
-| `copyfail-defense-systemd` | noarch | drop-ins for `user@`/`sshd`/`cron`/`crond`/`atd` + container-runtime examples |
-| `copyfail-defense-sysctl` *(v2.0.2+)* | noarch | `/etc/sysctl.d/99-copyfail-defense-userns.conf` (host-wide userns disable, suppressed on userns-consumer hosts); `/etc/sysctl.d/99-copyfail-defense-iouring.conf` *(v2.1.1)* (io_uring disable, suppressed on io_uring-workload/rootless/Flatpak/kernel<6.6 hosts) |
-| `copyfail-defense-auditor` | noarch | `/usr/sbin/copyfail-local-check` (Python, stdlib-only, read-only) |
-| `copyfail-defense-audit` *(v2.0.2)* | noarch | `/etc/audit/rules.d/99-copyfail-defense.rules` (syscall tripwires for AF_ALG / AF_KEY / AF_RXRPC) |
+| `rfxn-defense` | x86_64 | meta, pulls all six below (`-audit` as Recommends) |
+| `rfxn-defense-shim` | x86_64 | `/usr/lib64/no-afalg.so` + `copyfail-shim-{enable,disable}` |
+| `rfxn-defense-modprobe` | noarch | `/etc/modprobe.d/99-rfxn-defense-{cf1,cf2-xfrm,rxrpc}.conf` (cf-class entry-point cuts) |
+| `rfxn-defense-systemd` | noarch | drop-ins for `user@`/`sshd`/`cron`/`crond`/`atd` + container-runtime examples |
+| `rfxn-defense-sysctl` *(v2.0.2+)* | noarch | `/etc/sysctl.d/99-rfxn-defense-userns.conf` (host-wide userns disable, suppressed on userns-consumer hosts); `/etc/sysctl.d/99-rfxn-defense-iouring.conf` *(v2.1.1)* (io_uring disable, suppressed on io_uring-workload/rootless/Flatpak/kernel<6.6 hosts) |
+| `rfxn-defense-auditor` | noarch | `/usr/sbin/rfxn-local-check` (Python, stdlib-only, read-only) |
+| `rfxn-defense-audit` *(v2.0.2)* | noarch | `/etc/audit/rules.d/99-rfxn-defense.rules` (syscall tripwires for AF_ALG / AF_KEY / AF_RXRPC) |
 
 Per-EL binary RPMs are independently compiled against each
 distribution's glibc (EL8: 2.28 with split `libdl`; EL9/EL10: 2.34+
 with merged `libdl`). **Do not cross-install across ELs.** Direct
 download links + sha256s:
-[rfxn.github.io/copyfail](https://rfxn.github.io/copyfail/#direct-downloads).
+[rfxn.github.io/copyfail](https://rfxn.github.io/rfxn-defense/#direct-downloads).
 
 ---
 
@@ -395,11 +429,11 @@ running production"; nothing else relaxes.
 
 | Workload | Detection signals (any of) | Suppresses |
 |---|---|---|
-| **IPsec** (strongSwan, libreswan, openswan) | `systemctl is-enabled` returns enabled for strongswan/strongswan-starter/strongswan-swanctl/ipsec/libreswan/openswan/pluto; OR `/etc/ipsec.conf` has a `conn` stanza; OR non-empty `*.conf` in `/etc/swanctl/conf.d/`, `/etc/ipsec.d/`, `/etc/strongswan/conf.d/`, `/etc/strongswan.d/` | `99-copyfail-defense-cf2-xfrm.conf` (esp4, esp6, xfrm_user, xfrm_algo blacklist) |
-| **AFS** (openafs, kafs) | `systemctl is-enabled` for openafs-client/openafs-server/kafs/afsd; OR `/etc/openafs/CellServDB` or `/etc/openafs/ThisCell` exists; OR `/etc/krb5.conf.d/openafs*` present; OR `/proc/fs/afs/` registered | `99-copyfail-defense-rxrpc.conf` (rxrpc modprobe blacklist) AND `12-copyfail-defense-rxrpc-af.conf` (`RestrictAddressFamilies=~AF_RXRPC` on all 5 tenant units) |
-| **Rootless containers** (rootless podman/buildah) | `/home/*/.local/share/containers/storage/overlay-containers/` present with mtime within 180d (rootless podman storage tree); OR `/var/lib/containers/storage/` non-empty with mtime <90d; OR `/run/user/<UID>/containers/` present for any UID ≥ 1000 (live rootless tmpfs); OR `podman.socket` enabled (system-wide or any per-user instance) | `15-copyfail-defense-userns.conf` on `user@.service.d` **only** + `/etc/sysctl.d/99-copyfail-defense-userns.conf` (v2.0.2) |
-| **Userns consumers** *(v2.0.2: Flatpak, firejail, desktop browser)* | non-empty `/var/lib/flatpak/{app,runtime}` OR per-user `~/.local/share/flatpak/app` within 180d; OR `/usr/bin/firejail` installed; OR `/usr/bin/{chromium,chromium-browser,google-chrome,firefox,firefox-esr}` present | `/etc/sysctl.d/99-copyfail-defense-userns.conf` (v2.0.2 host-wide userns sysctl) **only**, per-unit `RestrictNamespaces` stays active |
-| **io_uring workload** *(v2.1.1)* | liburing.so in any `/proc/*/maps` (running io_uring consumer); OR known consumer binary present and executable (`postgres`, `scylla`, `mariadbd`, `dockerd`, `redis-server`, `nginx`, `envoy`, `rabbitmq-server`); OR io_uring-named systemd unit listed by `systemctl list-unit-files` | `/etc/sysctl.d/99-copyfail-defense-iouring.conf` **only**, all other layers stay active |
+| **IPsec** (strongSwan, libreswan, openswan) | `systemctl is-enabled` returns enabled for strongswan/strongswan-starter/strongswan-swanctl/ipsec/libreswan/openswan/pluto; OR `/etc/ipsec.conf` has a `conn` stanza; OR non-empty `*.conf` in `/etc/swanctl/conf.d/`, `/etc/ipsec.d/`, `/etc/strongswan/conf.d/`, `/etc/strongswan.d/` | `99-rfxn-defense-cf2-xfrm.conf` (esp4, esp6, xfrm_user, xfrm_algo blacklist) |
+| **AFS** (openafs, kafs) | `systemctl is-enabled` for openafs-client/openafs-server/kafs/afsd; OR `/etc/openafs/CellServDB` or `/etc/openafs/ThisCell` exists; OR `/etc/krb5.conf.d/openafs*` present; OR `/proc/fs/afs/` registered | `99-rfxn-defense-rxrpc.conf` (rxrpc modprobe blacklist) AND `12-rfxn-defense-rxrpc-af.conf` (`RestrictAddressFamilies=~AF_RXRPC` on all 5 tenant units) |
+| **Rootless containers** (rootless podman/buildah) | `/home/*/.local/share/containers/storage/overlay-containers/` present with mtime within 180d (rootless podman storage tree); OR `/var/lib/containers/storage/` non-empty with mtime <90d; OR `/run/user/<UID>/containers/` present for any UID ≥ 1000 (live rootless tmpfs); OR `podman.socket` enabled (system-wide or any per-user instance) | `15-rfxn-defense-userns.conf` on `user@.service.d` **only** + `/etc/sysctl.d/99-rfxn-defense-userns.conf` (v2.0.2) |
+| **Userns consumers** *(v2.0.2: Flatpak, firejail, desktop browser)* | non-empty `/var/lib/flatpak/{app,runtime}` OR per-user `~/.local/share/flatpak/app` within 180d; OR `/usr/bin/firejail` installed; OR `/usr/bin/{chromium,chromium-browser,google-chrome,firefox,firefox-esr}` present | `/etc/sysctl.d/99-rfxn-defense-userns.conf` (v2.0.2 host-wide userns sysctl) **only**, per-unit `RestrictNamespaces` stays active |
+| **io_uring workload** *(v2.1.1)* | liburing.so in any `/proc/*/maps` (running io_uring consumer); OR known consumer binary present and executable (`postgres`, `scylla`, `mariadbd`, `dockerd`, `redis-server`, `nginx`, `envoy`, `rabbitmq-server`); OR io_uring-named systemd unit listed by `systemctl list-unit-files` | `/etc/sysctl.d/99-rfxn-defense-iouring.conf` **only**, all other layers stay active |
 
 False-positive guards baked into the detector:
 
@@ -434,7 +468,7 @@ every host.
 `%posttrans` writes a versioned JSON report. Read it any time:
 
 ```sh
-sudo cat /var/lib/copyfail-defense/auto-detect.json
+sudo cat /var/lib/rfxn-defense/auto-detect.json
 ```
 
 ```json
@@ -462,17 +496,17 @@ sudo cat /var/lib/copyfail-defense/auto-detect.json
 Other inspection paths:
 
 ```sh
-# Per-action log lines from %posttrans / copyfail-redetect
-sudo journalctl -t copyfail-defense-detect --since today
+# Per-action log lines from %posttrans / rfxn-redetect
+sudo journalctl -t rfxn-defense-detect --since today
 
 # Auditor surface (SIEM-friendly)
-sudo copyfail-local-check --json \
+sudo rfxn-local-check --json \
   | jq '.posture.auto_detect'
 # {"available": true, "suppressed_modprobe": ["cf2_xfrm"], "suppressed_systemd": ["userns_user_at"]}
 ```
 
 Detection runs in `%posttrans` after every install/upgrade and is
-re-run on demand by `copyfail-redetect`. The auditor surfaces the
+re-run on demand by `rfxn-redetect`. The auditor surfaces the
 decision under `posture.auto_detect` for fleet dashboards.
 
 ### Re-detect after the host changes
@@ -481,7 +515,7 @@ If you enable IPsec / AFS / rootless containers / Flatpak / firejail
 / a desktop browser post-install:
 
 ```sh
-sudo /usr/sbin/copyfail-redetect
+sudo /usr/sbin/rfxn-redetect
 sudo systemctl daemon-reload
 sudo systemctl try-reload-or-restart sshd.service
 sudo sysctl --system   # (v2.0.2) if the sysctl drop-in was added or removed
@@ -508,16 +542,16 @@ sudo sysctl -w user.max_user_namespaces=$(zcat /proc/config.gz \
 ### Force full install (skip detection)
 
 Drop a sentinel file before `dnf install` (or before
-`copyfail-redetect`) to skip detection entirely:
+`rfxn-redetect`) to skip detection entirely:
 
 ```sh
 sudo mkdir -p /etc/copyfail
-sudo touch /etc/copyfail/force-full
-sudo dnf install -y copyfail-defense
+sudo touch /etc/rfxn-defense/force-full
+sudo dnf install -y rfxn-defense
 ```
 
 The auditor reports `force-full sentinel active` when this is on.
-Remove the sentinel and re-run `copyfail-redetect` to re-engage
+Remove the sentinel and re-run `rfxn-redetect` to re-engage
 detection.
 
 ### Manual override (finer than detection)
@@ -526,7 +560,7 @@ systemd drop-ins use the standard layered-override pattern.
 Within a `<unit>.service.d/` directory, files merge in
 lexicographic order, and **lower numbers lose to higher numbers
 for `=value` directives** (later files override earlier ones).
-copyfail-defense ships at `10-`, `12-`, `15-`; the standard
+rfxn-defense ships at `10-`, `12-`, `15-`; the standard
 operator escape hatches sit at `20-` and `25-`:
 
 **`20-override.conf` (empty-value to neutralize a directive):**
@@ -562,13 +596,13 @@ sudo systemctl daemon-reload
 sudo systemctl try-reload-or-restart sshd.service
 ```
 
-**modprobe override**: the conditional `99-copyfail-defense-cf2-xfrm.conf`
-and `99-copyfail-defense-rxrpc.conf` files are managed by detect.sh
+**modprobe override**: the conditional `99-rfxn-defense-cf2-xfrm.conf`
+and `99-rfxn-defense-rxrpc.conf` files are managed by detect.sh
 (cmp-and-skip per [SPEC §12.10.2a / D-57]). If you hand-edit a
 conditional file, detect.sh detects the divergence on next
-`%posttrans` or `copyfail-redetect`, logs a WARN, and **preserves
+`%posttrans` or `rfxn-redetect`, logs a WARN, and **preserves
 your edits** (does not overwrite). For the always-on
-`99-copyfail-defense-cf1.conf` file, edits survive package upgrade
+`99-rfxn-defense-cf1.conf` file, edits survive package upgrade
 via `%config(noreplace)`.
 
 The earlier (incorrect) recommendation to `chattr +i` a managed
@@ -587,15 +621,15 @@ stock `dnf install` does end-to-end verification automatically.
 ```
 fingerprint: 6001 1CDC EA2F F52D 975A  FDEE 6D30 F32C D5E8 0F80
 uid:         Copyfail Project Signing Key <proj@rfxn.com>
-key file:    https://rfxn.github.io/copyfail/RPM-GPG-KEY-copyfail
+key file:    https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail
 ```
 
 Out-of-band verification of a downloaded RPM:
 
 ```sh
-curl -sSL https://rfxn.github.io/copyfail/RPM-GPG-KEY-copyfail \
+curl -sSL https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail \
   | sudo rpm --import /dev/stdin
-rpm -K copyfail-defense-2.1.1-1.el9.x86_64.rpm
+rpm -K rfxn-defense-2.1.1-1.el9.x86_64.rpm
 # expect: digests signatures OK
 ```
 
@@ -656,10 +690,10 @@ To rebuild the RPMs from the published SRPM (under your own signing):
 
 ```sh
 mock -r centos-stream+epel-9-x86_64 --rebuild \
-  https://github.com/rfxn/copyfail/releases/download/v2.1.1/copyfail-defense-2.1.1-1.el9.src.rpm
+  https://github.com/rfxn/rfxn-defense/releases/download/v2.1.1/rfxn-defense-2.1.1-1.el9.src.rpm
 ```
 
-The spec lives at `packaging/copyfail-defense.spec`.
+The spec lives at `packaging/rfxn-defense.spec`.
 
 ---
 

@@ -132,7 +132,7 @@ copyfail-defense                 (meta, Obsoletes: afalg-defense)
 │     workloads run on those runtimes.
 │
 └── copyfail-defense-auditor     (Obsoletes: afalg-defense-auditor)
-      copyfail-local-check expanded with new checks per category;
+      rfxn-local-check expanded with new checks per category;
       JSON gains bug_classes_covered + per-class boolean.
 ```
 
@@ -347,7 +347,7 @@ copyfail-defense                 (meta, Obsoletes: afalg-defense)
   (kauditd cannot filter netlink message types per-protocol;
   documented as known gap rather than emitted as a non-functional
   rule). **[D-17]**
-- Auditor binary path unchanged: `/usr/sbin/copyfail-local-check`. **[D-18]**
+- Auditor binary path unchanged: `/usr/sbin/rfxn-local-check`. **[D-18]**
 
 ### 4.3 RPM rename mechanics
 
@@ -403,7 +403,7 @@ Provides:  afalg-defense-auditor  = %{epoch}:%{version}-%{release}
   - `rpm -qa | grep '^afalg-defense' | wc -l == 0` (clean obsolete).
   - `/etc/modprobe.d/99-copyfail-defense.conf` present.
   - `/etc/systemd/system/sshd.service.d/10-copyfail-defense.conf` present.
-  - `/usr/sbin/copyfail-local-check --json | jq -e '.posture.bug_classes_covered'` non-null.
+  - `/usr/sbin/rfxn-local-check --json | jq -e '.posture.bug_classes_covered'` non-null.
 - Existing 12-check matrix preserved per EL → 18 checks total. **[D-23]**
 
 ## 5. Decisions deliberately *not* made (need Ryan's call on return)
@@ -585,13 +585,13 @@ JSON report the auditor consumes.
 - **Suppress + log + report.** When a conflict is detected, the
   conflicting drop-in/blacklist is **not installed** on the host. The
   always-on cuts continue to apply. The decision is logged to
-  `LOG_AUTHPRIV` and surfaced in `/var/lib/copyfail-defense/auto-detect.json`
+  `LOG_AUTHPRIV` and surfaced in `/var/lib/rfxn-defense/auto-detect.json`
   for the auditor. **[D-27]**
-- **Sentinel override.** A pre-existing `/etc/copyfail/force-full`
+- **Sentinel override.** A pre-existing `/etc/rfxn-defense/force-full`
   file makes `%posttrans` skip detection and install everything.
   This is the operator's "I know better than your detector" lever.
   **[D-28]**
-- **Re-detect helper.** `/usr/sbin/copyfail-redetect` re-runs detection
+- **Re-detect helper.** `/usr/sbin/rfxn-redetect` re-runs detection
   on demand (operator enabled IPsec post-install; reboot or fleet
   config change). Same logic as `%posttrans`. **[D-29]**
 - **No changes to v2.0.0 always-on cuts:**
@@ -604,7 +604,7 @@ JSON report the auditor consumes.
     aklog/kinit -A open AF_RXRPC sockets to vlserver/ptserver, so
     leaving this unconditional breaks AFS userspace tooling on
     `user@.service`). The `~AF_RXRPC` directive ships in a separate
-    drop-in (`12-copyfail-defense-rxrpc-af.conf`) gated by the same
+    drop-in (`12-rfxn-defense-rxrpc-af.conf`) gated by the same
     AFS signal that gates the `rxrpc` modprobe blacklist. **[D-30]**
 
 ## 12.3 Out of scope
@@ -630,9 +630,9 @@ splits them. **[D-32]**
 
 | File | Contents | Suppressible |
 |---|---|---|
-| `99-copyfail-defense-cf1.conf` | algif_aead, authenc, authencesn, af_alg | NO, always-on |
-| `99-copyfail-defense-cf2-xfrm.conf` | esp4, esp6, xfrm_user, xfrm_algo | YES, IPsec conflict |
-| `99-copyfail-defense-rxrpc.conf` | rxrpc | YES, AFS conflict |
+| `99-rfxn-defense-cf1.conf` | algif_aead, authenc, authencesn, af_alg | NO, always-on |
+| `99-rfxn-defense-cf2-xfrm.conf` | esp4, esp6, xfrm_user, xfrm_algo | YES, IPsec conflict |
+| `99-rfxn-defense-rxrpc.conf` | rxrpc | YES, AFS conflict |
 
 **Numbering:** all three keep the `99-` prefix so any operator
 `100-*` drop overrides ours. The shared `-copyfail-defense-` prefix
@@ -646,8 +646,8 @@ fixup per reviewer C-3 / D-30):
 | File | Contents | Suppressible |
 |---|---|---|
 | `10-copyfail-defense.conf` | `RestrictAddressFamilies=~AF_ALG` + `SystemCallArchitectures=native` + `SystemCallFilter=~@swap` | NO, always-on |
-| `12-copyfail-defense-rxrpc-af.conf` | `RestrictAddressFamilies=~AF_RXRPC` | YES, AFS conflict (aklog/kinit -A open userspace AF_RXRPC sockets to vlserver/ptserver) |
-| `15-copyfail-defense-userns.conf` | `RestrictNamespaces=~user ~net` | YES, rootless container conflict (only on `user@.service.d`) |
+| `12-rfxn-defense-rxrpc-af.conf` | `RestrictAddressFamilies=~AF_RXRPC` | YES, AFS conflict (aklog/kinit -A open userspace AF_RXRPC sockets to vlserver/ptserver) |
+| `15-rfxn-defense-userns.conf` | `RestrictNamespaces=~user ~net` | YES, rootless container conflict (only on `user@.service.d`) |
 
 **Why split at `10-` / `12-` / `15-` instead of one `10-` and one
 `20-override`:** a numerically-low prefix lets all three of our
@@ -678,16 +678,16 @@ the `12-` is suppressed, only `~AF_ALG` applies. **[D-33a]**
 ### 12.4.3 Templates under `/usr/share/`
 
 The conditional drop-ins ship as **package-owned templates** under
-`/usr/share/copyfail-defense/conditional/`:
+`/usr/share/rfxn-defense/conditional/`:
 
 ```
-/usr/share/copyfail-defense/conditional/
+/usr/share/rfxn-defense/conditional/
 ├── modprobe/
-│   ├── 99-copyfail-defense-cf2-xfrm.conf
-│   └── 99-copyfail-defense-rxrpc.conf
+│   ├── 99-rfxn-defense-cf2-xfrm.conf
+│   └── 99-rfxn-defense-rxrpc.conf
 └── systemd/
-    ├── 12-copyfail-defense-rxrpc-af.conf   # AF_RXRPC family cut, gated on AFS
-    └── 15-copyfail-defense-userns.conf     # userns cut, gated on rootless
+    ├── 12-rfxn-defense-rxrpc-af.conf   # AF_RXRPC family cut, gated on AFS
+    └── 15-rfxn-defense-userns.conf     # userns cut, gated on rootless
 ```
 
 `%posttrans` copies templates to `/etc/...` only when no conflict is
@@ -754,8 +754,8 @@ Strict signals only, no false positives from package presence alone.
 **Detection runs in `%posttrans`**, after all subpackages are unpacked
 but before scriptlets close, so the host's persistent state is what
 gets inspected (NOT the freshly-installed package's state). Helper
-script `/usr/libexec/copyfail-defense/detect.sh` owns the logic;
-`%posttrans` and `copyfail-redetect` both call it. **[D-38]**
+script `/usr/libexec/rfxn-defense/detect.sh` owns the logic;
+`%posttrans` and `rfxn-redetect` both call it. **[D-38]**
 
 ### 12.5.1 IPsec
 
@@ -896,7 +896,7 @@ adoption rationale):
 - **Operator pre-stages `/var/lib/containers/storage/` via image
   pull from an init script, then never runs containers**: signal
   (2) trips initially, mtime gate ages out within 90 days, signal
-  goes false at next `copyfail-redetect` run. Acceptable.
+  goes false at next `rfxn-redetect` run. Acceptable.
 - **Operator runs rootless podman exactly once a year**: signal
   (1) stays true (storage tree persists across logout). Signal
   (3) goes false during quiet periods. Either signal alone is
@@ -934,8 +934,8 @@ sockets to communicate with vlserver/ptserver. Leaving
 token acquisition for any tenant on an AFS-configured host.
 
 The conditional file lives at
-`12-copyfail-defense-rxrpc-af.conf` per §12.4.2 and ships under
-`/usr/share/copyfail-defense/conditional/systemd/` per §12.4.3.
+`12-rfxn-defense-rxrpc-af.conf` per §12.4.2 and ships under
+`/usr/share/rfxn-defense/conditional/systemd/` per §12.4.3.
 detect.sh's apply scope copies it to all 5 tenant unit drop-in
 directories *only when AFS is not detected*. When AFS is
 detected, the file is removed from `/etc/...` and the tenant's
@@ -973,7 +973,7 @@ counter-example surfaces post-ship, add it to v2.0.2 detection.
 ## 12.6 Detection report (`auto-detect.json`)
 
 Schema versioned for forward compatibility. The auditor reads it.
-Path: `/var/lib/copyfail-defense/auto-detect.json` (mode 0644 root:root,
+Path: `/var/lib/rfxn-defense/auto-detect.json` (mode 0644 root:root,
 created by `%posttrans` if not present). **[D-42]**
 
 ```json
@@ -1025,7 +1025,7 @@ Schema rules:
   subuid based).
 - `signals` is a free-form list of human-readable strings, debugging
   aid, not a structured contract. Auditor reads `present` only.
-- `force_full: true` means `/etc/copyfail/force-full` was present; all
+- `force_full: true` means `/etc/rfxn-defense/force-full` was present; all
   `suppressed.*` are `false`, all `applied.*` are `true`.
 - Atomically written: detect.sh writes to `auto-detect.json.tmp`, then
   `mv -f` over the final path. No partial-state window.
@@ -1055,26 +1055,26 @@ auditor reads `schema_version` and compares against its own
 
 ## 12.7 Force-full sentinel
 
-`/etc/copyfail/force-full` (path, content irrelevant, existence-based)
+`/etc/rfxn-defense/force-full` (path, content irrelevant, existence-based)
 makes `%posttrans` skip detection entirely and install all
 suppressible mitigations. Operator's "I know my host" lever.
 
 - File presence test only, content is ignored. Empty file works.
-- The `/etc/copyfail/` directory is RPM-owned by `copyfail-defense`
+- The `/etc/rfxn-defense/` directory is RPM-owned by `copyfail-defense`
   (meta) at `%dir 0755 root:root` so it exists from first install.
   Sentinel is operator-created; package never writes it. **[D-43]**
 - Logged: `auto-detect.json.force_full = true`.
 - **Sentinel shape (v2.0.1 fixup M-4):** the sentinel must be a
-  regular file. If `/etc/copyfail/force-full` exists as a directory,
+  regular file. If `/etc/rfxn-defense/force-full` exists as a directory,
   a broken symlink, or another non-regular form, detect.sh emits a
   `copyfail-defense: WARN: ... force-full sentinel IGNORED` line to
   stderr and authpriv.warning, then proceeds with normal auto-detect.
-  This catches the `mkdir /etc/copyfail/force-full` operator typo
+  This catches the `mkdir /etc/rfxn-defense/force-full` operator typo
   that otherwise silently downgraded force-full to normal detection.
 
-## 12.8 Helper: `/usr/sbin/copyfail-redetect`
+## 12.8 Helper: `/usr/sbin/rfxn-redetect`
 
-Bash, ~30 lines. Re-runs `/usr/libexec/copyfail-defense/detect.sh`
+Bash, ~30 lines. Re-runs `/usr/libexec/rfxn-defense/detect.sh`
 with the same scriptlet semantics. Per the rev 2 fixup the helper
 now passes an explicit scope (`both`) since detect.sh's CLI splits
 into per-subpackage scopes (reviewer C-6):
@@ -1083,8 +1083,8 @@ into per-subpackage scopes (reviewer C-6):
 #!/bin/bash
 set -euo pipefail
 test "$(id -u)" -eq 0 || { echo "must be run as root" >&2; exit 1; }
-/usr/libexec/copyfail-defense/detect.sh apply both
-echo "Detection refreshed. See /var/lib/copyfail-defense/auto-detect.json"
+/usr/libexec/rfxn-defense/detect.sh apply both
+echo "Detection refreshed. See /var/lib/rfxn-defense/auto-detect.json"
 echo "Run: systemctl daemon-reload && systemctl try-reload sshd"
 echo "to apply systemd drop-in changes."
 ```
@@ -1107,7 +1107,7 @@ output, add it back with a real consumer wired in the same change.
 
 ## 12.9 Auditor extension (auto-detect surface)
 
-`copyfail-local-check.py` reads `auto-detect.json` (when present) and
+`rfxn-local-check.py` reads `auto-detect.json` (when present) and
 reports detection state under `posture.auto_detect`:
 
 ```json
@@ -1141,7 +1141,7 @@ Plus a new check `check_auto_detect_state()` under MITIGATION:
 copyfail-defense-systemd` (returncode-based) to determine whether
 either subpackage is installed. SKIP when neither rpm-query
 succeeds. The original draft used file-existence checks
-(`/etc/modprobe.d/99-copyfail-defense-cf1.conf` etc.), which is
+(`/etc/modprobe.d/99-rfxn-defense-cf1.conf` etc.), which is
 unreliable: an operator who hand-removed the file (or whose host
 suffered a botched %posttrans) would get a misleading SKIP
 (auditor-only install) when in fact a subpackage is installed but
@@ -1169,7 +1169,7 @@ Or `Auto-detect: clean (no conflicts)` when nothing tripped.
 scope argument** (`modprobe`, `systemd`, or `both`). Each
 `%posttrans` passes its own scope so a `-modprobe`-only install
 does not produce orphan systemd files (and vice-versa). The
-`copyfail-redetect` helper passes `both`. detect.sh writes the same
+`rfxn-redetect` helper passes `both`. detect.sh writes the same
 `auto-detect.json` regardless of scope, but only mutates
 `/etc/modprobe.d/` when scope is `modprobe` or `both`, and only
 mutates `/etc/systemd/system/<unit>.service.d/` when scope is
@@ -1180,19 +1180,19 @@ mutates `/etc/systemd/system/<unit>.service.d/` when scope is
 | Phase | Action |
 |---|---|
 | `%pretrans` | If v2.0.0 monolithic file present AND v2.0.0 RPM was installed, rename to `<path>.rpmsave-v2.0.1` (D-37, preserves operator hand-edits) |
-| `%files` | Always-on `99-copyfail-defense-cf1.conf` (RPM-owned, `%config(noreplace)`); templates under `/usr/share/copyfail-defense/conditional/modprobe/` (RPM-owned, no `%config`) |
+| `%files` | Always-on `99-rfxn-defense-cf1.conf` (RPM-owned, `%config(noreplace)`); templates under `/usr/share/rfxn-defense/conditional/modprobe/` (RPM-owned, no `%config`) |
 | `%post` | Best-effort `rmmod` of cf1 modules only (cf2/rxrpc deferred to %posttrans because we don't yet know whether to apply them); existing LOG_AUTHPRIV trail preserved |
-| `%posttrans` | Run `/usr/libexec/copyfail-defense/detect.sh apply modprobe`. Writes `auto-detect.json`, copies templates → `/etc/modprobe.d/` for non-conflicting cuts, removes any stale conditional files. Does NOT touch `/etc/systemd/system/` (scope is modprobe-only). Run rmmod for cf2/rxrpc if applied. |
-| `%postun` (full erase) | `detect.sh teardown modprobe` removes conditional `/etc/modprobe.d/99-copyfail-defense-{cf2-xfrm,rxrpc}.conf` files; remove `auto-detect.json` if no other subpackage owns it |
+| `%posttrans` | Run `/usr/libexec/rfxn-defense/detect.sh apply modprobe`. Writes `auto-detect.json`, copies templates → `/etc/modprobe.d/` for non-conflicting cuts, removes any stale conditional files. Does NOT touch `/etc/systemd/system/` (scope is modprobe-only). Run rmmod for cf2/rxrpc if applied. |
+| `%postun` (full erase) | `detect.sh teardown modprobe` removes conditional `/etc/modprobe.d/99-rfxn-defense-{cf2-xfrm,rxrpc}.conf` files; remove `auto-detect.json` if no other subpackage owns it |
 
 ### 12.10.2 `-systemd` lifecycle
 
 | Phase | Action |
 |---|---|
 | `%pretrans` | If v2.0.0 monolithic drop-in files present AND v2.0.0 RPM was installed, rename each to `<path>.rpmsave-v2.0.1` (D-37) |
-| `%files` | Always-on `10-copyfail-defense.conf` for all 5 units (RPM-owned, `%config(noreplace)`); templates `12-copyfail-defense-rxrpc-af.conf` and `15-copyfail-defense-userns.conf` under `/usr/share/copyfail-defense/conditional/systemd/` |
+| `%files` | Always-on `10-copyfail-defense.conf` for all 5 units (RPM-owned, `%config(noreplace)`); templates `12-rfxn-defense-rxrpc-af.conf` and `15-rfxn-defense-userns.conf` under `/usr/share/rfxn-defense/conditional/systemd/` |
 | `%post` | If `/run/systemd/system` exists: defer reload to %posttrans so we reload after detect.sh has placed the conditional drop-ins |
-| `%posttrans` | Run `/usr/libexec/copyfail-defense/detect.sh apply systemd`. Copies `12-rxrpc-af.conf` to all 5 unit `.d/` dirs unless AFS detected. Copies `15-userns.conf` to user@/sshd/cron/crond/atd `.d/` unless rootless detected (user@ only). Does NOT touch `/etc/modprobe.d/` (scope is systemd-only). Final `daemon-reload` and `try-reload-or-restart sshd`. |
+| `%posttrans` | Run `/usr/libexec/rfxn-defense/detect.sh apply systemd`. Copies `12-rxrpc-af.conf` to all 5 unit `.d/` dirs unless AFS detected. Copies `15-userns.conf` to user@/sshd/cron/crond/atd `.d/` unless rootless detected (user@ only). Does NOT touch `/etc/modprobe.d/` (scope is systemd-only). Final `daemon-reload` and `try-reload-or-restart sshd`. |
 | `%postun` (full erase) | `detect.sh teardown systemd` removes conditional `12-*.conf` and `15-*.conf` from all five `*.service.d/` dirs; daemon-reload + try-reload sshd; remove `auto-detect.json` if no other subpackage owns it |
 
 ### 12.10.2a Conditional file overwrite policy (operator hand-edits)
@@ -1205,7 +1205,7 @@ with EPERM on the next %posttrans, breaking dnf transactions.
 
 Rev 2 policy: `detect.sh apply <scope>` uses `cmp -s` to compare
 the deployed `/etc/...` file against the
-`/usr/share/copyfail-defense/conditional/<scope>/` template.
+`/usr/share/rfxn-defense/conditional/<scope>/` template.
 
 - If `/etc/...` doesn't exist and the cut should apply: install template.
 - If `/etc/...` exists and is identical to the template: no-op.
@@ -1251,7 +1251,7 @@ loss):
 - Templates may be partially copied to `/etc/...`.
 - `auto-detect.json` may be missing or incomplete.
 
-Recovery: operator runs `/usr/sbin/copyfail-redetect` to re-execute
+Recovery: operator runs `/usr/sbin/rfxn-redetect` to re-execute
 the apply flow. The script is idempotent (D-46), so partial state
 converges to the correct state on next run.
 
@@ -1296,12 +1296,12 @@ v2.0.0). New scenarios:
 | # | Scenario | Test |
 |---|---|---|
 | 19 | Clean host detection | Fresh container; `dnf install copyfail-defense`; assert all 3 modprobe files + 5 unit `10-` + 5 unit `12-rxrpc-af` + 5 unit `15-` present (15 systemd files total, 18 conf files total); `auto-detect.json` schema_version="2", reports no workloads, no suppressions. |
-| 20 | IPsec host detection | Fresh container; pre-stage `/etc/ipsec.conf` with a real `conn home` stanza; `dnf install`; assert `99-copyfail-defense-cf2-xfrm.conf` ABSENT, `99-copyfail-defense-cf1.conf` and `99-copyfail-defense-rxrpc.conf` PRESENT; `auto-detect.json` flags ipsec=present, suppressed.modprobe_cf2_xfrm=true. |
-| 21 | AFS host detection | Pre-stage `/etc/openafs/ThisCell`; install; assert `99-copyfail-defense-rxrpc.conf` ABSENT and all 5 unit `12-copyfail-defense-rxrpc-af.conf` ABSENT (rev 2 / D-30); cf1+cf2-xfrm present; JSON flags afs and suppressed.systemd_rxrpc_af=true. |
-| 22 | Rootless host detection (rev 2: storage-tree fixture per C-1) | Pre-stage `/home/alice/.local/share/containers/storage/overlay-containers/` (the canonical podman rootless fingerprint), useradd alice with UID 1000; `dnf install`; assert `user@.service.d/15-copyfail-defense-userns.conf` ABSENT, the other four units' `15-` files PRESENT, all `10-` and `12-rxrpc-af` files PRESENT. |
-| 22b | cPanel-FP regression (rev 2 / C-1) | Pre-stage 5 regular users + populated `/etc/subuid` BUT NO podman storage tree, NO `/run/user/...` containers, NO `podman.socket`; `dnf install`; assert `user@.service.d/15-copyfail-defense-userns.conf` PRESENT (cut applies on cPanel-shaped host); `auto-detect.json` rootless=false. |
-| 23 | Force-full override | Pre-stage all three conflict signals (IPsec + AFS + rootless storage tree) AND `touch /etc/copyfail/force-full`; install; assert ALL files present (no suppression); JSON `force_full: true`. |
-| 24 | Re-detect helper | Install on clean host; verify all conditional files present; `touch /etc/openafs/ThisCell`; run `copyfail-redetect`; assert `99-copyfail-defense-rxrpc.conf` and all 5 `12-copyfail-defense-rxrpc-af.conf` removed and JSON updated. |
+| 20 | IPsec host detection | Fresh container; pre-stage `/etc/ipsec.conf` with a real `conn home` stanza; `dnf install`; assert `99-rfxn-defense-cf2-xfrm.conf` ABSENT, `99-rfxn-defense-cf1.conf` and `99-rfxn-defense-rxrpc.conf` PRESENT; `auto-detect.json` flags ipsec=present, suppressed.modprobe_cf2_xfrm=true. |
+| 21 | AFS host detection | Pre-stage `/etc/openafs/ThisCell`; install; assert `99-rfxn-defense-rxrpc.conf` ABSENT and all 5 unit `12-rfxn-defense-rxrpc-af.conf` ABSENT (rev 2 / D-30); cf1+cf2-xfrm present; JSON flags afs and suppressed.systemd_rxrpc_af=true. |
+| 22 | Rootless host detection (rev 2: storage-tree fixture per C-1) | Pre-stage `/home/alice/.local/share/containers/storage/overlay-containers/` (the canonical podman rootless fingerprint), useradd alice with UID 1000; `dnf install`; assert `user@.service.d/15-rfxn-defense-userns.conf` ABSENT, the other four units' `15-` files PRESENT, all `10-` and `12-rxrpc-af` files PRESENT. |
+| 22b | cPanel-FP regression (rev 2 / C-1) | Pre-stage 5 regular users + populated `/etc/subuid` BUT NO podman storage tree, NO `/run/user/...` containers, NO `podman.socket`; `dnf install`; assert `user@.service.d/15-rfxn-defense-userns.conf` PRESENT (cut applies on cPanel-shaped host); `auto-detect.json` rootless=false. |
+| 23 | Force-full override | Pre-stage all three conflict signals (IPsec + AFS + rootless storage tree) AND `touch /etc/rfxn-defense/force-full`; install; assert ALL files present (no suppression); JSON `force_full: true`. |
+| 24 | Re-detect helper | Install on clean host; verify all conditional files present; `touch /etc/openafs/ThisCell`; run `rfxn-redetect`; assert `99-rfxn-defense-rxrpc.conf` and all 5 `12-rfxn-defense-rxrpc-af.conf` removed and JSON updated. |
 | 25 | v2.0.0 → v2.0.1 upgrade | Install v2.0.0 (from same repo per D-22 retention); verify monolithic files present; `dnf upgrade` to v2.0.1; assert monolithic files renamed to `.rpmsave-v2.0.1` (rev 2 D-37), split files installed per detection state. |
 
 The existing v2.0.0 upgrade-path test (afalg-defense 1.0.1 →
@@ -1313,7 +1313,7 @@ cPanel-FP regression). **[D-50]**
 
 - `README.md`, replace the "Override paths" section. New section:
   "Auto-detection of conflicting workloads" describing the three
-  detection signals, the JSON report path, the `copyfail-redetect`
+  detection signals, the JSON report path, the `rfxn-redetect`
   helper, the `force-full` sentinel, and the **systemd-drop-in
   override patterns** for operators who need finer control than
   detection provides.
@@ -1372,7 +1372,7 @@ cPanel-FP regression). **[D-50]**
   immutable file. Per reviewer C-7/C-8, this approach is dropped.
   Operators who need to fully prevent detect.sh from re-managing
   a file should use the `force-full` sentinel
-  (`/etc/copyfail/force-full`) and treat detect.sh as a
+  (`/etc/rfxn-defense/force-full`) and treat detect.sh as a
   one-shot-disable lever rather than fighting per-file
   immutability flags. **[D-58]**
 
@@ -1396,15 +1396,15 @@ cPanel-FP regression). **[D-50]**
 
 - **D-27** Detection action is suppress + log + report (not warn-only,
   not fail-install).
-- **D-28** `/etc/copyfail/force-full` sentinel skips detection.
-- **D-29** `/usr/sbin/copyfail-redetect` re-runs detection on demand.
+- **D-28** `/etc/rfxn-defense/force-full` sentinel skips detection.
+- **D-29** `/usr/sbin/rfxn-redetect` re-runs detection on demand.
 - **D-30** `RestrictAddressFamilies=~AF_ALG` stays unconditional
   (no realistic legitimate-userspace consumer). `~AF_RXRPC` becomes
   **conditional** on AFS detection (rev 2 fixup per reviewer C-3:
   AFS userspace tooling, `aklog`, `kinit -A`, `pts`, `vos`
   opens userspace AF_RXRPC sockets to vlserver/ptserver). The
   conditional `~AF_RXRPC` ships in the new
-  `12-copyfail-defense-rxrpc-af.conf` drop-in, gated by the same
+  `12-rfxn-defense-rxrpc-af.conf` drop-in, gated by the same
   AFS signals as the `rxrpc` modprobe blacklist.
 - **D-31** No runtime-state checks (`ip xfrm`, `mount`, `docker info`)
 , flaky in mock and during scriptlets.
@@ -1416,7 +1416,7 @@ cPanel-FP regression). **[D-50]**
   suppresses on rootless detection. sshd/cron/crond/atd always get
   the userns cut.
 - **D-35** Conditional drop-ins ship as templates under
-  `/usr/share/copyfail-defense/conditional/`; `/etc/...` not
+  `/usr/share/rfxn-defense/conditional/`; `/etc/...` not
   RPM-owned. Always-on files stay RPM-owned with `%config(noreplace)`.
 - **D-36** Reject "ship-everything-then-blank" / commented-out
   alternative. Empty `/etc/...` directory is the truthful state.
@@ -1425,8 +1425,8 @@ cPanel-FP regression). **[D-50]**
   reviewer C-4: preserves operator hand-edits). Conditional on file
   presence AND v2.0.0 RPM being installed.
 - **D-38** Detection logic lives in
-  `/usr/libexec/copyfail-defense/detect.sh`; `%posttrans` and
-  `copyfail-redetect` both invoke it via explicit scope arg
+  `/usr/libexec/rfxn-defense/detect.sh`; `%posttrans` and
+  `rfxn-redetect` both invoke it via explicit scope arg
   (per D-56).
 - **D-39** Stopped-but-enabled IPsec daemon counts as detected.
 - **D-40** Rootless container signals (rev 2 fixup per reviewer C-1
@@ -1444,16 +1444,16 @@ cPanel-FP regression). **[D-50]**
   expanded for `12-rxrpc-af`); auditor consumes it; rejects
   unknown schema versions with WARN + structured field
   `posture.auto_detect.schema_unrecognized: true` (D-53).
-- **D-43** `/etc/copyfail/` directory is RPM-owned by meta package;
+- **D-43** `/etc/rfxn-defense/` directory is RPM-owned by meta package;
   sentinel is operator-created.
-- **D-44** `copyfail-redetect` does NOT auto daemon-reload; operator
+- **D-44** `rfxn-redetect` does NOT auto daemon-reload; operator
   decides reload timing.
 - **D-45** Auditor `check_auto_detect_state()`: OK on clean / INFO on
   detected+suppressed / WARN on missing-JSON-but-installed / SKIP on
   auditor-only install.
 - **D-46** `detect.sh apply` is fully idempotent.
 - **D-47** Interrupted `%posttrans` recovery: operator runs
-  `copyfail-redetect`. Auditor reports WARN if JSON missing.
+  `rfxn-redetect`. Auditor reports WARN if JSON missing.
 - **D-48** Mock-build chroots: vanilla state has no workload signals;
   RPMs build with all conditional cuts active by default.
 - **D-49** detect.sh logs to `LOG_AUTHPRIV` matching v2.0.0
@@ -1487,10 +1487,10 @@ cPanel-FP regression). **[D-50]**
 - **D-56** `detect.sh apply <scope>` takes explicit scope arg
   (`modprobe` / `systemd` / `both`); each `%posttrans` passes
   its own scope to avoid orphan files when only one subpackage
-  is installed; `copyfail-redetect` passes `both`.
+  is installed; `rfxn-redetect` passes `both`.
   Reviewer C-6.
 - **D-57** detect.sh uses `cmp -s` against the
-  `/usr/share/copyfail-defense/conditional/` template before
+  `/usr/share/rfxn-defense/conditional/` template before
   overwriting `/etc/...` conditional files. If the deployed
   file differs (operator hand-edited), log WARN and skip the
   overwrite; suppression-removal still proceeds regardless of
@@ -1559,7 +1559,7 @@ for the deferral list.
 - **Race between detect.sh and concurrent dnf?** RPM serializes
   scriptlets, only one transaction at a time. `auto-detect.json`
   atomic-writes via tmpfile + `mv -f`. No race.
-- **Operator runs `copyfail-redetect` while a `%posttrans` from a
+- **Operator runs `rfxn-redetect` while a `%posttrans` from a
   separate dnf is in progress?** Both invoke the same detect.sh; the
   second one waits-or-overwrites depending on filesystem timing. The
   atomic `mv -f` means the JSON is always either the old or new
@@ -1583,7 +1583,7 @@ for the deferral list.
 3. **detect.sh location: `/usr/libexec/` (FHS) vs
    `/usr/share/`?** **Acked-deferred for v2.0.2 (reviewer L-2,
    `%{_libexecdir}` macro use).** Current plan keeps the path
-   string `/usr/libexec/copyfail-defense/detect.sh` hard-coded
+   string `/usr/libexec/rfxn-defense/detect.sh` hard-coded
    per FHS. v2.0.2 may convert to the macro form for cleanliness.
 
 **Rev 2 fixup challenge re-pass (after C-1..C-8 + M-1..M-12 fold-in):**
@@ -1620,7 +1620,7 @@ for the deferral list.
   `.rpmsave-v2.0.1` files at their leisure. RPM doesn't track
   these files. Acceptable.
 - **Rev 2 cmp-and-skip on conditional files vs new edge cases.**
-  An operator who hand-edits `/etc/modprobe.d/99-copyfail-defense-cf2-xfrm.conf`
+  An operator who hand-edits `/etc/modprobe.d/99-rfxn-defense-cf2-xfrm.conf`
   in rev 2 gets their edits preserved. If detect.sh later
   decides to *suppress* that cut (operator added IPsec
   post-install), the file is removed (suppression wins over
@@ -1674,13 +1674,13 @@ new subpackage. **[D-59]**
   cf1; different entry path. Covered by a new `-modprobe` blacklist
   for `rds`/`rds_tcp`/`rds_rdma`, a new `RestrictAddressFamilies=~AF_RDS`
   entry in the always-on `10-copyfail-defense.conf` systemd drop-in,
-  a new auditd key `copyfail_afrds`, and an opt-in
+  a new auditd key `rfxn_afrds`, and an opt-in
   `kernel.io_uring_disabled=2` sysctl.
 - **ssh-keysign-pwn** (CVE-2026-46333), `__ptrace_may_access()` race
   + `pidfd_getfd` on exiting SUID binary. FD-theft / privilege
   confusion class, not page-cache overwrite. Covered by a new
   `kernel.yama.ptrace_scope=2` sysctl entry and a new auditd key
-  `copyfail_pidfd_getfd`.
+  `rfxn_pidfd_getfd`.
 - **EL7**, build target restored. Mock chroot uses
   `vault.centos.org/centos/7.9.2009/{os,updates,extras}/x86_64/` +
   EPEL archive at `archives.fedoraproject.org/pub/archive/epel/7/x86_64/`.
@@ -1691,10 +1691,10 @@ new subpackage. **[D-59]**
 
 | Layer        | File                                               | Action |
 |---           |---                                                 |---     |
-| `-modprobe`  | `/etc/modprobe.d/99-copyfail-defense-rds.conf`     | `install rds /bin/true` for `rds`, `rds_tcp`, `rds_rdma`; conditional (suppressed by detect.sh on RDS-workload hosts) **[D-60]** |
+| `-modprobe`  | `/etc/modprobe.d/99-rfxn-defense-rds.conf`     | `install rds /bin/true` for `rds`, `rds_tcp`, `rds_rdma`; conditional (suppressed by detect.sh on RDS-workload hosts) **[D-60]** |
 | `-systemd`   | extends always-on `10-copyfail-defense.conf` on the 5 tenant units with `~AF_RDS` in the `RestrictAddressFamilies=` list (joined with existing `~AF_ALG ~AF_KEY ~AF_RXRPC`) | unconditional **[D-61]** |
-| `-sysctl`    | extends `/etc/sysctl.d/99-copyfail-defense-userns.conf` with `kernel.yama.ptrace_scope = 2` (active) and `# kernel.io_uring_disabled = 2` (commented out, opt-in) | active line unconditional; opt-in line operator-uncomments **[D-62]** |
-| `-audit`     | extends `/etc/audit/rules.d/99-copyfail-defense.rules` with two new rules: `socket(a0=21)` keyed `copyfail_afrds`, and `pidfd_getfd` (numeric syscall 438) keyed `copyfail_pidfd_getfd` | unconditional **[D-63]** |
+| `-sysctl`    | extends `/etc/sysctl.d/99-rfxn-defense-userns.conf` with `kernel.yama.ptrace_scope = 2` (active) and `# kernel.io_uring_disabled = 2` (commented out, opt-in) | active line unconditional; opt-in line operator-uncomments **[D-62]** |
+| `-audit`     | extends `/etc/audit/rules.d/99-rfxn-defense.rules` with two new rules: `socket(a0=21)` keyed `rfxn_afrds`, and `pidfd_getfd` (numeric syscall 438) keyed `rfxn_pidfd_getfd` | unconditional **[D-63]** |
 
 ### 13.3 RDS workload detection
 
@@ -1708,7 +1708,7 @@ IPsec / AFS / rootless detectors. Signals (any of):
 - `/etc/rdma/rdma.conf` present (RDMA fabric for Lustre / GPFS / HPC)
 
 When detected, `apply_modprobe` suppresses
-`99-copyfail-defense-rds.conf`. The auto-detect.json `detected` map
+`99-rfxn-defense-rds.conf`. The auto-detect.json `detected` map
 gains a `rds_workload` entry; the `suppressed` map gains
 `modprobe_rds`. **Schema version remains 2**, keys are additive,
 existing SIEM consumers ignore them gracefully. **[D-64]**
@@ -1722,10 +1722,10 @@ specific tenant unit legitimately needs AF_RDS. **[D-65]**
 
 ### 13.4 Auditor extensions
 
-`copyfail-local-check` gains four new checks:
+`rfxn-local-check` gains four new checks:
 
 - `check_rds_modprobe` (MITIGATION), verifies
-  `99-copyfail-defense-rds.conf` presence and content (or
+  `99-rfxn-defense-rds.conf` presence and content (or
   acknowledges suppression via `auto-detect.json`)
 - `check_af_rds_restrict` (MITIGATION), verifies
   `10-copyfail-defense.conf` contains `~AF_RDS` in
@@ -1735,7 +1735,7 @@ specific tenant unit legitimately needs AF_RDS. **[D-65]**
   at 0 (only WARNs if the `-sysctl` package is installed, per
   D-45 pattern)
 - `check_pidfd_getfd_auditd_rule` (DETECTION), verifies the
-  `copyfail_pidfd_getfd` key exists in the loaded audit ruleset
+  `rfxn_pidfd_getfd` key exists in the loaded audit ruleset
 
 The per-class surface matrix gains two rows: `pintheft` and
 `keysign-pwn`. JSON `posture.bug_classes_covered` includes them when
@@ -1758,7 +1758,7 @@ operator explicitly accepts a deferred EL7 build. **[D-67]**
 - **D-59** v2.1.0 adds bug-class coverage via new mitigation rungs
   on the existing six subpackages; no rename, no new subpackage.
 - **D-60** PinTheft modprobe cut is a separate conf file
-  (`99-copyfail-defense-rds.conf`), conditional via detect.sh
+  (`99-rfxn-defense-rds.conf`), conditional via detect.sh
   parallels the cf2-xfrm and rxrpc conditional-file pattern from
   v2.0.1 (D-32).
 - **D-61** PinTheft systemd cut extends the existing always-on
@@ -1769,12 +1769,12 @@ operator explicitly accepts a deferred EL7 build. **[D-67]**
 - **D-62** ssh-keysign-pwn sysctl (`kernel.yama.ptrace_scope=2`)
   AND PinTheft secondary sysctl (`kernel.io_uring_disabled=2`,
   commented out) both extend the existing
-  `99-copyfail-defense-userns.conf` file. The file is renamed
+  `99-rfxn-defense-userns.conf` file. The file is renamed
   semantically (still keeps its filename for `%config(noreplace)`
   continuity), its scope broadens from "userns lockdown" to
   "kernel hardening for the cf-class + adjacent classes."
 - **D-63** Two new auditd rules added to the existing
-  `99-copyfail-defense.rules` file; no new audit rule file.
+  `99-rfxn-defense.rules` file; no new audit rule file.
   Existing SIEM `ausearch -k <key>` queries unaffected.
 - **D-64** auto-detect.json `schema_version` stays at "2". New keys
   (`rds_workload`, `modprobe_rds`) are additive. v2.0.x auditors
@@ -1792,3 +1792,116 @@ operator explicitly accepts a deferred EL7 build. **[D-67]**
   native rpmbuild fallback documented in CHANGELOG. Release
   proceeds with EL7 deferred only on explicit operator
   acceptance.
+
+## 14. v3.0.0 architecture, rename to rfxn-defense + responsive defense layer
+
+### 14.1 Reframe
+
+v3.0.0 renames the package family from `copyfail-defense` to
+`rfxn-defense` and reframes the project as a **responsive defense layer
+for Linux**: one that ships kernel-LPE mitigations as 0days land,
+closing the delta between public CVE disclosure and the kernel/software
+vendor patch set landing on hosts. Coverage scope is unchanged from
+v2.1.1 (cf1, cf2/DF-ESP, DF-RxRPC, Fragnesia, PinTheft, ssh-keysign-pwn,
+DirtyDecrypt cross-stamp). The rename + auto-update cadence make the
+pitch operational rather than aspirational.
+
+### 14.2 Rename mechanics
+
+Double Obsoletes/Provides chain: every subpackage carries both
+`copyfail-defense-<sub>` (2.0.x-2.1.x lineage) and `afalg-defense-<sub>`
+(1.0.x lineage, where it existed: shim + auditor only). Compat retained
+through the 3.0.x release line; dropped in 3.1.0.
+
+Path migration via `%pretrans` (meta):
+  - `/var/lib/copyfail-defense/` → `/var/lib/rfxn-defense/`
+  - `/etc/copyfail/` → `/etc/rfxn-defense/`
+
+`mv -n` (no-clobber) keeps the migration idempotent. Both-paths-present
+case (partial prior migration) logs WARN to journald and preserves the
+new path for operator inspection.
+
+Audit-key rename (5 keys, lockstep across audit rules + auditor +
+test-repo): `copyfail_{afalg,afkey,afrxrpc,afrds,pidfd_getfd}` →
+`rfxn_*`. SIEM operators with `ausearch -k` queries on legacy keys
+MUST update on deploy of v3.0.0. The existing `%posttrans audit` runs
+`augenrules --load`, which atomically replaces the kernel rule set via
+`auditctl -R`; no auditd restart required.
+
+GPG key: `RPM-GPG-KEY-rfxn` ships alongside the retained
+`RPM-GPG-KEY-copyfail`. Same RSA-4096 key bytes (fingerprint
+`6001 1CDC EA2F F52D 975A FDEE 6D30 F32C D5E8 0F80`), different
+filenames. The v3.0.0 `.repo` file lists both `gpgkey=` URLs so dnf
+accepts either. Allows hosts upgrading from 2.x with `copyfail.repo`
+still installed to keep verifying without rebuilding their repo config.
+
+### 14.3 Auto-update cadence (`rfxn-defense-autoupdate`)
+
+New subpackage hard-Required by meta. Two files ship:
+
+  - `/etc/cron.d/rfxn-defense-update`: cadence `15 */4 * * * root
+    /usr/libexec/rfxn-defense/update.sh`. The `:15` offset avoids the
+    on-the-hour mirror-thundering-herd; the 4-hourly tick guarantees
+    new releases land within 4 hours wall-time per host.
+  - `/usr/libexec/rfxn-defense/update.sh`: wrapper script. EL7-EL10
+    compatible (dnf-or-yum auto-detect, /usr/bin/flock, /usr/bin/timeout
+    from coreutils). flock -n single-runner (skip-on-lock-held). Random
+    jitter 0-600s before work (10-minute spread across the fleet).
+    600s total timeout cap; rc=124 distinguishes timeout from dnf
+    failure in journald. Targeted: `--disablerepo='*' --enablerepo='rfxn
+    -defense' upgrade 'rfxn-defense*'`. All output via `logger -t
+    rfxn-defense-update` to journald.
+
+Opt-out: touch `/etc/rfxn-defense/auto-update.disabled`. The wrapper
+short-circuits before invoking dnf, leaving cron itself unmodified.
+Dry-run for tests: `CFD_AUTOUPDATE_DRY_RUN=1` env var.
+
+Hard-Required (not Recommended) by meta because delivery cadence is
+core to the responsive-defense-layer pitch. `--setopt=install_weak_deps=false`
+must not be able to silently drop the delivery mechanism. Operators who
+want to remove the cron entirely use `rpm -e --nodeps rfxn-defense-autoupdate`
+(meta hard-requires it, so a plain `dnf remove rfxn-defense-autoupdate`
+would also remove meta — by design).
+
+### 14.4 GitHub repo rename + gh-pages redirect
+
+Phase 12 of the v3.0.0 build renames `rfxn/copyfail` →
+`rfxn/rfxn-defense` via `gh repo rename`. GitHub auto-redirects the
+old URL for ~6 months; old clones with `origin = github.com/rfxn/copyfail`
+keep working via redirect. Local remote URL update is a one-liner:
+`git remote set-url origin https://github.com/rfxn/rfxn-defense`.
+
+The gh-pages branch travels with the repo, so the published dnf
+repository at `https://rfxn.github.io/copyfail/` 301-redirects to
+`https://rfxn.github.io/rfxn-defense/` automatically. Existing hosts
+with `copyfail.repo` installed continue to resolve through the redirect
+with no operator action; v3.0.0 `.repo` files use the new canonical URL.
+
+### 14.5 v3.0.0 decision index
+
+- **D-68** Hard-Require autoupdate from meta (not Recommends).
+  Delivery is core to the reframe; `--setopt=install_weak_deps=false`
+  cannot silently drop it. Opt-out is the touch-file, not the rpm
+  remove.
+- **D-69** Double Obsoletes/Provides chain (copyfail-defense +
+  afalg-defense). Drops in 3.1.0; both retained through 3.0.x.
+- **D-70** `%pretrans` (meta) migration uses `mv -n`; both-paths
+  -present case logs WARN to journald and preserves the new path.
+  Operator inspects and removes the legacy path manually if desired.
+- **D-71** Audit-key rename is hard-break (not aliased). The cost
+  of carrying both `copyfail_*` and `rfxn_*` keys in auditd rules
+  for the 3.0.x line outweighs the SIEM migration cost; CHANGELOG
+  + README document the mapping with a `sed -i` recipe.
+- **D-72** `RPM-GPG-KEY-copyfail` retained as a sibling through
+  3.0.x. Same key bytes; only the filename differs. Dual `gpgkey=`
+  URL in `.repo` so legacy clients verify either file.
+- **D-73** GitHub repo rename happens POST gh-pages-push + GH-release
+  (Phase 12 order), not pre. Avoids any window where the live URL is
+  broken between dnf clients refreshing.
+- **D-74** DirtyDecrypt (CVE-2026-31635) cross-stamp confirms coverage
+  by existing rxrpc cuts. No new spec coverage; entry primitive is
+  AF_RXRPC same as DF-RxRPC.
+- **D-75** Operator-facing env var names retained: `CFD_FORCE_*`
+  and `CFD_SUPPRESS_*` keep the legacy prefix through 3.0.x to avoid
+  documentation churn. Renaming to `RFXN_*` deferred to 3.1.0 with
+  a deprecation cycle.

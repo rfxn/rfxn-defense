@@ -1,35 +1,65 @@
-# copyfail-defense, shipping state
+# rfxn-defense, shipping state
 
 Snapshot: **2026-05-23**
 
+rfxn-defense is a responsive defense layer for Linux — it ships
+kernel-LPE mitigations as 0days land, closing the delta between public
+CVE disclosure and the kernel/software vendor patch set landing on
+hosts. Each release pairs a disclosed bug class with the on-disk
+primitives (modprobe blacklists, systemd `RestrictAddressFamilies` /
+`RestrictNamespaces`, sysctl drop-ins, auditd tripwires, LD_PRELOAD
+entry-point shim) that cut the attack path without waiting for a
+kernel reboot or upstream patch. A 4-hourly auto-update cron (v3.0.0+)
+keeps hosts current — install once, stay covered.
+
 ## Latest release
 
+- **v3.0.0** (2026-05-23) — project rename `copyfail-defense` ->
+  `rfxn-defense` reframing the package family as a kernel-LPE umbrella.
+  Coverage unchanged from v2.1.1; rename mechanics, the responsive
+  -defense-layer pitch, 4-hourly auto-update cron, audit-key rename,
+  GPG key sibling, and DirtyDecrypt (CVE-2026-31635) cross-stamp under
+  existing rxrpc cuts. Double Obsoletes/Provides chain (copyfail-defense
+  + afalg-defense) handles upgrades from either lineage.
+  - NEW subpackage `rfxn-defense-autoupdate` hard-Required by meta:
+    `/etc/cron.d/rfxn-defense-update` (4-hour cadence, 0-600s jitter,
+    flock + 600s timeout, targeted `dnf upgrade rfxn-defense*`,
+    journald-logged, opt-out via `/etc/rfxn-defense/auto-update.disabled`).
+  - Audit-key rename `copyfail_*` -> `rfxn_*`; SIEM operators must
+    update `ausearch -k` queries on deploy.
+  - Repo file `copyfail.repo` -> `rfxn-defense.repo`; new GPG key
+    `RPM-GPG-KEY-rfxn` ships alongside the retained `RPM-GPG-KEY-copyfail`
+    (same key bytes, dual gpgkey URLs in `.repo`).
+  - gh-pages branch travels with the GitHub repo rename; legacy
+    `https://rfxn.github.io/copyfail/` 301-redirects to
+    `https://rfxn.github.io/rfxn-defense/`.
+- Tag: <https://github.com/rfxn/rfxn-defense/releases/tag/v3.0.0>
 - **v2.1.1**, promotes `kernel.io_uring_disabled=2` from operator
   opt-in (commented) to auto-applied with layered suppression. New
-  `/etc/sysctl.d/99-copyfail-defense-iouring.conf` drop-in (separate
+  `/etc/sysctl.d/99-rfxn-defense-iouring.conf` drop-in (separate
   from userns file). detect.sh adds `detect_io_uring_workload()` with
   three runtime signals (liburing.so in `/proc/*/maps`, known consumer
   binaries, io_uring-named systemd units); kernel < 6.6 gate
   auto-suppresses with `reason=kernel_too_old`. Operator env knobs:
   `CFD_FORCE_IOURING_DISABLE=1` / `CFD_SUPPRESS_IOURING_DISABLE=1`.
   Signed RPMs for EL7 / EL8 / EL9 / EL10.
-- Tag: <https://github.com/rfxn/copyfail/releases/tag/v2.1.1>
+- Tag: <https://github.com/rfxn/rfxn-defense/releases/tag/v2.1.1>
 - **v2.1.0**, adds PinTheft (RDS zerocopy + io_uring) and
   ssh-keysign-pwn (CVE-2026-46333; ptrace exit-race + `pidfd_getfd`)
   coverage; new `-modprobe` cut for `rds`/`rds_tcp`/`rds_rdma`; new
   `RestrictAddressFamilies=~AF_RDS` in the always-on systemd
   10-* drop-in; new `kernel.yama.ptrace_scope=2` sysctl entry; opt-in
   `kernel.io_uring_disabled=2` line (commented out by default); two
-  new auditd tripwire rules (`copyfail_afrds`, `copyfail_pidfd_getfd`).
+  new auditd tripwire rules (`rfxn_afrds`, `rfxn_pidfd_getfd`).
   Build matrix expands to **EL7 / EL8 / EL9 / EL10**, x86_64.
   Signed RPMs.
-- Tag: <https://github.com/rfxn/copyfail/releases/tag/v2.1.0>
+- Tag: <https://github.com/rfxn/rfxn-defense/releases/tag/v2.1.0>
 - v2.0.2 RPMs retained in repo trees for upgrade path
-  (`dnf upgrade copyfail-defense`).
+  (`dnf upgrade rfxn-defense`).
 - v2.0.1 RPMs retained for one cycle.
 - v2.0.0 RPMs retained for one cycle.
 - v1.0.1 RPMs retained for one cycle (clean
-  `dnf upgrade afalg-defense -> copyfail-defense` path).
+  `dnf upgrade afalg-defense -> rfxn-defense` path).
 - v1.0.0 was rolled back (was unsigned baseline; deleted from GH releases).
 
 ELS = {7, 8, 9, 10}. EL7 RPMs are built against `vault.centos.org`
@@ -42,41 +72,41 @@ mock canary or native fallback for each release.
 
 | Surface | URL |
 |---|---|
-| Source repo (main) | <https://github.com/rfxn/copyfail> |
-| GH Pages site | <https://rfxn.github.io/copyfail/> |
-| DNF repo file | <https://rfxn.github.io/copyfail/copyfail.repo> |
-| Public signing key | <https://rfxn.github.io/copyfail/RPM-GPG-KEY-copyfail> |
-| Per-EL RPM trees | `https://rfxn.github.io/copyfail/repo/{8,9,10}/x86_64/` |
+| Source repo (main) | <https://github.com/rfxn/rfxn-defense> |
+| GH Pages site | <https://rfxn.github.io/rfxn-defense/> |
+| DNF repo file | <https://rfxn.github.io/rfxn-defense/copyfail.repo> |
+| Public signing key | <https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-copyfail> |
+| Per-EL RPM trees | `https://rfxn.github.io/rfxn-defense/repo/{8,9,10}/x86_64/` |
 | Detached repodata sigs | `…/repo/{8,9,10}/x86_64/repodata/repomd.xml.asc` |
 | Deep-dive article | <https://www.rfxn.com/research/copyfail-cve-2026-31431> |
 
 ## Operator one-liner
 
 ```sh
-sudo curl -sSL https://rfxn.github.io/copyfail/copyfail.repo \
+sudo curl -sSL https://rfxn.github.io/rfxn-defense/copyfail.repo \
   -o /etc/yum.repos.d/copyfail.repo
-sudo dnf install -y copyfail-defense
-sudo /usr/sbin/copyfail-shim-enable
+sudo dnf install -y rfxn-defense
+sudo /usr/sbin/rfxn-shim-enable
 ```
 
 Upgrade from `afalg-defense` v1.0.x:
 
 ```sh
-sudo dnf upgrade -y copyfail-defense
+sudo dnf upgrade -y rfxn-defense
 ```
 
 ## RPM family
 
 | Package | Arch | Path |
 |---|---|---|
-| `copyfail-defense` (meta) | x86_64 | requires shim + modprobe + systemd + auditor |
-| `copyfail-defense-shim` | x86_64 | `/usr/lib64/no-afalg.so`, `/usr/sbin/copyfail-shim-{enable,disable}` |
-| `copyfail-defense-modprobe` | noarch | `/etc/modprobe.d/99-copyfail-defense-cf1.conf` (always-on) + cf2-xfrm + rxrpc (conditional via detect.sh) |
-| `copyfail-defense-systemd` | noarch | `/etc/systemd/system/{user@,sshd,cron,crond,atd}.service.d/10-copyfail-defense.conf` (always-on) + rxrpc-af (12-*, conditional) + userns (15-*, conditional) |
-| `copyfail-defense-auditor` | noarch | `/usr/sbin/copyfail-local-check` |
+| `rfxn-defense` (meta) | x86_64 | requires shim + modprobe + systemd + auditor |
+| `rfxn-defense-shim` | x86_64 | `/usr/lib64/no-afalg.so`, `/usr/sbin/copyfail-shim-{enable,disable}` |
+| `rfxn-defense-modprobe` | noarch | `/etc/modprobe.d/99-rfxn-defense-cf1.conf` (always-on) + cf2-xfrm + rxrpc (conditional via detect.sh) |
+| `rfxn-defense-systemd` | noarch | `/etc/systemd/system/{user@,sshd,cron,crond,atd}.service.d/10-rfxn-defense.conf` (always-on) + rxrpc-af (12-*, conditional) + userns (15-*, conditional) |
+| `rfxn-defense-auditor` | noarch | `/usr/sbin/rfxn-local-check` |
 
 `Epoch: 1` introduced in 2.0.0; `Obsoletes:` / `Provides: afalg-defense*`
-metadata retained through 2.0.x release line. `/usr/sbin/copyfail-redetect`
+metadata retained through 2.0.x release line. `/usr/sbin/rfxn-redetect`
 added in 2.0.1 (ships in meta package).
 
 Per-EL binary RPMs are independently compiled against each
@@ -101,9 +131,9 @@ Do **not** cross-install across ELs.
 | `-sysctl` (`user.max_user_namespaces=0`) *(v2.0.2)* | – | ✅ | ✅ | – | ✅ | – | – |
 | `-sysctl` (`kernel.yama.ptrace_scope=2`) *(v2.1.0)* | – | – | – | – | – | – | ✅ |
 | `-sysctl` (`kernel.io_uring_disabled=2`) *(v2.1.1, auto-detect)* | – | – | – | – | – | ✅ ⁴ | – |
-| `-audit` (`copyfail_afalg/afkey/afrxrpc`) *(v2.0.2)* | tripwire | tripwire | tripwire | tripwire | tripwire | – | – |
-| `-audit` (`copyfail_afrds`) *(v2.1.0)* | – | – | – | – | – | tripwire | – |
-| `-audit` (`copyfail_pidfd_getfd`) *(v2.1.0)* | – | – | – | – | – | – | tripwire |
+| `-audit` (`rfxn_afalg/afkey/afrxrpc`) *(v2.0.2)* | tripwire | tripwire | tripwire | tripwire | tripwire | – | – |
+| `-audit` (`rfxn_afrds`) *(v2.1.0)* | – | – | – | – | – | tripwire | – |
+| `-audit` (`rfxn_pidfd_getfd`) *(v2.1.0)* | – | – | – | – | – | – | tripwire |
 | Kernel patch | `a664bf3d` | `f4c50a4034` | `f4c50a4034` | (none upstream) | netdev only | (none upstream) | (CVE-2026-46333; none upstream) |
 
 ## Signing
@@ -125,15 +155,15 @@ uid:          Copyfail Project Signing Key <proj@rfxn.com>
 
 ## Build / package conventions
 
-- Spec: `packaging/copyfail-defense.spec`
+- Spec: `packaging/rfxn-defense.spec`
 - Helper scripts: `packaging/copyfail-shim-{enable,disable}`
 - Active dropins source: `packaging/copyfail-modprobe-{cf1,cf2-xfrm,rxrpc}.conf`, `packaging/copyfail-systemd-dropin{,-rxrpc-af,-userns}.conf`, `packaging/copyfail-sysctl-{userns,iouring}.conf`
 - Container-runtime example dropin source: `packaging/copyfail-systemd-dropin-containers.conf`
-- Workload detection helper: `packaging/copyfail-defense-detect.sh`
-- Operator re-detect helper: `packaging/copyfail-redetect`
+- Workload detection helper: `packaging/rfxn-defense-detect.sh`
+- Operator re-detect helper: `packaging/rfxn-redetect`
 - `.repo` source: `packaging/copyfail.repo`
 - Public key source: `packaging/RPM-GPG-KEY-copyfail`
-- Build invocation: `rpmbuild --define "_topdir /home/copyfail/rpmbuild" -ba packaging/copyfail-defense.spec`
+- Build invocation: `rpmbuild --define "_topdir /home/copyfail/rpmbuild" -ba packaging/rfxn-defense.spec`
 - Per-EL: `mock -r centos-stream+epel-{8,9,10}-x86_64 --rebuild SRPMS/...`
 - Sign: `rpmsign --addsign <RPM>` (uses `/root/.rpmmacros`)
 - Repo metadata: `createrepo_c --general-compress-type=gz <dir>/`
@@ -154,7 +184,7 @@ REPO_URL=... bash packaging/test-repo.sh   # override source
 
 ## Auditor
 
-`/usr/sbin/copyfail-local-check`, 26 checks across ENV/KERNEL/MITIGATION/
+`/usr/sbin/rfxn-local-check`, 26 checks across ENV/KERNEL/MITIGATION/
 HARDENING/DETECTION categories, stdlib-only Python 3.6+. Five-class
 scoring:
 
@@ -176,13 +206,13 @@ booleans). Exit codes unchanged from v1.0.1.
 
 v2.0.1 adds `posture.auto_detect` with `available`, `suppressed_modprobe`,
 and `suppressed_systemd` fields. Available only when
-`/var/lib/copyfail-defense/auto-detect.json` schema version 2 is present.
+`/var/lib/rfxn-defense/auto-detect.json` schema version 2 is present.
 
 ## Auto-detection (v2.0.1+)
 
-`/usr/libexec/copyfail-defense/detect.sh` runs during `%posttrans` for
+`/usr/libexec/rfxn-defense/detect.sh` runs during `%posttrans` for
 modprobe and systemd subpackages. It writes
-`/var/lib/copyfail-defense/auto-detect.json` (schema version 2) and
+`/var/lib/rfxn-defense/auto-detect.json` (schema version 2) and
 conditionally installs or suppresses drop files.
 
 | Signal | Source | Suppresses |
@@ -191,17 +221,17 @@ conditionally installs or suppresses drop files.
 | AFS | kafs module; afs mount | rxrpc modprobe conf + rxrpc-af systemd drop-in |
 | rootless containers | storage-tree: `~/.local/share/containers/storage` | userns systemd drop-in (user@ only) |
 
-`/usr/sbin/copyfail-redetect`, operator-callable wrapper; re-runs
+`/usr/sbin/rfxn-redetect`, operator-callable wrapper; re-runs
 `detect.sh apply both`. Required after enabling a workload post-install.
 Does NOT call `systemctl daemon-reload`, operator decides reload timing.
 
-`/etc/copyfail/force-full`, sentinel file; when present, detection is
+`/etc/rfxn-defense/force-full`, sentinel file; when present, detection is
 skipped and all mitigations applied unconditionally.
 
 ## Safety properties enforced by the spec
 
-- `%post` does **not** touch `/etc/ld.so.preload`, operator must run `copyfail-shim-enable`.
-- `copyfail-shim-enable` smoke-tests the .so against `/bin/true` before writing the preload file.
+- `%post` does **not** touch `/etc/ld.so.preload`, operator must run `rfxn-shim-enable`.
+- `rfxn-shim-enable` smoke-tests the .so against `/bin/true` before writing the preload file.
 - `%preun shim` on full erase scrubs `/etc/ld.so.preload` *before* RPM removes the .so (otherwise every dyn-linked binary fails to dlopen the missing preload, brick).
 - `%posttrans shim` warns if the file ever ends up dangling.
 - `%post modprobe` does best-effort `rmmod` of cf1 modules + LOG_AUTHPRIV trail; failures silenced.
@@ -231,7 +261,7 @@ posture without re-implementing verdict logic.
 
 ## Cross-repo state
 
-- `rfxn/copyfail` main `<TBD-after-v2.0.1-commit>`, copyfail-defense v2.0.1 hotfix
+- `rfxn/copyfail` main `<TBD-after-v2.0.1-commit>`, rfxn-defense v2.0.1 hotfix
 - `rfxn/copyfail` gh-pages `<TBD>`, index.html refresh pending Phase 8
 - `rfxn/copyfail` v2.0.0 tag, signed release (previous)
 - `rfxn/copyfail` v2.0.1 tag, pending Phase 9 (manual)

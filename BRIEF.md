@@ -1,6 +1,16 @@
-# CVE-2026-31431 "Copy Fail", Handoff Brief
+# CVE-2026-31431 "Copy Fail" + cf-class umbrella, Handoff Brief
 
-**Status as of 2026-04-30:** Public disclosure 2026-04-29. No vendor kpatch shipped yet. Mitigation posture is defense-in-depth with multiple userspace layers until kernel patch + reboot.
+**Updated 2026-05-23 for v3.0.0 rename to rfxn-defense.** Original
+handoff covered the cf1 disclosure of 2026-04-29; this brief now also
+covers the v3.0.0 reframe of the project as a **responsive defense layer for Linux** — one that ships kernel-LPE mitigations as 0days land, closing the delta between public CVE disclosure and the kernel / software vendor patch set landing on hosts. The bug-class detail
+below is preserved as institutional knowledge; the rfxn-defense
+package family is the operator-facing surface that ships the
+primitives discussed.
+
+**Status as of 2026-04-30 (original):** Public disclosure of cf1
+2026-04-29. No vendor kpatch shipped yet at that snapshot. Mitigation
+posture is defense-in-depth with multiple userspace layers until
+kernel patch + reboot.
 
 ## What it is
 
@@ -161,10 +171,10 @@ Mitigation in copyfail-defense (v2.1.0+):
   - `copyfail-defense-systemd` `RestrictAddressFamilies=~AF_RDS` on the
     five always-on tenant units (user@/sshd/cron/crond/atd) via the
     10-* drop-in
-  - `copyfail-defense-audit` rule `copyfail_afrds` on
+  - `copyfail-defense-audit` rule `rfxn_afrds` on
     `socket(AF_RDS=21)` by auid>=1000
   - `copyfail-defense-sysctl` sets `kernel.io_uring_disabled=2` in a
-    new `/etc/sysctl.d/99-copyfail-defense-iouring.conf` drop-in
+    new `/etc/sysctl.d/99-rfxn-defense-iouring.conf` drop-in
     (v2.1.1, auto-applied; see below for suppression conditions)
 
 **v2.1.1 (2026-05-22):** io_uring auto-detect promotion, secondary
@@ -174,7 +184,7 @@ other primitive in the package (all auto-applied with detect.sh
 carve-outs). The detector fires on liburing.so in any /proc/*/maps,
 known io_uring consumer binaries, and io_uring-named systemd units.
 Kernel <6.6 hosts are auto-suppressed with reason kernel_too_old.
-Operator escape hatch: `CFD_FORCE_IOURING_DISABLE=1 copyfail-redetect`.
+Operator escape hatch: `CFD_FORCE_IOURING_DISABLE=1 rfxn-redetect`.
 
 ## ssh-keysign-pwn (CVE-2026-46333)
 
@@ -194,11 +204,11 @@ those hosts (later kernel-ml installs, EL9-shaped backports).
 Mitigation in copyfail-defense (v2.1.0+):
   - `copyfail-defense-sysctl` sets `kernel.yama.ptrace_scope = 2`
     (closes the `pidfd_getfd` path without breaking root debugging)
-  - `copyfail-defense-audit` rule `copyfail_pidfd_getfd` (numeric
+  - `copyfail-defense-audit` rule `rfxn_pidfd_getfd` (numeric
     syscall 438; PoC needs 100-2000 spawns per success, fires
     loudly in audit log)
 
-The auditor (`copyfail-local-check`) gains `check_ptrace_scope`
+The auditor (`rfxn-local-check`) gains `check_ptrace_scope`
 (HARDENING category) and `check_pidfd_getfd_auditd_rule` (DETECTION
 category) and reports `keysign-pwn` in the per-class surface
 matrix.
