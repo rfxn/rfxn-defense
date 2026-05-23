@@ -40,9 +40,12 @@ and the kernel/software vendor patch set.
   coverage by existing rxrpc cuts; no new primitive needed. Escalation
   path documented if future variant surfaces non-AF_RXRPC entry.
 - **GitHub repo rename**, `rfxn/copyfail` → `rfxn/rfxn-defense`.
-  GitHub auto-redirects old URL ~6 months. gh-pages branch travels;
-  `https://rfxn.github.io/copyfail/` 301-redirects to
-  `https://rfxn.github.io/rfxn-defense/`.
+  GitHub auto-redirects the github.com web URL + git remote ~6 months.
+  gh-pages branch travels with the rename. **Known limitation:** the
+  legacy `https://rfxn.github.io/copyfail/` URL returns HTTP 404
+  (GitHub Pages does not issue HTTP redirects for renamed repos);
+  v2.x hosts need manual migration. See the "Known issue" section
+  below for the operator recipe.
 - **Docs**, README + STATE + SPEC + BRIEF + FOLLOWUPS rewritten
   with the responsive-defense-layer reframe. SPEC.md gains §14
   (v3.0.0 architecture + decision index D-68..D-75).

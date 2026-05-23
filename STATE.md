@@ -30,9 +30,12 @@ keeps hosts current — install once, stay covered.
   - Repo file `copyfail.repo` -> `rfxn-defense.repo`; new GPG key
     `RPM-GPG-KEY-rfxn` ships alongside the retained `RPM-GPG-KEY-copyfail`
     (same key bytes, dual gpgkey URLs in `.repo`).
-  - gh-pages branch travels with the GitHub repo rename; legacy
-    `https://rfxn.github.io/copyfail/` 301-redirects to
-    `https://rfxn.github.io/rfxn-defense/`.
+  - gh-pages branch travels with the GitHub repo rename. **Known
+    limitation:** legacy `https://rfxn.github.io/copyfail/` returns
+    HTTP 404 (GitHub Pages does not issue HTTP redirects for renamed
+    repos). v2.x hosts with `copyfail.repo` in `/etc/yum.repos.d/`
+    require manual migration; see FOLLOWUPS.md "Known issue: legacy
+    /copyfail/ URL after v3.0.0 repo rename" for the operator recipe.
 - Tag: <https://github.com/rfxn/rfxn-defense/releases/tag/v3.0.0>
 - **v2.1.1**, promotes `kernel.io_uring_disabled=2` from operator
   opt-in (commented) to auto-applied with layered suppression. New

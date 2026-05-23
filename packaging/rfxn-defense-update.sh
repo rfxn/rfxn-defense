@@ -44,15 +44,8 @@ if ! flock -n 9; then
     exit 0
 fi
 
-# Jitter 0..JITTER_MAX_SECONDS to spread mirror load on a fleet.
-# awk's srand() with no argument seeds from epoch-seconds on every
-# implementation; time-synced hosts firing on the same cron tick would
-# all receive identical jitter values (sentinel S-1 caught this in
-# v3.0.0 review). srand() takes a NUMERIC seed only -- string seeds get
-# truncated at the first non-digit, so we must combine epoch + PID +
-# hostname-cksum into a single integer. For a 1000-host fleet this
-# gives ~1.7 hosts/sec average load on the gh-pages mirror during the
-# 10-minute jitter window.
+# Jitter 0..JITTER_MAX_SECONDS to spread mirror load. Seed mixes
+# hostname so time-synced hosts diverge on the same cron tick.
 host_cksum=$(hostname | cksum | cut -d' ' -f1)
 seed_num=$(( $(date +%s) * 1000000 + $$ * 10000 + host_cksum % 10000 ))
 jitter=$(awk -v seed="$seed_num" \

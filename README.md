@@ -121,7 +121,6 @@ minimal hosts without auditd skip the pull-in):
 > ```
 >
 > New installs should use the new URL in the install section above.
-| `rfxn-defense-audit` *(v2.0.2, soft-dep)* | auditd tripwire rules for `socket(AF_ALG/AF_KEY/AF_RXRPC)` syscalls |
 
 Auditor only (no `LD_PRELOAD`, for hot infrastructure):
 
@@ -384,7 +383,7 @@ deploying every rung this package ships.
 | Package | Arch | Contents |
 |---|---|---|
 | `rfxn-defense` | x86_64 | meta, pulls all six below (`-audit` as Recommends) |
-| `rfxn-defense-shim` | x86_64 | `/usr/lib64/no-afalg.so` + `copyfail-shim-{enable,disable}` |
+| `rfxn-defense-shim` | x86_64 | `/usr/lib64/no-afalg.so` + `rfxn-shim-{enable,disable}` |
 | `rfxn-defense-modprobe` | noarch | `/etc/modprobe.d/99-rfxn-defense-{cf1,cf2-xfrm,rxrpc}.conf` (cf-class entry-point cuts) |
 | `rfxn-defense-systemd` | noarch | drop-ins for `user@`/`sshd`/`cron`/`crond`/`atd` + container-runtime examples |
 | `rfxn-defense-sysctl` *(v2.0.2+)* | noarch | `/etc/sysctl.d/99-rfxn-defense-userns.conf` (host-wide userns disable, suppressed on userns-consumer hosts); `/etc/sysctl.d/99-rfxn-defense-iouring.conf` *(v2.1.1)* (io_uring disable, suppressed on io_uring-workload/rootless/Flatpak/kernel<6.6 hosts) |
