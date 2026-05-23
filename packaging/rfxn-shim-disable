@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# copyfail-shim-disable
+# rfxn-shim-disable
 #   Remove /usr/lib64/no-afalg.so from /etc/ld.so.preload.
 #
 # Idempotent. Leaves other entries in ld.so.preload untouched.
@@ -10,8 +10,8 @@ set -eu
 SHIM=/usr/lib64/no-afalg.so
 PRELOAD=/etc/ld.so.preload
 
-err()  { printf 'copyfail-shim-disable: %s\n' "$*" >&2; }
-info() { printf 'copyfail-shim-disable: %s\n' "$*"; }
+err()  { printf 'rfxn-shim-disable: %s\n' "$*" >&2; }
+info() { printf 'rfxn-shim-disable: %s\n' "$*"; }
 
 if [ "$(id -u)" -ne 0 ]; then
     err "must run as root"

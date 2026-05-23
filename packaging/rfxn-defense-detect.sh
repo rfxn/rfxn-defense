@@ -1,30 +1,30 @@
 #!/bin/bash
 #
-# copyfail-defense-detect.sh
+# rfxn-defense-detect.sh
 #   Detect IPsec / AFS / rootless-container workloads on the host
-#   and decide which copyfail-defense conditional drop-ins to apply.
+#   and decide which rfxn-defense conditional drop-ins to apply.
 #
-# Invoked from %posttrans of copyfail-defense-modprobe and
-# copyfail-defense-systemd, and from /usr/sbin/copyfail-redetect.
+# Invoked from %posttrans of rfxn-defense-modprobe and
+# rfxn-defense-systemd, and from /usr/sbin/rfxn-redetect.
 #
 # Modes:
 #   apply  - decide, mutate /etc/, write auto-detect.json
 set -euo pipefail
 
-STATE_DIR="/var/lib/copyfail-defense"
+STATE_DIR="/var/lib/rfxn-defense"
 STATE_FILE="${STATE_DIR}/auto-detect.json"
-TEMPLATE_DIR="/usr/share/copyfail-defense/conditional"
+TEMPLATE_DIR="/usr/share/rfxn-defense/conditional"
 ETC_MODPROBE="/etc/modprobe.d"
 ETC_SYSTEMD="/etc/systemd/system"
 ETC_SYSCTL="/etc/sysctl.d"
-FORCE_FULL="/etc/copyfail/force-full"
-TOOL_VERSION="2.1.1"
+FORCE_FULL="/etc/rfxn-defense/force-full"
+TOOL_VERSION="3.0.0"
 
 # Active tenant units (must match SPEC §4.2 and v2.0.0 CF_CLASS_TENANT_UNITS)
 TENANT_UNITS=("user@" "sshd" "cron" "crond" "atd")
 
 # Logging tag matches v2.0.0 spec line 369 convention
-LOGGER_TAG="copyfail-defense-detect"
+LOGGER_TAG="rfxn-defense-detect"
 
 log() {
     logger -t "${LOGGER_TAG}" -p authpriv.info "$*" 2>/dev/null || true
@@ -179,7 +179,7 @@ USERNS_CONSUMERS_SIGNALS=()
 # sandboxer), and desktop browsers (Chromium/Chrome/Firefox use
 # unprivileged userns for their renderer sandbox on Linux).
 #
-# Triggers suppression of /etc/sysctl.d/99-copyfail-defense-userns.conf
+# Triggers suppression of /etc/sysctl.d/99-rfxn-defense-userns.conf
 # only - the per-unit systemd RestrictNamespaces=~user drop-in is
 # unaffected (it scopes to the five tenant units).
 detect_userns_consumers() {
@@ -363,13 +363,13 @@ check_force_full() {
         return 0
     fi
     if [ -h "${FORCE_FULL}" ] && [ ! -e "${FORCE_FULL}" ]; then
-        printf 'copyfail-defense: WARN: %s is a symlink to a missing target; force-full sentinel IGNORED\n' \
+        printf 'rfxn-defense: WARN: %s is a symlink to a missing target; force-full sentinel IGNORED\n' \
             "${FORCE_FULL}" \
           | tee /dev/stderr \
           | logger -t "${LOGGER_TAG}" -p authpriv.warning 2>/dev/null \
           || true
     elif [ -e "${FORCE_FULL}" ]; then
-        printf 'copyfail-defense: WARN: %s exists but is not a regular file; force-full sentinel IGNORED\n' \
+        printf 'rfxn-defense: WARN: %s exists but is not a regular file; force-full sentinel IGNORED\n' \
             "${FORCE_FULL}" \
           | tee /dev/stderr \
           | logger -t "${LOGGER_TAG}" -p authpriv.warning 2>/dev/null \
@@ -479,7 +479,7 @@ cmp_and_install() {
     fi
     # Different content - operator hand-edit. Skip overwrite.
     # tee to stderr so dnf surfaces the warning (D-55).
-    printf 'copyfail-defense: WARN: %s diverged from template; preserving operator edits (cmp-and-skip per D-57)\n' \
+    printf 'rfxn-defense: WARN: %s diverged from template; preserving operator edits (cmp-and-skip per D-57)\n' \
         "${dst}" | tee /dev/stderr | logger -t "${LOGGER_TAG}" -p authpriv.warning 2>/dev/null || true
     return 0
 }
@@ -487,8 +487,8 @@ cmp_and_install() {
 apply_modprobe() {
     local src dst
     # cf2-xfrm: cmp-and-install or remove
-    src="${TEMPLATE_DIR}/modprobe/99-copyfail-defense-cf2-xfrm.conf"
-    dst="${ETC_MODPROBE}/99-copyfail-defense-cf2-xfrm.conf"
+    src="${TEMPLATE_DIR}/modprobe/99-rfxn-defense-cf2-xfrm.conf"
+    dst="${ETC_MODPROBE}/99-rfxn-defense-cf2-xfrm.conf"
     if [ "${SUPPRESS_MODPROBE_CF2_XFRM}" = "true" ]; then
         rm -f "${dst}"
         log "modprobe cf2-xfrm: suppressed (IPsec detected)"
@@ -496,8 +496,8 @@ apply_modprobe() {
         cmp_and_install "${src}" "${dst}" "modprobe cf2-xfrm"
     fi
     # rxrpc: cmp-and-install or remove
-    src="${TEMPLATE_DIR}/modprobe/99-copyfail-defense-rxrpc.conf"
-    dst="${ETC_MODPROBE}/99-copyfail-defense-rxrpc.conf"
+    src="${TEMPLATE_DIR}/modprobe/99-rfxn-defense-rxrpc.conf"
+    dst="${ETC_MODPROBE}/99-rfxn-defense-rxrpc.conf"
     if [ "${SUPPRESS_MODPROBE_RXRPC}" = "true" ]; then
         rm -f "${dst}"
         log "modprobe rxrpc: suppressed (AFS detected)"
@@ -510,8 +510,8 @@ apply_modprobe() {
 
 apply_rds_modprobe() {
     local src dst
-    src="${TEMPLATE_DIR}/modprobe/99-copyfail-defense-rds.conf"
-    dst="${ETC_MODPROBE}/99-copyfail-defense-rds.conf"
+    src="${TEMPLATE_DIR}/modprobe/99-rfxn-defense-rds.conf"
+    dst="${ETC_MODPROBE}/99-rfxn-defense-rds.conf"
     if [ ! -f "${src}" ]; then
         # Subpackage -modprobe not installed; nothing to do.
         return 0
@@ -528,10 +528,10 @@ apply_rds_modprobe() {
 apply_systemd() {
     local src dst unit suppress
     # 12-* AF_RXRPC drop-in (suppressed on AFS hosts; applies to all 5 units)
-    src="${TEMPLATE_DIR}/systemd/12-copyfail-defense-rxrpc-af.conf"
+    src="${TEMPLATE_DIR}/systemd/12-rfxn-defense-rxrpc-af.conf"
     if [ -f "${src}" ]; then
         for unit in "${TENANT_UNITS[@]}"; do
-            dst="${ETC_SYSTEMD}/${unit}.service.d/12-copyfail-defense-rxrpc-af.conf"
+            dst="${ETC_SYSTEMD}/${unit}.service.d/12-rfxn-defense-rxrpc-af.conf"
             if [ "${SUPPRESS_SYSTEMD_RXRPC_AF}" = "true" ]; then
                 rm -f "${dst}"
                 log "systemd rxrpc-af ${unit}: suppressed (AFS detected)"
@@ -541,10 +541,10 @@ apply_systemd() {
         done
     fi
     # 15-* userns drop-in (suppressed on user@ only when rootless detected)
-    src="${TEMPLATE_DIR}/systemd/15-copyfail-defense-userns.conf"
+    src="${TEMPLATE_DIR}/systemd/15-rfxn-defense-userns.conf"
     if [ -f "${src}" ]; then
         for unit in "${TENANT_UNITS[@]}"; do
-            dst="${ETC_SYSTEMD}/${unit}.service.d/15-copyfail-defense-userns.conf"
+            dst="${ETC_SYSTEMD}/${unit}.service.d/15-rfxn-defense-userns.conf"
             suppress="false"
             if [ "${unit}" = "user@" ] && \
                [ "${SUPPRESS_SYSTEMD_USERNS_USER_AT}" = "true" ]; then
@@ -562,8 +562,8 @@ apply_systemd() {
 
 apply_sysctl() {
     local src dst
-    src="${TEMPLATE_DIR}/sysctl/99-copyfail-defense-userns.conf"
-    dst="${ETC_SYSCTL}/99-copyfail-defense-userns.conf"
+    src="${TEMPLATE_DIR}/sysctl/99-rfxn-defense-userns.conf"
+    dst="${ETC_SYSCTL}/99-rfxn-defense-userns.conf"
     if [ ! -f "${src}" ]; then
         # Subpackage -sysctl not installed; nothing to do.
         return 0
@@ -580,8 +580,8 @@ apply_sysctl() {
 
 apply_sysctl_iouring() {
     local src dst
-    src="${TEMPLATE_DIR}/sysctl/99-copyfail-defense-iouring.conf"
-    dst="${ETC_SYSCTL}/99-copyfail-defense-iouring.conf"
+    src="${TEMPLATE_DIR}/sysctl/99-rfxn-defense-iouring.conf"
+    dst="${ETC_SYSCTL}/99-rfxn-defense-iouring.conf"
     if [ ! -f "${src}" ]; then
         # Template missing (older subpackage, race). Nothing to do.
         return 0
@@ -596,36 +596,36 @@ apply_sysctl_iouring() {
 }
 
 teardown_sysctl_iouring() {
-    rm -f "${ETC_SYSCTL}/99-copyfail-defense-iouring.conf"
-    log "sysctl iouring teardown: removed /etc/sysctl.d/99-copyfail-defense-iouring.conf"
+    rm -f "${ETC_SYSCTL}/99-rfxn-defense-iouring.conf"
+    log "sysctl iouring teardown: removed /etc/sysctl.d/99-rfxn-defense-iouring.conf"
     return 0
 }
 
 teardown_modprobe() {
-    rm -f "${ETC_MODPROBE}/99-copyfail-defense-cf2-xfrm.conf"
-    rm -f "${ETC_MODPROBE}/99-copyfail-defense-rxrpc.conf"
-    rm -f "${ETC_MODPROBE}/99-copyfail-defense-rds.conf"
+    rm -f "${ETC_MODPROBE}/99-rfxn-defense-cf2-xfrm.conf"
+    rm -f "${ETC_MODPROBE}/99-rfxn-defense-rxrpc.conf"
+    rm -f "${ETC_MODPROBE}/99-rfxn-defense-rds.conf"
     log "modprobe teardown: removed conditional /etc/modprobe.d/* files"
 }
 
 teardown_rds_modprobe() {
-    rm -f "${ETC_MODPROBE}/99-copyfail-defense-rds.conf"
-    log "modprobe rds teardown: removed /etc/modprobe.d/99-copyfail-defense-rds.conf"
+    rm -f "${ETC_MODPROBE}/99-rfxn-defense-rds.conf"
+    log "modprobe rds teardown: removed /etc/modprobe.d/99-rfxn-defense-rds.conf"
     return 0
 }
 
 teardown_sysctl() {
-    rm -f "${ETC_SYSCTL}/99-copyfail-defense-userns.conf"
+    rm -f "${ETC_SYSCTL}/99-rfxn-defense-userns.conf"
     teardown_sysctl_iouring
-    log "sysctl teardown: removed /etc/sysctl.d/99-copyfail-defense-{userns,iouring}.conf"
+    log "sysctl teardown: removed /etc/sysctl.d/99-rfxn-defense-{userns,iouring}.conf"
     return 0
 }
 
 teardown_systemd() {
     local unit
     for unit in "${TENANT_UNITS[@]}"; do
-        rm -f "${ETC_SYSTEMD}/${unit}.service.d/12-copyfail-defense-rxrpc-af.conf"
-        rm -f "${ETC_SYSTEMD}/${unit}.service.d/15-copyfail-defense-userns.conf"
+        rm -f "${ETC_SYSTEMD}/${unit}.service.d/12-rfxn-defense-rxrpc-af.conf"
+        rm -f "${ETC_SYSTEMD}/${unit}.service.d/15-rfxn-defense-userns.conf"
     done
     log "systemd teardown: removed conditional /etc/systemd/system/*.d/12-* and 15-*"
 }
@@ -645,17 +645,17 @@ write_state_json() {
     # JSON should show applied=false in that case, even though
     # suppressed=false.
     local sysctl_template_present="false"
-    if [ -f "${TEMPLATE_DIR}/sysctl/99-copyfail-defense-userns.conf" ]; then
+    if [ -f "${TEMPLATE_DIR}/sysctl/99-rfxn-defense-userns.conf" ]; then
         sysctl_template_present="true"
     fi
 
     local modprobe_rds_template_present="false"
-    if [ -f "${TEMPLATE_DIR}/modprobe/99-copyfail-defense-rds.conf" ]; then
+    if [ -f "${TEMPLATE_DIR}/modprobe/99-rfxn-defense-rds.conf" ]; then
         modprobe_rds_template_present="true"
     fi
 
     local sysctl_iouring_template_present="false"
-    if [ -f "${TEMPLATE_DIR}/sysctl/99-copyfail-defense-iouring.conf" ]; then
+    if [ -f "${TEMPLATE_DIR}/sysctl/99-rfxn-defense-iouring.conf" ]; then
         sysctl_iouring_template_present="true"
     fi
 
@@ -741,7 +741,7 @@ sysctl_iouring_template_present = b("CFD_SYSCTL_IOURING_TEMPLATE_PRESENT")
 
 doc = {
     "schema_version": "2",
-    "tool": "copyfail-defense-detect",
+    "tool": "rfxn-defense-detect",
     "tool_version": os.environ["CFD_TOOL_VERSION"],
     "timestamp": int(os.environ["CFD_TIMESTAMP"]),
     "hostname": os.environ["CFD_HOSTNAME"],

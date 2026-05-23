@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# copyfail-shim-enable
+# rfxn-shim-enable
 #   Idempotently wire /usr/lib64/no-afalg.so into /etc/ld.so.preload.
 #
 # Safety: ld.so.preload is a foot-cannon. A broken/wrong-arch .so referenced
@@ -19,8 +19,8 @@ set -eu
 SHIM=/usr/lib64/no-afalg.so
 PRELOAD=/etc/ld.so.preload
 
-err()  { printf 'copyfail-shim-enable: %s\n'  "$*" >&2; }
-info() { printf 'copyfail-shim-enable: %s\n'  "$*"; }
+err()  { printf 'rfxn-shim-enable: %s\n'  "$*" >&2; }
+info() { printf 'rfxn-shim-enable: %s\n'  "$*"; }
 
 if [ "$(id -u)" -ne 0 ]; then
     err "must run as root"
@@ -28,7 +28,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 if [ ! -f "$SHIM" ]; then
-    err "$SHIM not present - reinstall copyfail-shim package"
+    err "$SHIM not present - reinstall rfxn-shim package"
     exit 3
 fi
 

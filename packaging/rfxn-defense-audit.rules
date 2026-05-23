@@ -1,5 +1,5 @@
-## /etc/audit/rules.d/99-copyfail-defense.rules
-## Owned by copyfail-defense-audit; do not hand-edit.
+## /etc/audit/rules.d/99-rfxn-defense.rules
+## Owned by rfxn-defense-audit; do not hand-edit.
 ##
 ## Tripwire rules detecting userspace prerequisites of the Copy Fail
 ## bug class (cf1 / CVE-2026-31431, cf2 / CVE-2026-43284, Dirty Frag-RxRPC

@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 #
 ##
-# copyfail-local-check.py
+# rfxn-local-check.py
 #             (C) 2026, rfxn.com - forged in prod - <ryan@rfxn.com>
 # This program may be freely redistributed under the terms of the GNU GPL v2
 ##
 #
 """
-copyfail-local-check.py - comprehensive Copy Fail bug-class auditor.
+rfxn-local-check.py - comprehensive Copy Fail bug-class auditor.
 
 Covers the full cf-class:
   cf1 (CVE-2026-31431) - algif_aead AEAD scratch-write
@@ -26,13 +26,13 @@ SAFE BY DESIGN
   - Trigger probe targets a freshly-created sentinel, not /usr/bin/su.
 
 USAGE
-  ./copyfail-local-check.py                       # human-readable
-  ./copyfail-local-check.py --json                # SIEM ingestion (+ posture)
-  ./copyfail-local-check.py --verbose             # show passing checks
-  ./copyfail-local-check.py --skip-trigger        # skip AF_ALG probe
-  ./copyfail-local-check.py --skip-hardening      # skip suid/page-cache audit
-  ./copyfail-local-check.py --category KERNEL,MITIGATION
-  ./copyfail-local-check.py --emit-remediation    # bash-script of fixes
+  ./rfxn-local-check.py                       # human-readable
+  ./rfxn-local-check.py --json                # SIEM ingestion (+ posture)
+  ./rfxn-local-check.py --verbose             # show passing checks
+  ./rfxn-local-check.py --skip-trigger        # skip AF_ALG probe
+  ./rfxn-local-check.py --skip-hardening      # skip suid/page-cache audit
+  ./rfxn-local-check.py --category KERNEL,MITIGATION
+  ./rfxn-local-check.py --emit-remediation    # bash-script of fixes
 
 EXIT CODES
   0 - clean (no vulnerability, mitigations adequate)
@@ -65,7 +65,7 @@ import tempfile
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-__version__ = "2.1.1"
+__version__ = "3.0.0"
 
 # --- splice(2) wrapper ----------------------------------------------------
 # os.splice was added in Python 3.10. EL7/8/9 default Pythons are 3.6/3.6/3.9
@@ -143,7 +143,7 @@ PRIV_CONFIG_FILES = [
 ]
 PRIV_CONFIG_ROOT_FILES = ["/etc/shadow", "/etc/gshadow"]
 
-AUTO_DETECT_PATH = "/var/lib/copyfail-defense/auto-detect.json"
+AUTO_DETECT_PATH = "/var/lib/rfxn-defense/auto-detect.json"
 AUTO_DETECT_SCHEMA_VERSION = "2"
 
 # v2.0.0: cf-class kernel-module entry-points the modprobe subpackage
@@ -426,7 +426,7 @@ def _build_keyblob(authkey, enckey):
 
 def trigger_probe():
     """rootsecdev-style sentinel-file trigger; safe by design."""
-    tmp = tempfile.mkdtemp(prefix="copyfail-")
+    tmp = tempfile.mkdtemp(prefix="rfxn-defense-")
     target = os.path.join(tmp, "sentinel.bin")
     try:
         sentinel = (b"COPYFAIL-SENTINEL-UNCORRUPTED!!\n" * (PAGE // 32))[:PAGE]
@@ -1329,7 +1329,7 @@ def check_xfrm_modules():
                          ", ".join(loaded)),
                      details=states,
                      remediation="rmmod {}".format(" ".join(loaded)) +
-                                 " (and add to /etc/modprobe.d/99-copyfail-defense.conf "
+                                 " (and add to /etc/modprobe.d/99-rfxn-defense.conf "
                                  "to prevent reload).")
     if modular:
         return Check("xfrm_modules", "KERNEL", Status.INFO,
@@ -1362,7 +1362,7 @@ def check_rxrpc_module():
                      "(dirtyfrag-RxRPC reachable)",
                      details=details,
                      remediation="rmmod rxrpc && add to "
-                                 "/etc/modprobe.d/99-copyfail-defense.conf")
+                                 "/etc/modprobe.d/99-rfxn-defense.conf")
     if state == "modular":
         return Check("rxrpc_module", "KERNEL", Status.INFO,
                      "rxrpc loadable but not loaded "
@@ -1401,8 +1401,8 @@ def check_modprobe_blacklist_extended():
                      len(missing), ", ".join(missing)),
                  details={"covered": sorted(covered),
                           "missing": missing},
-                 remediation="Install copyfail-defense-modprobe, OR write "
-                             "/etc/modprobe.d/99-copyfail-defense.conf with "
+                 remediation="Install rfxn-defense-modprobe, OR write "
+                             "/etc/modprobe.d/99-rfxn-defense.conf with "
                              "'install <mod> /bin/false' for each missing.")
 
 def _rpm_q_installed(pkg):
@@ -1421,7 +1421,7 @@ def _rpm_q_installed(pkg):
 
 def check_auto_detect_state():
     """v2.0.1: report auto-detection result from
-    /var/lib/copyfail-defense/auto-detect.json (written by detect.sh).
+    /var/lib/rfxn-defense/auto-detect.json (written by detect.sh).
 
     OK if no workloads detected (or force_full set).
     INFO if workloads detected and conditional mitigations suppressed
@@ -1434,8 +1434,8 @@ def check_auto_detect_state():
     Rev 2 fixup: SKIP test uses rpm -q (D-45 / M-9) not file-existence;
     schema rejection emits posture.auto_detect.schema_unrecognized=true
     (D-53 / M-3)."""
-    have_modprobe = _rpm_q_installed("copyfail-defense-modprobe")
-    have_systemd = _rpm_q_installed("copyfail-defense-systemd")
+    have_modprobe = _rpm_q_installed("rfxn-defense-modprobe")
+    have_systemd = _rpm_q_installed("rfxn-defense-systemd")
 
     if not (have_modprobe or have_systemd):
         return Check("auto_detect_state", "MITIGATION", Status.SKIP,
@@ -1447,11 +1447,11 @@ def check_auto_detect_state():
     except FileNotFoundError:
         return Check("auto_detect_state", "MITIGATION", Status.WARN,
                      "auto-detect.json missing; %posttrans likely failed",
-                     remediation="Run: /usr/sbin/copyfail-redetect")
+                     remediation="Run: /usr/sbin/rfxn-redetect")
     except (json.JSONDecodeError, OSError) as e:
         return Check("auto_detect_state", "MITIGATION", Status.WARN,
                      "auto-detect.json unreadable: {}".format(e),
-                     remediation="Run: /usr/sbin/copyfail-redetect")
+                     remediation="Run: /usr/sbin/rfxn-redetect")
 
     # json.load() succeeds for any valid JSON value: list, null, string,
     # number. Only a top-level object exposes .get(). Reject everything
@@ -1465,7 +1465,7 @@ def check_auto_detect_state():
                          "type": type(data).__name__,
                          "schema_unrecognized": True,
                      },
-                     remediation="Run: /usr/sbin/copyfail-redetect")
+                     remediation="Run: /usr/sbin/rfxn-redetect")
 
     schema = data.get("schema_version")
     if schema != AUTO_DETECT_SCHEMA_VERSION:
@@ -1524,7 +1524,7 @@ def check_auto_detect_state():
 def check_rds_modprobe():
     """v2.1.0 MITIGATION: AF_RDS / rds.ko blacklist for the pintheft class.
 
-    Decision matrix (drop-in 99-copyfail-defense-rds.conf):
+    Decision matrix (drop-in 99-rfxn-defense-rds.conf):
       suppressed.modprobe_rds=true  -> INFO (Oracle/RDS workload detected)
       file present + not suppressed -> OK
       file absent + -modprobe       -> FAIL (subpackage installed, drop
@@ -1532,7 +1532,7 @@ def check_rds_modprobe():
       file absent + no -modprobe    -> SKIP (auditor-only install)
     Missing suppressed.modprobe_rds key is treated as false (operators
     who upgraded RPMs before %posttrans re-ran)."""
-    drop_path = "/etc/modprobe.d/99-copyfail-defense-rds.conf"
+    drop_path = "/etc/modprobe.d/99-rfxn-defense-rds.conf"
     drop_present = os.path.isfile(drop_path)
 
     suppressed_rds = False
@@ -1557,12 +1557,12 @@ def check_rds_modprobe():
                      "AF_RDS modprobe drop-in present: {}".format(drop_path),
                      details={"path": drop_path})
 
-    if _rpm_q_installed("copyfail-defense-modprobe"):
+    if _rpm_q_installed("rfxn-defense-modprobe"):
         return Check("rds_modprobe", "MITIGATION", Status.FAIL,
                      "AF_RDS modprobe drop-in missing despite -modprobe "
                      "subpackage installed (scriptlet likely failed)",
                      details={"path": drop_path},
-                     remediation="Run: /usr/sbin/copyfail-redetect ; verify "
+                     remediation="Run: /usr/sbin/rfxn-redetect ; verify "
                                  "{} exists and contains 'install rds "
                                  "/bin/false'".format(drop_path))
 
@@ -1585,7 +1585,7 @@ def check_af_rds_restrict():
         text = out.decode("utf-8", errors="replace")
         source = "systemctl cat sshd.service"
     else:
-        dropin = "/etc/systemd/system/sshd.service.d/10-copyfail-defense.conf"
+        dropin = "/etc/systemd/system/sshd.service.d/10-rfxn-defense.conf"
         fallback = read_text_safe(dropin) or ""
         if fallback:
             text = fallback
@@ -1594,7 +1594,7 @@ def check_af_rds_restrict():
     if source is None:
         return Check("af_rds_restrict", "MITIGATION", Status.SKIP,
                      "sshd.service unavailable via systemctl and no "
-                     "copyfail drop-in on disk")
+                     "rfxn-defense drop-in on disk")
 
     if raf_re.search(text):
         return Check("af_rds_restrict", "MITIGATION", Status.OK,
@@ -1605,9 +1605,9 @@ def check_af_rds_restrict():
                  "sshd.service does not restrict AF_RDS (pintheft "
                  "primitive reachable inside tenant sessions)",
                  details={"source": source},
-                 remediation="Install copyfail-defense-systemd, OR add to "
+                 remediation="Install rfxn-defense-systemd, OR add to "
                              "/etc/systemd/system/sshd.service.d/"
-                             "10-copyfail-defense.conf: [Service] "
+                             "10-rfxn-defense.conf: [Service] "
                              "RestrictAddressFamilies=~AF_RDS")
 
 def _unit_namespaces_blocked(rn_value):
@@ -1680,16 +1680,16 @@ def check_systemd_restrict_namespaces():
                      "partial coverage: {} protected, {} missing".format(
                          len(findings_ok), len(findings_missing)),
                      details=details,
-                     remediation="Install copyfail-defense-systemd, OR add "
+                     remediation="Install rfxn-defense-systemd, OR add "
                                  "drop-ins under /etc/systemd/system/<unit>"
-                                 ".service.d/10-copyfail-defense.conf with "
+                                 ".service.d/10-rfxn-defense.conf with "
                                  "RestrictNamespaces=~user ~net")
     if findings_missing:
         return Check("systemd_restrict_namespaces", "MITIGATION", Status.WARN,
                      "no tenant unit blocks user+net namespaces "
                      "(cf2 / dirtyfrag-ESP unshare prerequisite reachable)",
                      details=details,
-                     remediation="dnf install copyfail-defense-systemd, OR "
+                     remediation="dnf install rfxn-defense-systemd, OR "
                                  "add drop-ins manually.")
     return Check("systemd_restrict_namespaces", "MITIGATION", Status.SKIP,
                  "no tenant units found in this systemd instance",
@@ -1802,14 +1802,14 @@ def check_ptrace_scope():
                      details={"value": v},
                      remediation="sysctl -w kernel.yama.ptrace_scope=2 ; "
                                  "ensure /etc/sysctl.d/"
-                                 "99-copyfail-defense-userns.conf is loaded")
+                                 "99-rfxn-defense-userns.conf is loaded")
     return Check("ptrace_scope", "HARDENING", Status.FAIL,
                  "kernel.yama.ptrace_scope={} (unrestricted; keysign-pwn "
                  "agent reach unblocked)".format(v),
                  details={"value": v},
                  remediation="sysctl -w kernel.yama.ptrace_scope=2 ; "
                              "ensure /etc/sysctl.d/"
-                             "99-copyfail-defense-userns.conf is loaded")
+                             "99-rfxn-defense-userns.conf is loaded")
 
 def check_io_uring_disabled():
     """v2.1.1 MITIGATION: PinTheft secondary mitigation reporter.
@@ -1819,7 +1819,7 @@ def check_io_uring_disabled():
     kernel >= 6.6. Suppressed elsewhere (rootless, userns consumers,
     io_uring workload signals, kernel too old).
     """
-    raw = read_text_safe("/var/lib/copyfail-defense/auto-detect.json")
+    raw = read_text_safe("/var/lib/rfxn-defense/auto-detect.json")
     try:
         detect_state = json.loads(raw) if raw else {}
     except (json.JSONDecodeError, TypeError):
@@ -1861,11 +1861,11 @@ def check_io_uring_disabled():
     if suppressed is False:
         return Check("io_uring_disabled", "MITIGATION", Status.FAIL,
                      "io_uring_disabled=0 but auto-detect chose to apply "
-                     "(reason={}); /etc/sysctl.d/99-copyfail-defense-iouring.conf "
+                     "(reason={}); /etc/sysctl.d/99-rfxn-defense-iouring.conf "
                      "missing or unreadable".format(reason),
                      details={"value": v, "detect_reason": reason},
-                     remediation="sysctl -p /etc/sysctl.d/99-copyfail-defense-iouring.conf "
-                                 "; run copyfail-redetect")
+                     remediation="sysctl -p /etc/sysctl.d/99-rfxn-defense-iouring.conf "
+                                 "; run rfxn-redetect")
     # suppressed is None, older detect.sh or no install.
     return Check("io_uring_disabled", "MITIGATION", Status.INFO,
                  "io_uring_disabled=0; detect.sh state unavailable",
@@ -2002,7 +2002,7 @@ def check_auditd_rules_extended():
         if m:
             keys_found.add(m.group(1))
     # cf-class audit keys. Names align with what --emit-remediation
-    # writes to /etc/audit/rules.d/copyfail.rules. Operators may run
+    # writes to /etc/audit/rules.d/rfxn-defense.rules. Operators may run
     # different keys; we report on absence of OUR canonical set, not
     # on absence of any related rule.
     cf_keys = ["afalg_attempt", "cf_userns", "cf_addkey", "cf_xfrm_nl",
@@ -2550,7 +2550,7 @@ def emit_remediation_script(results, category_filter_active=False):
         "#!/bin/bash",
         "# Auto-generated remediation suggestions for the Copy Fail",
         "# bug class (cf1 / cf2 / Dirty Frag).",
-        "# rfxn.com - forged in prod - github.com/rfxn/copyfail",
+        "# rfxn.com - forged in prod - github.com/rfxn/rfxn-defense",
         "# Hostname: {}    Kernel: {}".format(
             os.uname().nodename, os.uname().release),
         "# Verdict:  {}".format(posture["verdict"]),
@@ -2585,17 +2585,17 @@ def emit_remediation_script(results, category_filter_active=False):
     lines += [
         "# === Canonical commands (review and uncomment to apply) =====",
         "#",
-        "# # FAST PATH: install the copyfail-defense umbrella package",
+        "# # FAST PATH: install the rfxn-defense umbrella package",
         "# # (covers everything below):",
-        "# curl -sSL https://rfxn.github.io/copyfail/copyfail.repo \\",
-        "#   | sudo tee /etc/yum.repos.d/copyfail.repo",
-        "# sudo dnf install -y copyfail-defense",
-        "# sudo /usr/sbin/copyfail-shim-enable",
+        "# curl -sSL https://rfxn.github.io/rfxn-defense/rfxn-defense.repo \\",
+        "#   | sudo tee /etc/yum.repos.d/rfxn-defense.repo",
+        "# sudo dnf install -y rfxn-defense",
+        "# sudo /usr/sbin/rfxn-shim-enable",
         "#",
         "# # MANUAL PATH (if you can't install the package):",
         "#",
         "# # 1. cf-class modprobe blacklist (cf1 + cf2 + Dirty Frag):",
-        "# sudo tee /etc/modprobe.d/99-copyfail-defense.conf >/dev/null <<'EOF'",
+        "# sudo tee /etc/modprobe.d/99-rfxn-defense.conf >/dev/null <<'EOF'",
         "# install algif_aead   /bin/false",
         "# install authenc      /bin/false",
         "# install authencesn   /bin/false",
@@ -2623,7 +2623,7 @@ def emit_remediation_script(results, category_filter_active=False):
         "# # 2. systemd cf-class drop-ins (tenant units):",
         "# for u in user@ sshd cron crond atd; do",
         "#     sudo install -d /etc/systemd/system/${u}.service.d",
-        "#     sudo tee /etc/systemd/system/${u}.service.d/10-copyfail-defense.conf \\",
+        "#     sudo tee /etc/systemd/system/${u}.service.d/10-rfxn-defense.conf \\",
         "#         >/dev/null <<EOF",
         "# [Service]",
         "# RestrictAddressFamilies=~AF_ALG ~AF_RXRPC",
@@ -2636,7 +2636,7 @@ def emit_remediation_script(results, category_filter_active=False):
         "# sudo systemctl try-reload-or-restart sshd.service",
         "#",
         "# # 3. cf-class auditd rules (extended):",
-        "# sudo tee /etc/audit/rules.d/copyfail.rules >/dev/null <<'EOF'",
+        "# sudo tee /etc/audit/rules.d/rfxn-defense.rules >/dev/null <<'EOF'",
         "# -a always,exit -F arch=b64 -S socket -F a0=38 -k afalg_attempt",
         "# -a always,exit -F arch=b64 -S unshare -F auid>=1000 -k cf_userns",
         "# -a always,exit -F arch=b64 -S add_key -F auid>=1000 -k cf_addkey",
@@ -2688,7 +2688,7 @@ def main():
     PROGRESS = Progress(enabled=not args.no_progress and not args.json)
 
     if PROGRESS.enabled or PROGRESS.plain:
-        sys.stderr.write("copyfail-defense checker (cf1+cf2+Dirty Frag) "
+        sys.stderr.write("rfxn-defense checker (cf1+cf2+Dirty Frag) "
                          "starting on {} ({})\n".format(
             os.uname().nodename, os.uname().release))
         sys.stderr.flush()
@@ -2708,9 +2708,9 @@ def main():
     if args.json:
         out = {
             "schema_version": "2.0",
-            "tool": "copyfail-local-check",
+            "tool": "rfxn-local-check",
             "publisher": "rfxn.com - forged in prod",
-            "url": "https://github.com/rfxn/copyfail",
+            "url": "https://github.com/rfxn/rfxn-defense",
             "covers": ["CVE-2026-31431", "cf2-xfrm-esp", "dirtyfrag-esp",
                        "dirtyfrag-rxrpc"],
             "timestamp": int(time.time()),
@@ -2736,7 +2736,7 @@ def main():
               + colorize("({})".format(os.uname().nodename), C.DIM))
         print(colorize("cf1 (CVE-2026-31431) / cf2 (xfrm-ESP) / Dirty Frag",
                        C.DIM))
-        print(colorize("rfxn.com - forged in prod - github.com/rfxn/copyfail",
+        print(colorize("rfxn.com - forged in prod - github.com/rfxn/rfxn-defense",
                        C.DIM))
         print(colorize("=" * 78, C.DIM))
         for r in results:

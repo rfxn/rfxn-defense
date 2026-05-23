@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# copyfail-redetect
-#   Re-run copyfail-defense workload detection on demand.
+# rfxn-redetect
+#   Re-run rfxn-defense workload detection on demand.
 #   Use after enabling IPsec / AFS / rootless containers post-install
 #   to refresh the conditional drop-in state.
 #
@@ -11,13 +11,13 @@
 set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then
-    echo "copyfail-redetect: must be run as root" >&2
+    echo "rfxn-redetect: must be run as root" >&2
     exit 1
 fi
 
-if [ ! -x /usr/libexec/copyfail-defense/detect.sh ]; then
-    echo "copyfail-redetect: /usr/libexec/copyfail-defense/detect.sh missing" >&2
-    echo "  (re-install copyfail-defense-modprobe or -systemd to restore)" >&2
+if [ ! -x /usr/libexec/rfxn-defense/detect.sh ]; then
+    echo "rfxn-redetect: /usr/libexec/rfxn-defense/detect.sh missing" >&2
+    echo "  (re-install rfxn-defense-modprobe or -systemd to restore)" >&2
     exit 1
 fi
 
@@ -25,9 +25,9 @@ fi
 # systemd AND sysctl state regardless of which subpackage's %posttrans
 # last fired. 'all' replaces 'both' (which was modprobe+systemd only)
 # now that -sysctl ships a host-wide drop-in that detection manages.
-/usr/libexec/copyfail-defense/detect.sh apply all
+/usr/libexec/rfxn-defense/detect.sh apply all
 echo
-echo "Detection refreshed. State: /var/lib/copyfail-defense/auto-detect.json"
+echo "Detection refreshed. State: /var/lib/rfxn-defense/auto-detect.json"
 echo
 echo "If conditional systemd drop-ins changed, run:"
 echo "    systemctl daemon-reload"
