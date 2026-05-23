@@ -1,0 +1,17 @@
+# rfxn-defense - 4-hourly responsive-update cron
+# Owned by rfxn-defense-autoupdate. Edit /etc/rfxn-defense/auto-update.disabled
+# (touch file) to opt out without removing the package.
+#
+# Runs at 00:15, 04:15, 08:15, 12:15, 16:15, 20:15 host-local.
+# The wrapper jitters 0-600s before doing work to spread mirror load
+# across the fleet, then flocks + timeouts + dnf-targeted-upgrades all
+# rfxn-defense* subpackages from the rfxn-defense repo only.
+#
+# Tail the journal to see runs:
+#   journalctl -t rfxn-defense-update -n 50
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=
+
+15 */4 * * * root /usr/libexec/rfxn-defense/update.sh
