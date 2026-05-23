@@ -1584,6 +1584,221 @@ echo "=== RDS-HOST OK ==="
 INNER
 }
 
+# v2.1.1: bare host on EL10 must auto-apply the io_uring sysctl
+# drop-in. EL7/8/9 default kernels are <6.6 so this scenario SKIPs
+# on those ELs (return 77 = skip).
+run_bare_iouring_host_test_in() {
+    local image="$1"
+    podman run --rm -i --network=host \
+        -e REPO_URL="$REPO_URL" -e KEY_URL="$KEY_URL" \
+        "$image" /bin/bash <<'INNER'
+set -euo pipefail
+fail() { echo "FAIL: $*" >&2; exit 1; }
+ok()   { echo "ok:   $*"; }
+assert_no_scriptlet_fail() {
+    local _log="$1"
+    if grep -qE 'scriptlet failed|Error in (POST|PRE)|syntax error near' "$_log"; then
+        echo "--- RPM scriptlet failure markers in dnf output ---" >&2
+        grep -nE 'scriptlet failed|Error in (POST|PRE)|syntax error near' "$_log" >&2
+        echo "--- end ---" >&2
+        fail "RPM scriptlet failure detected during dnf operation"
+    fi
+}
+
+# Skip on kernels <6.6: assertion is that the key WILL be applied
+# on bare hosts, which only holds when the kernel supports it.
+rel=$(uname -r)
+major=${rel%%.*}; minor=${rel#*.}; minor=${minor%%.*}
+if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 6 ]; }; then
+    echo "SKIP: kernel ${rel} < 6.6; bare-host io_uring scenario does not apply"
+    exit 77
+fi
+
+curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+dnf install -y python3 jq >/dev/null 2>&1 || true
+dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+assert_no_scriptlet_fail /tmp/dnf.log
+
+# io_uring sysctl drop-in MUST exist and JSON state must confirm.
+[ -f /etc/sysctl.d/99-copyfail-defense-iouring.conf ] \
+    || fail "iouring sysctl file missing on bare host (kernel >= 6.6)"
+
+jq -e '.detected.io_uring_workload.present == false' \
+       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+    || fail "bare host should not show io_uring_workload (got present=true)"
+jq -e '.suppressed.sysctl_iouring.suppressed == false' \
+       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+    || fail "bare host should NOT suppress io_uring (got suppressed=true)"
+jq -e '.applied.sysctl_iouring == true' \
+       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+    || fail "applied.sysctl_iouring should be true on bare host"
+
+# Sysctl key actually loaded:
+val=$(cat /proc/sys/kernel/io_uring_disabled 2>/dev/null || echo missing)
+[ "$val" = "2" ] \
+    || fail "kernel.io_uring_disabled=${val}, expected 2"
+
+ok "bare_iouring_host: io_uring auto-applied on EL10 bare host"
+echo "=== BARE-IOURING OK ==="
+INNER
+}
+
+# v2.1.1: pre-stage a process holding liburing.so in its mappings,
+# then install copyfail-defense. detect.sh signal 1 should fire,
+# suppress the drop-in.
+run_iouring_consumer_host_test_in() {
+    local image="$1"
+    podman run --rm -i --network=host \
+        -e REPO_URL="$REPO_URL" -e KEY_URL="$KEY_URL" \
+        "$image" /bin/bash <<'INNER'
+set -euo pipefail
+fail() { echo "FAIL: $*" >&2; exit 1; }
+ok()   { echo "ok:   $*"; }
+assert_no_scriptlet_fail() {
+    local _log="$1"
+    if grep -qE 'scriptlet failed|Error in (POST|PRE)|syntax error near' "$_log"; then
+        echo "--- RPM scriptlet failure markers in dnf output ---" >&2
+        grep -nE 'scriptlet failed|Error in (POST|PRE)|syntax error near' "$_log" >&2
+        echo "--- end ---" >&2
+        fail "RPM scriptlet failure detected during dnf operation"
+    fi
+}
+
+# Stage a fake liburing.so.2 mapping in a long-running Python process
+# so /proc/<pid>/maps holds the substring detect.sh signal 1 keys on.
+# Use a tempfile-driven python invocation (NOT a nested heredoc) to
+# avoid escaping ambiguity inside the shell INNER heredoc.
+cat > /tmp/stub_iouring.py <<'PYEOF'
+import mmap, os, sys, tempfile, time
+td = tempfile.mkdtemp()
+fp = os.path.join(td, "liburing.so.2")
+with open(fp, "wb") as f:
+    f.write(b"\x7fELF" + b"\x00" * 4096)
+fd = os.open(fp, os.O_RDONLY)
+mm = mmap.mmap(fd, 4096, prot=mmap.PROT_READ, flags=mmap.MAP_PRIVATE)
+sys.stdout.write("staged pid=%d fp=%s\n" % (os.getpid(), fp))
+sys.stdout.flush()
+time.sleep(60)
+PYEOF
+python3 /tmp/stub_iouring.py &
+STUB_PID=$!
+# Poll for the map to appear in /proc -- bound 10s to avoid race on
+# loaded container hosts.
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+    grep -q liburing /proc/${STUB_PID}/maps 2>/dev/null && break
+    sleep 1
+done
+grep -q liburing /proc/${STUB_PID}/maps \
+    || fail "stub process /proc/${STUB_PID}/maps does not contain liburing"
+
+curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+dnf install -y python3 jq >/dev/null 2>&1 || true
+dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+assert_no_scriptlet_fail /tmp/dnf.log
+
+# io_uring drop-in MUST NOT be present.
+if [ -f /etc/sysctl.d/99-copyfail-defense-iouring.conf ]; then
+    fail "iouring sysctl file staged despite running liburing process"
+fi
+
+# JSON state must report detection + suppression with the expected reason.
+jq -e '.detected.io_uring_workload.present == true' \
+       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+    || fail "io_uring_workload.present != true despite staged process"
+reason=$(jq -r '.suppressed.sysctl_iouring.reason' /var/lib/copyfail-defense/auto-detect.json)
+[ "$reason" = "io_uring_workload" ] \
+    || fail "suppression reason: expected io_uring_workload, got '$reason'"
+
+# Cleanup the stub process.
+kill ${STUB_PID} 2>/dev/null || true
+ok "iouring_consumer_host: liburing process detected, drop-in correctly suppressed"
+echo "=== IOURING-CONSUMER OK ==="
+INNER
+}
+
+# v2.1.1: kernel <6.6 must result in suppression with reason=kernel_too_old.
+# On EL7/8/9 default kernels this is the natural state. On EL10 we
+# cannot stub uname inside the container, so this scenario is a no-op
+# / SKIP for EL10. The bare_iouring scenario already covers EL10
+# apply. The iouring_old_kernel scenario locks in the EL7/8/9
+# suppression-reason path.
+run_iouring_old_kernel_host_test_in() {
+    local image="$1"
+    podman run --rm -i --network=host \
+        -e REPO_URL="$REPO_URL" -e KEY_URL="$KEY_URL" \
+        "$image" /bin/bash <<'INNER'
+set -euo pipefail
+fail() { echo "FAIL: $*" >&2; exit 1; }
+ok()   { echo "ok:   $*"; }
+assert_no_scriptlet_fail() {
+    local _log="$1"
+    if grep -qE 'scriptlet failed|Error in (POST|PRE)|syntax error near' "$_log"; then
+        echo "--- RPM scriptlet failure markers in dnf output ---" >&2
+        grep -nE 'scriptlet failed|Error in (POST|PRE)|syntax error near' "$_log" >&2
+        echo "--- end ---" >&2
+        fail "RPM scriptlet failure detected during dnf operation"
+    fi
+}
+
+# Only run on kernels <6.6. EL10's container kernel is >=6.6,
+# skip there.
+rel=$(uname -r)
+major=${rel%%.*}; minor=${rel#*.}; minor=${minor%%.*}
+if [ "$major" -gt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -ge 6 ]; }; then
+    echo "SKIP: kernel ${rel} >= 6.6; old-kernel scenario does not apply"
+    exit 77
+fi
+
+curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
+. /etc/os-release
+if [ "${VERSION_ID%%.*}" = "7" ]; then
+    # CentOS 7 EOL prelude (same as rds_host scenario).
+    rm -f /etc/yum.repos.d/CentOS-*.repo
+    cat > /etc/yum.repos.d/CentOS-Vault.repo <<'EOREPO'
+[base]
+name=CentOS-7 Base (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/os/x86_64/
+gpgcheck=0
+enabled=1
+[updates]
+name=CentOS-7 Updates (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/updates/x86_64/
+gpgcheck=0
+enabled=1
+[extras]
+name=CentOS-7 Extras (Vault)
+baseurl=https://vault.centos.org/centos/7.9.2009/extras/x86_64/
+gpgcheck=0
+enabled=1
+EOREPO
+    cat > /etc/yum.repos.d/epel.repo <<'EOEPEL'
+[epel]
+name=EPEL 7 (archive)
+baseurl=https://archives.fedoraproject.org/pub/archive/epel/7/x86_64/
+gpgcheck=0
+enabled=1
+EOEPEL
+    yum install -y dnf >/dev/null
+fi
+
+dnf install -y python3 jq >/dev/null 2>&1 || true
+dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+assert_no_scriptlet_fail /tmp/dnf.log
+
+[ ! -f /etc/sysctl.d/99-copyfail-defense-iouring.conf ] \
+    || fail "iouring sysctl file present on kernel < 6.6"
+
+reason=$(jq -r '.suppressed.sysctl_iouring.reason' /var/lib/copyfail-defense/auto-detect.json)
+[ "$reason" = "kernel_too_old" ] \
+    || fail "suppression reason: expected kernel_too_old, got '$reason'"
+
+ok "iouring_old_kernel_host: io_uring suppressed with reason=kernel_too_old"
+echo "=== IOURING-OLD-KERNEL OK ==="
+INNER
+}
+
 # Sanity: verify the live URLs are reachable BEFORE we burn container time.
 echo "Probing $REPO_URL ..."
 http_code=$(curl -sSI -o /dev/null -w '%{http_code}' "$REPO_URL")
@@ -1650,12 +1865,15 @@ for el in "${ELS[@]}"; do
     # fixup pass: + systemd_only for M-2 canary).
     # v2.0.2: + userns_consumer for Flatpak/firejail/browser signal.
     # v2.1.0: + rds_host for Oracle Grid /etc/oratab suppression.
+    # v2.1.1: + bare_iouring_host, iouring_consumer_host, iouring_old_kernel_host.
     for scenario_name in clean_host ipsec_host afs_host rootless_host \
                          subuid_no_storage \
                          force_full redetect split_upgrade \
                          systemd_only \
                          userns_consumer \
-                         rds_host; do
+                         rds_host \
+                         bare_iouring_host iouring_consumer_host \
+                         iouring_old_kernel_host; do
         echo
         step "${scenario_name} test"
         scenario_rc=0
