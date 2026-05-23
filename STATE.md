@@ -1,10 +1,10 @@
-# copyfail-defense — shipping state
+# copyfail-defense, shipping state
 
 Snapshot: **2026-05-23**
 
 ## Latest release
 
-- **v2.1.1** — promotes `kernel.io_uring_disabled=2` from operator
+- **v2.1.1**, promotes `kernel.io_uring_disabled=2` from operator
   opt-in (commented) to auto-applied with layered suppression. New
   `/etc/sysctl.d/99-copyfail-defense-iouring.conf` drop-in (separate
   from userns file). detect.sh adds `detect_io_uring_workload()` with
@@ -14,7 +14,7 @@ Snapshot: **2026-05-23**
   `CFD_FORCE_IOURING_DISABLE=1` / `CFD_SUPPRESS_IOURING_DISABLE=1`.
   Signed RPMs for EL7 / EL8 / EL9 / EL10.
 - Tag: <https://github.com/rfxn/copyfail/releases/tag/v2.1.1>
-- **v2.1.0** — adds PinTheft (RDS zerocopy + io_uring) and
+- **v2.1.0**, adds PinTheft (RDS zerocopy + io_uring) and
   ssh-keysign-pwn (CVE-2026-46333; ptrace exit-race + `pidfd_getfd`)
   coverage; new `-modprobe` cut for `rds`/`rds_tcp`/`rds_rdma`; new
   `RestrictAddressFamilies=~AF_RDS` in the always-on systemd
@@ -142,7 +142,7 @@ uid:          Copyfail Project Signing Key <proj@rfxn.com>
 
 ## Test harness
 
-`packaging/test-repo.sh` — podman-driven, **26 checks per EL** (was 18 in
+`packaging/test-repo.sh`, podman-driven, **26 checks per EL** (was 18 in
 v2.0.0; v2.0.1 adds detection-scenario tests for IPsec/AFS/rootless/clean
 host + redetect helper + auto_detect auditor JSON).
 
@@ -154,7 +154,7 @@ REPO_URL=... bash packaging/test-repo.sh   # override source
 
 ## Auditor
 
-`/usr/sbin/copyfail-local-check` — 26 checks across ENV/KERNEL/MITIGATION/
+`/usr/sbin/copyfail-local-check`, 26 checks across ENV/KERNEL/MITIGATION/
 HARDENING/DETECTION categories, stdlib-only Python 3.6+. Five-class
 scoring:
 
@@ -191,25 +191,25 @@ conditionally installs or suppresses drop files.
 | AFS | kafs module; afs mount | rxrpc modprobe conf + rxrpc-af systemd drop-in |
 | rootless containers | storage-tree: `~/.local/share/containers/storage` | userns systemd drop-in (user@ only) |
 
-`/usr/sbin/copyfail-redetect` — operator-callable wrapper; re-runs
+`/usr/sbin/copyfail-redetect`, operator-callable wrapper; re-runs
 `detect.sh apply both`. Required after enabling a workload post-install.
-Does NOT call `systemctl daemon-reload` — operator decides reload timing.
+Does NOT call `systemctl daemon-reload`, operator decides reload timing.
 
-`/etc/copyfail/force-full` — sentinel file; when present, detection is
+`/etc/copyfail/force-full`, sentinel file; when present, detection is
 skipped and all mitigations applied unconditionally.
 
 ## Safety properties enforced by the spec
 
-- `%post` does **not** touch `/etc/ld.so.preload` — operator must run `copyfail-shim-enable`.
+- `%post` does **not** touch `/etc/ld.so.preload`, operator must run `copyfail-shim-enable`.
 - `copyfail-shim-enable` smoke-tests the .so against `/bin/true` before writing the preload file.
-- `%preun shim` on full erase scrubs `/etc/ld.so.preload` *before* RPM removes the .so (otherwise every dyn-linked binary fails to dlopen the missing preload — brick).
+- `%preun shim` on full erase scrubs `/etc/ld.so.preload` *before* RPM removes the .so (otherwise every dyn-linked binary fails to dlopen the missing preload, brick).
 - `%posttrans shim` warns if the file ever ends up dangling.
 - `%post modprobe` does best-effort `rmmod` of cf1 modules + LOG_AUTHPRIV trail; failures silenced.
 - `%posttrans modprobe` calls `detect.sh apply modprobe`; best-effort rmmod of cf2/rxrpc if suppressed.
 - `%postun modprobe` calls `detect.sh teardown modprobe` (or inline fallback); removes all drop files.
 - `%posttrans systemd` calls `detect.sh apply systemd`; daemon-reload.
 - `%postun systemd` calls `detect.sh teardown systemd` (or inline fallback); daemon-reload.
-- All shipped conf files marked `%config(noreplace)` — operator hand-edits survive package upgrade.
+- All shipped conf files marked `%config(noreplace)`, operator hand-edits survive package upgrade.
 - ExclusiveArch: x86_64 (the .c source has `#error` for non-x86_64).
 - Both `gpgcheck=1` and `repo_gpgcheck=1` enforced in the published `.repo`.
 
@@ -217,13 +217,13 @@ skipped and all mitigations applied unconditionally.
 
 The toolkit is a stack of independent layers:
 
-1. **LD_PRELOAD shim** — works on every kernel, every dyn-linked process. cf1 primary defense.
+1. **LD_PRELOAD shim**, works on every kernel, every dyn-linked process. cf1 primary defense.
 2. **modprobe blacklist** of `algif_aead`/`authenc`/`authencesn`/`af_alg` (cf1; no-op on RHEL builtin) + `esp4`/`esp6`/`xfrm_user`/`xfrm_algo` (cf2/dirtyfrag-ESP) + `rxrpc` (dirtyfrag-RxRPC). Functional for the latter two on stock RHEL kernels (these are modules).
 3. **systemd `RestrictAddressFamilies=~AF_ALG ~AF_RXRPC`** + **`RestrictNamespaces=~user ~net`** on tenant units (user@/sshd/cron/crond/atd). Kernel-enforced seccomp; uncircumventable from userspace.
 4. **suid surface lockdown** (auditor recommends `chmod 4750 /usr/bin/su` only when `/etc/passwd` analysis shows no non-wheel interactive users).
 5. **page-cache integrity probe** for `/etc/passwd`, PAM stacks, `/etc/ld.so.preload`, `/usr/bin/su`, dynamic linker.
-6. **audit telemetry** — keys: `afalg_attempt`, `cf_userns`, `cf_addkey`, `cf_xfrm_nl`, `splice_tenant`.
-7. **kernel patches** — cf1 `a664bf3d`, cf2/df-ESP `f4c50a4034`, df-RxRPC (none upstream).
+6. **audit telemetry**, keys: `afalg_attempt`, `cf_userns`, `cf_addkey`, `cf_xfrm_nl`, `splice_tenant`.
+7. **kernel patches**, cf1 `a664bf3d`, cf2/df-ESP `f4c50a4034`, df-RxRPC (none upstream).
 
 The auditor scores all layers and reports per-class `applicable` /
 `mitigated` / `active layers` so a fleet console can render per-host
@@ -231,9 +231,9 @@ posture without re-implementing verdict logic.
 
 ## Cross-repo state
 
-- `rfxn/copyfail` main `<TBD-after-v2.0.1-commit>` — copyfail-defense v2.0.1 hotfix
-- `rfxn/copyfail` gh-pages `<TBD>` — index.html refresh pending Phase 8
-- `rfxn/copyfail` v2.0.0 tag — signed release (previous)
-- `rfxn/copyfail` v2.0.1 tag — pending Phase 9 (manual)
-- `rfxn/rfxn-infra` main `b86d9b7` — `docs/runbooks/copyfail-signing-key-backup.md` (unchanged)
-- forge ZFS — `hdd-pool/backups/copyfail-signing-key/` populated, snapshot `@20260430` (unchanged)
+- `rfxn/copyfail` main `<TBD-after-v2.0.1-commit>`, copyfail-defense v2.0.1 hotfix
+- `rfxn/copyfail` gh-pages `<TBD>`, index.html refresh pending Phase 8
+- `rfxn/copyfail` v2.0.0 tag, signed release (previous)
+- `rfxn/copyfail` v2.0.1 tag, pending Phase 9 (manual)
+- `rfxn/rfxn-infra` main `b86d9b7`, `docs/runbooks/copyfail-signing-key-backup.md` (unchanged)
+- forge ZFS, `hdd-pool/backups/copyfail-signing-key/` populated, snapshot `@20260430` (unchanged)

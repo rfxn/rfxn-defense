@@ -1,8 +1,8 @@
-# SPEC — `copyfail-defense` v2.0.0
+# SPEC, `copyfail-defense` v2.0.0
 
 **Status:** Drafted autonomously 2026-05-08 (rev 3). Optimized for **maximum
 protection without disrupting the business**. Every decision in §9 was made
-on Ryan's behalf — return review is the **[D-NN]** index.
+on Ryan's behalf, return review is the **[D-NN]** index.
 
 **v2.0.1 hotfix appended in §12** (drafted 2026-05-08; rev 2 after
 reviewer fixup pass). The §1–§11 body documents the v2.0.0 baseline and
@@ -13,15 +13,15 @@ added in the fixup pass). Conflict: where §12 contradicts §1–§11
 v2.0.1+ builds.
 
 Rev history:
-- rev 1 — initial draft after cf2 + Dirty Frag assessment.
-- rev 2 — misread context as user directive; over-tightened systemd cuts.
-- rev 3 (this) — re-evaluated each decision against business-disruption cost
+- rev 1, initial draft after cf2 + Dirty Frag assessment.
+- rev 2, misread context as user directive; over-tightened systemd cuts.
+- rev 3 (this), re-evaluated each decision against business-disruption cost
   vs cf-class defense gain. Container-runtime drop-ins demoted to examples;
   `SystemCallFilter` narrowed to `@swap` only.
-- v2.0.1 hotfix — auto-detect IPsec / AFS / rootless-container workloads
+- v2.0.1 hotfix, auto-detect IPsec / AFS / rootless-container workloads
   at install time and suppress the conflicting drop-ins. Replaces the
   README's "Override paths" section with package-driven behavior.
-- v2.0.1 fixup (rev 2, 2026-05-08) — incorporates reviewer findings
+- v2.0.1 fixup (rev 2, 2026-05-08), incorporates reviewer findings
   C-1..C-8 + M-1..M-12. Key changes: storage-tree-based rootless
   detection (replacing the cPanel-FP-prone `/etc/subuid` signal),
   conditional `~AF_RXRPC` (was unconditional; AFS aklog opens
@@ -39,17 +39,17 @@ The shipped toolkit (`afalg-defense` v1.0.1) is laser-focused on AF_ALG /
 `algif_aead` (CVE-2026-31431). Two follow-on disclosures sit in the same
 vulnerability class but use completely different kernel sinks:
 
-- **cf2 ("Copy Fail 2: Electric Boogaloo")** — `esp_input` skip_cow path,
+- **cf2 ("Copy Fail 2: Electric Boogaloo")**, `esp_input` skip_cow path,
   4-byte STORE via xfrm SA `seq_hi`. AF_INET socket. Patch: upstream
   `f4c50a4034`.
-- **Dirty Frag** (V4bel) — vulnerability *class*, chains two distinct
+- **Dirty Frag** (V4bel), vulnerability *class*, chains two distinct
   bugs: (a) the same xfrm-ESP bug as cf2, (b) RxRPC `rxkad_verify_packet_1`
   in-place `pcbc(fcrypt)` on splice'd frag. RxRPC leg has **no upstream
   patch yet**; embargo broken; affects kernel 4.11–7.1.
 
 The author's own framing: *"even on systems where the publicly known Copy
 Fail mitigation (algif_aead blacklist) is applied, your Linux is still
-vulnerable to Dirty Frag."* The current package name has aged poorly —
+vulnerable to Dirty Frag."* The current package name has aged poorly
 the defensive primitives we ship are a superset of bug-class entry-point
 cuts, not specifically AF_ALG.
 
@@ -77,7 +77,7 @@ v2.0.0.
   unchanged.
 
 ### Defined but deferred (2.1.0)
-- **`copyfail-defense-userns`** — sysctl drop for
+- **`copyfail-defense-userns`**, sysctl drop for
   `user.max_user_namespaces=0` (RHEL/Fedora) and
   `kernel.unprivileged_userns_clone=0` (Debian/Ubuntu). **Opt-in only.**
   NOT pulled by meta. **[D-01]** The blast radius (rootless podman,
@@ -85,10 +85,10 @@ v2.0.0.
   auto-pulling.
 
 ### Out of scope
-- arm64 port — pre-existing follow-up.
-- kpatch wrapping — each upstream patch is per-CVE.
-- PAM `nullok` auto-fix — auditor reports, operator acts. **[D-02]**
-- Splice-syscall blocking — every bypass class is reachable via inline
+- arm64 port, pre-existing follow-up.
+- kpatch wrapping, each upstream patch is per-CVE.
+- PAM `nullok` auto-fix, auditor reports, operator acts. **[D-02]**
+- Splice-syscall blocking, every bypass class is reachable via inline
   asm. **[D-03]**
 
 ## 4. Architecture
@@ -96,12 +96,12 @@ v2.0.0.
 ### 4.1 Package layout
 
 ```
-copyfail-defense                 (meta — Obsoletes: afalg-defense)
+copyfail-defense                 (meta, Obsoletes: afalg-defense)
 ├── copyfail-defense-shim        (Obsoletes: afalg-defense-shim)
 │     LD_PRELOAD no-afalg.so + copyfail-shim-{enable,disable}
 │     Coverage: cf1 (primary), dirtyfrag-RxRPC PoC cksum (incidental)
 │
-├── copyfail-defense-modprobe    (NEW — was inline doc in v1.0.1)
+├── copyfail-defense-modprobe    (NEW, was inline doc in v1.0.1)
 │     /etc/modprobe.d/99-copyfail.conf:
 │       install algif_aead /bin/false   # cf1 (no-op on RHEL builtin)
 │       install authenc    /bin/false
@@ -115,19 +115,19 @@ copyfail-defense                 (meta — Obsoletes: afalg-defense)
 │     %preun: remove the file (do NOT auto-rmmod on uninstall)
 │     Coverage: cf2 + both dirtyfrag legs on hosting nodes
 │
-├── copyfail-defense-systemd     (NEW — was inline doc in v1.0.1)
+├── copyfail-defense-systemd     (NEW, was inline doc in v1.0.1)
 │     drop-ins for user@.service, sshd.service, cron.service,
 │     crond.service, atd.service:
 │       RestrictAddressFamilies=~AF_ALG ~AF_RXRPC
 │       RestrictNamespaces=~user ~net
 │       SystemCallArchitectures=native
 │       SystemCallFilter=~@swap
-│     Coverage: ALL THREE — RestrictNamespaces blocks unshare path used
+│     Coverage: ALL THREE, RestrictNamespaces blocks unshare path used
 │              by cf2 + dirtyfrag-ESP; ~AF_ALG keeps cf1 cut;
 │              ~AF_RXRPC kills dirtyfrag-RxRPC at the kernel-enforced
 │              seccomp layer (not LD_PRELOAD)
 │     Container-runtime drop-ins (containerd, docker, podman) shipped
-│     as examples/ for opt-in only — NOT active by default. Operator
+│     as examples/ for opt-in only, NOT active by default. Operator
 │     installs per-fleet after confirming no rootless/userns-remapped
 │     workloads run on those runtimes.
 │
@@ -146,13 +146,13 @@ copyfail-defense                 (meta — Obsoletes: afalg-defense)
   to reference new package family names).
 - docdir rebased: `/usr/share/doc/copyfail-defense/` (was
   `afalg-defense`).
-- Example modprobe + systemd snippets removed from this subpackage —
+- Example modprobe + systemd snippets removed from this subpackage
   the new `-modprobe` and `-systemd` subpackages own those concerns.
   **[D-05]**
 
 #### `copyfail-defense-modprobe`
 - **New.** Single drop file: `/etc/modprobe.d/99-copyfail-defense.conf`. **[D-06]**
-  *(Keeps `-defense` suffix for namespace hygiene — avoids collision with
+  *(Keeps `-defense` suffix for namespace hygiene, avoids collision with
   any future `copyfail-checker.conf` or third-party `copyfail*` configs.
   Modprobe drop directories are flat, so namespacing matters.)*
 - Content:
@@ -161,7 +161,7 @@ copyfail-defense                 (meta — Obsoletes: afalg-defense)
   # /etc/modprobe.d/99-copyfail-defense.conf
   # Owned by copyfail-defense-modprobe; do not hand-edit.
 
-  # cf1 — CVE-2026-31431 algif_aead family
+  # cf1, CVE-2026-31431 algif_aead family
   install algif_aead   /bin/false
   install authenc      /bin/false
   install authencesn   /bin/false
@@ -171,7 +171,7 @@ copyfail-defense                 (meta — Obsoletes: afalg-defense)
   blacklist authencesn
   blacklist af_alg
 
-  # cf2 / Dirty Frag-ESP — xfrm IPsec ESP family
+  # cf2 / Dirty Frag-ESP, xfrm IPsec ESP family
   install esp4         /bin/false
   install esp6         /bin/false
   install xfrm_user    /bin/false
@@ -181,7 +181,7 @@ copyfail-defense                 (meta — Obsoletes: afalg-defense)
   blacklist xfrm_user
   blacklist xfrm_algo
 
-  # Dirty Frag-RxRPC — Andrew File System RPC
+  # Dirty Frag-RxRPC, Andrew File System RPC
   install rxrpc        /bin/false
   blacklist rxrpc
   ```
@@ -209,7 +209,7 @@ copyfail-defense                 (meta — Obsoletes: afalg-defense)
   atd.service.d/10-copyfail-defense.conf
   ```
 
-  Rationale: these are the units that spawn tenant work — login
+  Rationale: these are the units that spawn tenant work, login
   sessions (user@/sshd), scheduled jobs (cron/crond/atd). The drop-in
   body's `RestrictNamespaces=~user` prevents `unshare(CLONE_NEWUSER)`
   from any process the unit roots, which is the prerequisite for
@@ -223,7 +223,7 @@ copyfail-defense                 (meta — Obsoletes: afalg-defense)
   `/usr/share/doc/copyfail-defense/examples/`, NOT installed as active
   drop-ins. Applying `RestrictNamespaces=~user` to those service units
   breaks rootless containers AND user-namespace-remapped containers
-  comprehensively — that's infrastructure disruption beyond tenant
+  comprehensively, that's infrastructure disruption beyond tenant
   blast-radius reduction. Operators on hosting nodes that don't run
   rootless/remapped containers can opt in by copying the example into
   the active drop-in directory. **[D-09a]**
@@ -248,11 +248,11 @@ copyfail-defense                 (meta — Obsoletes: afalg-defense)
   (`unshare -u` for hostname-isolated test runners, some flatpak
   configs). Stay surgical. **[D-10]**
 - **Why `SystemCallFilter=~@swap` only** (not `~@mount @swap`):
-  `@swap` blocks `swapon`/`swapoff` — no tenant has legitimate use,
+  `@swap` blocks `swapon`/`swapoff`, no tenant has legitimate use,
   zero-cost cut. `@mount` was considered and **rejected**: blocking
   `mount`/`umount2`/`pivot_root` would break rootless podman/buildah
   container creation under `user@.service` AND adds zero cf-class
-  defense (the exploit chain doesn't require `mount` syscalls — it
+  defense (the exploit chain doesn't require `mount` syscalls, it
   uses `unshare(CLONE_NEWUSER|CLONE_NEWNET)` which is already cut
   by `RestrictNamespaces=~user`). Keeping `@swap` only is the
   protection-without-business-disruption pick. **[D-12]**
@@ -280,7 +280,7 @@ copyfail-defense                 (meta — Obsoletes: afalg-defense)
   RestrictAddressFamilies=
   EOF
   systemctl daemon-reload
-  # No service restart needed — user@<UID>.service instances pick this
+  # No service restart needed, user@<UID>.service instances pick this
   # up on next login session.
   ```
 
@@ -302,8 +302,8 @@ copyfail-defense                 (meta — Obsoletes: afalg-defense)
 
   | Category | New checks |
   |---|---|
-  | `ENV` | apparmor userns posture (Ubuntu/Debian only — `/proc/sys/kernel/apparmor_restrict_unprivileged_userns`); rxrpc/esp4/esp6/xfrm_user/xfrm_algo `/proc/modules` state and builtin-vs-modular classification |
-  | `KERNEL` | xfrm-ESP module presence + reachable probe (read-only — opens AF_INET/UDP, attempts `setsockopt(UDP_ENCAP, ESPINUDP)` without registering an SA); RxRPC reachable probe (`/proc/net/protocols` parse for `RXRPC` row, then optional `socket(AF_RXRPC, ...)` confirm) |
+  | `ENV` | apparmor userns posture (Ubuntu/Debian only, `/proc/sys/kernel/apparmor_restrict_unprivileged_userns`); rxrpc/esp4/esp6/xfrm_user/xfrm_algo `/proc/modules` state and builtin-vs-modular classification |
+  | `KERNEL` | xfrm-ESP module presence + reachable probe (read-only, opens AF_INET/UDP, attempts `setsockopt(UDP_ENCAP, ESPINUDP)` without registering an SA); RxRPC reachable probe (`/proc/net/protocols` parse for `RXRPC` row, then optional `socket(AF_RXRPC, ...)` confirm) |
   | `MITIGATION` | modprobe drop coverage of new entries; per-unit `RestrictAddressFamilies` + `RestrictNamespaces` for sshd/user@/containerd/docker/podman; `user.max_user_namespaces` and `kernel.unprivileged_userns_clone` sysctl posture (informational) |
   | `HARDENING` | `/usr/bin/su` mode/ownership (cf2/df-ESP target); recommend `chmod 4750` **only when** a wheel/admin group exists AND no non-wheel non-system users have legitimate su use (heuristic: scan `/etc/passwd` for users with shells in standard list) **[D-26]** |
   | `DETECTION` | page-cache integrity probe extended to `/usr/bin/su`, `/etc/pam.d/system-auth`, `/etc/pam.d/password-auth`, `/etc/pam.d/common-auth`; PAM `nullok` scan in `pam.d/{system,password,common}-auth` plus glob `/etc/pam.d/cpanel*` and `/etc/pam.d/plesk*`; auditd-rule presence checks for `unshare(CLONE_NEWUSER)`, `add_key("rxrpc",...)`, xfrm-netlink SA add (XFRM_MSG_NEWSA = netlink type filter, documented as best-effort given kauditd's limited netlink filtering) |
@@ -311,7 +311,7 @@ copyfail-defense                 (meta — Obsoletes: afalg-defense)
 - **Exit code semantics:** unchanged (`0/1/2/3/4`). Per-class
   coverage reported in JSON only; the human verdict still distills
   to existing values. **[D-15]**
-- **JSON schema additions** (per Ryan's directive — array form):
+- **JSON schema additions** (per Ryan's directive, array form):
 
   ```json
   "posture": {
@@ -327,7 +327,7 @@ copyfail-defense                 (meta — Obsoletes: afalg-defense)
   ```
 
   `bug_classes_covered` is a flat array of class IDs where
-  `mitigated: true` — Ryan's directive form, tailored for SIEM
+  `mitigated: true`, Ryan's directive form, tailored for SIEM
   ingestion (a single field to filter on). The map under
   `bug_classes` retains the per-class booleans for finer-grained
   consumption. `applicable: false` means the kernel sink isn't
@@ -418,7 +418,7 @@ These are reasonable defaults; flagged for your review:
 - **[D-26] Conditional `chmod 4750 /usr/bin/su` recommendation**: the
   auditor's heuristic checks for non-wheel non-system users with
   shells in `/etc/passwd`. cPanel hosting boxes have many such users
-  by design — the recommendation will be **suppressed by default**
+  by design, the recommendation will be **suppressed by default**
   on those hosts. Operator can force it via `--recommend-aggressive`.
   Verify this matches your intent.
 
@@ -430,7 +430,7 @@ If 2.0.0 ships with a broken subpackage:
    `Provides:` clause keeps the old name resolvable through 2.0.x.
 2. We: tag `v2.0.0-yanked`, rebuild a `2.0.1` with the bad
    subpackage gated off, push.
-3. Signing key unchanged — no key-trust rollback needed.
+3. Signing key unchanged, no key-trust rollback needed.
 
 ## 7. Out-of-band dependencies
 
@@ -444,18 +444,18 @@ If 2.0.0 ships with a broken subpackage:
 
 ## 8. Documentation surface
 
-- `README.md` — full rewrite (cf-class framing). Action-first.
+- `README.md`, full rewrite (cf-class framing). Action-first.
   Rootless-podman override block included.
-- `STATE.md` — bumped to v2.0.0 snapshot.
-- `BRIEF.md` — extended with cf2 + Dirty Frag sections.
-- `FOLLOWUPS.md` — close v1.0.2 entry; open v2.1.0 items
+- `STATE.md`, bumped to v2.0.0 snapshot.
+- `BRIEF.md`, extended with cf2 + Dirty Frag sections.
+- `FOLLOWUPS.md`, close v1.0.2 entry; open v2.1.0 items
   (`-userns` opt-in, drop Obsoletes/Provides, repo cleanup,
   rfxn.com article).
 
 ## 9. Decision index
 
 - **D-01** Defer `-userns` subpackage to 2.1.0; opt-in only.
-- **D-02** No PAM `nullok` auto-fix — auditor reports only.
+- **D-02** No PAM `nullok` auto-fix, auditor reports only.
 - **D-03** No splice-syscall blocking.
 - **D-04** Meta `Requires:` exact-match VR on shim/modprobe/systemd/auditor.
 - **D-05** Remove example dropins from `-shim`.
@@ -465,11 +465,11 @@ If 2.0.0 ships with a broken subpackage:
 - **D-08** `%preun modprobe` removes drop file; no rmmod on uninstall.
 - **D-09** systemd drop-in default unit list: user@, sshd, cron,
   crond, atd. Container-runtime drop-ins shipped as `examples/`,
-  NOT active — opt-in only.
+  NOT active, opt-in only.
 - **D-09a** containerd/docker/podman drop-ins ship as
   `/usr/share/doc/copyfail-defense/examples/<runtime>-dropin.conf`
   with documented opt-in path in README.
-- **D-10** `RestrictNamespaces=~user ~net` *(no UTS — adds zero
+- **D-10** `RestrictNamespaces=~user ~net` *(no UTS, adds zero
   cf-class defense, minor collateral on niche workloads)*.
 - **D-11** Leave mount/ipc/pid/cgroup namespaces alone.
 - **D-12** `SystemCallFilter=~@swap` *(NOT `@mount @swap`; @mount
@@ -496,18 +496,18 @@ If 2.0.0 ships with a broken subpackage:
 
 ## 10. Decision evolution (rev 1 → rev 2 → rev 3)
 
-| Decision | Rev 1 | Rev 2 (over-tightened) | Rev 3 (this — final) | Source of rev 3 |
+| Decision | Rev 1 | Rev 2 (over-tightened) | Rev 3 (this, final) | Source of rev 3 |
 |---|---|---|---|---|
 | Modprobe filename | `99-copyfail-defense.conf` | `99-copyfail.conf` | `99-copyfail-defense.conf` | namespace hygiene; rev 2 saved 8 chars at cost of collision risk |
 | `RestrictNamespaces` | `~user net uts` | `~user ~net` | `~user ~net` | UTS adds zero cf-class defense |
 | `SystemCallFilter` | rejected | `~@mount @swap` | `~@swap` only | `@mount` breaks rootless containers, no cf-class defense gain |
 | systemd unit list | user@/sshd/cron/crond/atd | user@/sshd + container runtimes (active) | user@/sshd/cron/crond/atd default; container runtimes shipped as **examples** | applying `~user` to runtime daemons breaks every rootless deployment |
-| JSON shape | map only | array + map | array + map | array is SIEM-ergonomic, map is granular — keep both |
+| JSON shape | map only | array + map | array + map | array is SIEM-ergonomic, map is granular, keep both |
 | `chmod 4750 /usr/bin/su` | unconditional flag | conditional on user inventory | conditional on user inventory | rev 2 self-review fix carried forward |
 
 ---
 
-## 11. Self-review (challenge pass — rev 3)
+## 11. Self-review (challenge pass, rev 3)
 
 The rev 2 → rev 3 reset corrected over-tightening. Re-running the
 challenge pass on rev 3:
@@ -515,7 +515,7 @@ challenge pass on rev 3:
 - **Default systemd unit list (user@/sshd/cron/crond/atd)** covers the
   tenant blast radius (login shells + scheduled jobs) without touching
   infrastructure daemons. Drop-ins on units that don't exist are
-  silently ignored at daemon-reload — `cron.service` (Debian) and
+  silently ignored at daemon-reload, `cron.service` (Debian) and
   `crond.service` (RHEL) are both listed for cross-distro coverage.
 - **Container-runtime drop-ins as examples**: operators who legitimately
   run rootless or userns-remapped containers under containerd/docker/
@@ -528,7 +528,7 @@ challenge pass on rev 3:
   block useful workflow. Net: this default protects the high-value
   case without the high-cost collateral.
 - **`SystemCallFilter=~@swap`** is a zero-cost cut. `@swap` blocks
-  `swapon`/`swapoff` — no tenant has legitimate use, and these
+  `swapon`/`swapoff`, no tenant has legitimate use, and these
   syscalls only matter to administrators. Adding it costs nothing,
   catches accidental misconfiguration, and provides a small additional
   hardening layer beyond the cf-class scope.
@@ -545,14 +545,14 @@ challenge pass on rev 3:
   cost is trivial.
 - **Untouched concerns from rev 1**: `%config(noreplace)` on conf
   files, README override docs, auditd rule limitations, `Epoch: 1`
-  permanence — all carried into this rev.
+  permanence, all carried into this rev.
 
 **No outstanding fixes.** Rev 3 is the protection-without-disruption
 optimum I can produce without operator-fleet-specific signal. Proceed.
 
 ---
 
-# 12. v2.0.1 hotfix — auto-detect conflicting workloads
+# 12. v2.0.1 hotfix, auto-detect conflicting workloads
 
 **Status:** drafted 2026-05-08, awaiting Ryan's review. Builds on
 v2.0.0 §1–§11. New decisions D-27..D-50 continue the index.
@@ -595,11 +595,11 @@ JSON report the auditor consumes.
   on demand (operator enabled IPsec post-install; reboot or fleet
   config change). Same logic as `%posttrans`. **[D-29]**
 - **No changes to v2.0.0 always-on cuts:**
-  - cf1 modprobe stanza (`algif_aead authenc authencesn af_alg`) —
+  - cf1 modprobe stanza (`algif_aead authenc authencesn af_alg`)
     always installed.
-  - systemd `RestrictAddressFamilies=~AF_ALG` —
+  - systemd `RestrictAddressFamilies=~AF_ALG`
     always installed (no realistic legitimate userspace consumer).
-  - systemd `RestrictAddressFamilies=~AF_RXRPC` —
+  - systemd `RestrictAddressFamilies=~AF_RXRPC`
     **conditional on AFS detection** (rev 2 fixup per reviewer C-3:
     aklog/kinit -A open AF_RXRPC sockets to vlserver/ptserver, so
     leaving this unconditional breaks AFS userspace tooling on
@@ -617,7 +617,7 @@ JSON report the auditor consumes.
   stays deferred. v2.0.1 ships into the same repo trees alongside
   v2.0.0; v1.0.1 RPMs remain for the upgrade-path test.
 - runtime-state checks (`ip xfrm policy list`, `mount`, `docker
-  info`) — explicitly rejected. They're flaky inside `mock` build
+  info`), explicitly rejected. They're flaky inside `mock` build
   environments and unreliable during scriptlet execution. **[D-31]**
 
 ## 12.4 File-layout split
@@ -630,9 +630,9 @@ splits them. **[D-32]**
 
 | File | Contents | Suppressible |
 |---|---|---|
-| `99-copyfail-defense-cf1.conf` | algif_aead, authenc, authencesn, af_alg | NO — always-on |
-| `99-copyfail-defense-cf2-xfrm.conf` | esp4, esp6, xfrm_user, xfrm_algo | YES — IPsec conflict |
-| `99-copyfail-defense-rxrpc.conf` | rxrpc | YES — AFS conflict |
+| `99-copyfail-defense-cf1.conf` | algif_aead, authenc, authencesn, af_alg | NO, always-on |
+| `99-copyfail-defense-cf2-xfrm.conf` | esp4, esp6, xfrm_user, xfrm_algo | YES, IPsec conflict |
+| `99-copyfail-defense-rxrpc.conf` | rxrpc | YES, AFS conflict |
 
 **Numbering:** all three keep the `99-` prefix so any operator
 `100-*` drop overrides ours. The shared `-copyfail-defense-` prefix
@@ -645,9 +645,9 @@ fixup per reviewer C-3 / D-30):
 
 | File | Contents | Suppressible |
 |---|---|---|
-| `10-copyfail-defense.conf` | `RestrictAddressFamilies=~AF_ALG` + `SystemCallArchitectures=native` + `SystemCallFilter=~@swap` | NO — always-on |
-| `12-copyfail-defense-rxrpc-af.conf` | `RestrictAddressFamilies=~AF_RXRPC` | YES — AFS conflict (aklog/kinit -A open userspace AF_RXRPC sockets to vlserver/ptserver) |
-| `15-copyfail-defense-userns.conf` | `RestrictNamespaces=~user ~net` | YES — rootless container conflict (only on `user@.service.d`) |
+| `10-copyfail-defense.conf` | `RestrictAddressFamilies=~AF_ALG` + `SystemCallArchitectures=native` + `SystemCallFilter=~@swap` | NO, always-on |
+| `12-copyfail-defense-rxrpc-af.conf` | `RestrictAddressFamilies=~AF_RXRPC` | YES, AFS conflict (aklog/kinit -A open userspace AF_RXRPC sockets to vlserver/ptserver) |
+| `15-copyfail-defense-userns.conf` | `RestrictNamespaces=~user ~net` | YES, rootless container conflict (only on `user@.service.d`) |
 
 **Why split at `10-` / `12-` / `15-` instead of one `10-` and one
 `20-override`:** a numerically-low prefix lets all three of our
@@ -659,7 +659,7 @@ documented in v2.0.1 README (`20-override.conf` to empty-value any
 directive; `25-additions.conf` to add new directives) continue to work
 because they sort after our 15-* in every directory. **[D-33]**
 
-`RestrictAddressFamilies` is mergeable — systemd unions the value
+`RestrictAddressFamilies` is mergeable, systemd unions the value
 across drop-ins, so the `~AF_RXRPC` token in the `12-` file extends
 the `~AF_ALG` token from the `10-` file when both are present. When
 the `12-` is suppressed, only `~AF_ALG` applies. **[D-33a]**
@@ -669,7 +669,7 @@ the `12-` is suppressed, only `~AF_ALG` applies. **[D-33a]**
 - **`10-` always installed** on all 5 tenant units (user@/sshd/cron/crond/atd).
 - **`12-rxrpc-af` suppressed when AFS detected**, on all 5 units (since
   AFS userspace tooling can be invoked from any of those service
-  contexts — login shell, cron job, at job).
+  contexts, login shell, cron job, at job).
 - **`15-userns` suppressed for `user@.service.d` ONLY** when rootless
   containers are detected. `RestrictNamespaces=~user ~net` on
   sshd/cron/crond/atd is INTENDED defense (those don't legitimately
@@ -691,7 +691,7 @@ The conditional drop-ins ship as **package-owned templates** under
 ```
 
 `%posttrans` copies templates to `/etc/...` only when no conflict is
-detected. `/etc/...` files are **not RPM-owned** — they're created and
+detected. `/etc/...` files are **not RPM-owned**, they're created and
 removed by the scriptlet. `%config(noreplace)` doesn't apply because
 RPM doesn't track them. The always-on files stay RPM-owned with
 `%config(noreplace)` per D-24. **[D-35]**
@@ -702,7 +702,7 @@ file at the same path that *would have applied* the cut, then mute
 it. Operators inspecting `/etc/modprobe.d/` to understand state see a
 file that looks like the mitigation is active but isn't. Splitting +
 copy-on-detect leaves `/etc/...` empty when the mitigation isn't
-applied — operator's mental model matches reality. **[D-36]**
+applied, operator's mental model matches reality. **[D-36]**
 
 ### 12.4.4 What v2.0.0 → v2.0.1 RPM upgrade does to existing files
 
@@ -713,7 +713,7 @@ Operators who already installed v2.0.0 have:
 Both are `%config(noreplace)`. RPM upgrade rules: when a `%config`
 file's path is removed from a new package (because we split it), RPM
 moves the existing file to `<path>.rpmsave` and does NOT install the
-new file. That breaks v2.0.0 → v2.0.1 upgrade silently — the host
+new file. That breaks v2.0.0 → v2.0.1 upgrade silently, the host
 keeps the old monolithic file (still applying the unconditional cut)
 and gets none of the new split files (no cf1 cut, no userns cut, no
 detection).
@@ -725,7 +725,7 @@ cleanly AND any operator hand-edits to the v2.0.0 monolithic file
 are preserved on disk for inspection. The rename is conditional on
 the v2.0.0 file existing AND the v2.0.0 RPM having been installed
 (avoid renaming files an operator hand-placed before installing
-v2.0.0). The RPM does NOT consult `.rpmsave-v2.0.1` files — they're
+v2.0.0). The RPM does NOT consult `.rpmsave-v2.0.1` files, they're
 inert audit-trail artifacts the operator can review/restore by hand
 or delete with `rm`. **[D-37]**
 
@@ -735,7 +735,7 @@ file is plausible. Aggressive `rm -f` would silently destroy that
 edit. Renaming preserves it.
 
 ```sh
-# %pretrans modprobe — runs before v2.0.1 unpacks
+# %pretrans modprobe, runs before v2.0.1 unpacks
 old=/etc/modprobe.d/99-copyfail-defense.conf
 if [ -f "$old" ] && \
    rpm -q copyfail-defense-modprobe --qf '%{version}' 2>/dev/null \
@@ -750,7 +750,7 @@ drop-ins (each file gets its own `.rpmsave-v2.0.1` next to it).
 
 ## 12.5 Detection signals
 
-Strict signals only — no false positives from package presence alone.
+Strict signals only, no false positives from package presence alone.
 **Detection runs in `%posttrans`**, after all subpackages are unpacked
 but before scriptlets close, so the host's persistent state is what
 gets inspected (NOT the freshly-installed package's state). Helper
@@ -791,7 +791,7 @@ Detected if **any** of:
    file (non-empty: any file with non-whitespace content).
 4. `/etc/ipsec.d/*.conf` matches at least one file with non-whitespace
    content.
-5. `/etc/strongswan/conf.d/*.conf` or `/etc/strongswan.d/*.conf` —
+5. `/etc/strongswan/conf.d/*.conf` or `/etc/strongswan.d/*.conf`
    distro-divergent strongSwan layout. Same non-empty rule.
 
 **No runtime-state checks.** `ip xfrm policy list` and similar are
@@ -799,16 +799,16 @@ rejected per D-31.
 
 **Edge cases handled:**
 
-- Stopped-but-enabled IPsec daemon (maintenance window) — `is-enabled`
+- Stopped-but-enabled IPsec daemon (maintenance window), `is-enabled`
   still returns `enabled`. Detection trips. Correct. **[D-39]**
-- Comments-only `ipsec.conf` — `conn` stanza grep skips comments via
+- Comments-only `ipsec.conf`, `conn` stanza grep skips comments via
   `^[[:space:]]*conn[[:space:]]+`. Correct.
-- Debian-vs-RHEL service name divergence — alias list (1) catches
+- Debian-vs-RHEL service name divergence, alias list (1) catches
   Fedora/EPEL `strongswan.service` + `strongswan-starter.service`
   (both ship in `/usr/lib/systemd/system/` per Fedora packaging),
   Debian `strongswan.service`, EPEL `strongswan-swanctl.service`,
   the legacy `ipsec.service` symlink, libreswan / pluto rebuilds.
-- FRRouting: NOT a signal in rev 2 — see D-51. BGP-only FRR
+- FRRouting: NOT a signal in rev 2, see D-51. BGP-only FRR
   deployments dominate; FRR-with-IPsec-VTI operators can use
   `force-full` or hand-edit a `20-override.conf`.
 
@@ -833,7 +833,7 @@ included `/etc/subuid` cross-referenced against `UID>=1000` users.
 shadow-utils' `useradd` populates `/etc/subuid` for every regular
 user regardless of container intent, which produces a near-100%
 false-positive rate on cPanel hosts (the project's primary target
-audience). cPanel routinely creates 100s-1000s of regular users —
+audience). cPanel routinely creates 100s-1000s of regular users
 on those fleets the signal trips on first install, suppressing the
 `user@.service` userns cut and inverting the v2.0.0 → v2.0.1
 protection guarantee. The signal is dropped entirely. The
@@ -849,7 +849,7 @@ Detected if **any** of these *storage-tree* signals:
    exists for any user (this is podman's default rootless storage
    path; presence means some user has actually run a rootless
    container at least once). Per `containers/storage` upstream
-   defaults — see <https://github.com/containers/storage/blob/main/storage.conf>
+   defaults, see <https://github.com/containers/storage/blob/main/storage.conf>
    ("rootless\_storage\_path" defaults to
    `$HOME/.local/share/containers/storage`).
 2. **Rootful container storage tree with recent activity**:
@@ -876,7 +876,7 @@ Detected if **any** of these *storage-tree* signals:
 adoption rationale):
 
 - **Storage tree presence is the canonical podman rootless
-  fingerprint** — it's literally the directory podman creates the
+  fingerprint**, it's literally the directory podman creates the
   first time `podman run` succeeds rootlessly. Operators who set up
   the rootless prerequisite (`useradd`, `loginctl enable-linger`)
   but never invoked podman do not trip these signals. This
@@ -942,7 +942,7 @@ detected, the file is removed from `/etc/...` and the tenant's
 AF_RXRPC use survives.
 
 The reviewer's specific code-example (`add_key("rxrpc",...)`) was
-technically wrong (keyctl is not a socket family restriction —
+technically wrong (keyctl is not a socket family restriction
 that's a separate `add_key` keyring API), but the broader concern
 about AF_RXRPC userspace consumers stands and drives this fix.
 
@@ -959,14 +959,14 @@ about AF_RXRPC userspace consumers stands and drives this fix.
   some Kerberos-AFS integrations, `pts`, `vos`) opens AF_RXRPC
   sockets to talk to vlserver/ptserver from userspace. Kernel
   kafs uses the in-kernel rxrpc API, but the userspace tooling is
-  the AFS-token-acquisition path — breaking it leaves authenticated
+  the AFS-token-acquisition path, breaking it leaves authenticated
   AFS access broken for every tenant on the host. The earlier
   draft's claim that "no production workload reaches user-space
   AF_RXRPC" was incorrect for AFS hosts.
 
 `~AF_ALG` stays unconditional in v2.0.1; `~AF_RXRPC` becomes
 conditional on AFS detection (signals identical to those gating
-the `rxrpc` modprobe blacklist — §12.5.2). If an AF_ALG
+the `rxrpc` modprobe blacklist, §12.5.2). If an AF_ALG
 counter-example surfaces post-ship, add it to v2.0.2 detection.
 **[D-30]**
 
@@ -1023,13 +1023,13 @@ Schema rules:
   expanded for the new `12-rxrpc-af` drop-in. The rootless detection
   signal text format also changed (storage-tree based instead of
   subuid based).
-- `signals` is a free-form list of human-readable strings — debugging
+- `signals` is a free-form list of human-readable strings, debugging
   aid, not a structured contract. Auditor reads `present` only.
 - `force_full: true` means `/etc/copyfail/force-full` was present; all
   `suppressed.*` are `false`, all `applied.*` are `true`.
 - Atomically written: detect.sh writes to `auto-detect.json.tmp`, then
   `mv -f` over the final path. No partial-state window.
-- **JSON emission uses python3** (rev 2 fixup per reviewer M-6) —
+- **JSON emission uses python3** (rev 2 fixup per reviewer M-6)
   `python3 -c 'import json,sys; ...'` reads detect.sh's collected
   state via env-var marshalling and emits a properly-escaped JSON
   document. Bash heredoc emission is rejected because it cannot
@@ -1049,17 +1049,17 @@ auditor reads `schema_version` and compares against its own
   INFO) regardless of detected workloads, because the auditor cannot
   trust the file's contents.
 - Exit code: WARN-emitting checks already escalate the auditor's
-  exit code via existing logic — no NEW exit code value is added.
+  exit code via existing logic, no NEW exit code value is added.
   This is the "keep at WARN but require the new field" branch of
   reviewer M-3's two options. **[D-53]**
 
 ## 12.7 Force-full sentinel
 
-`/etc/copyfail/force-full` (path, content irrelevant — existence-based)
+`/etc/copyfail/force-full` (path, content irrelevant, existence-based)
 makes `%posttrans` skip detection entirely and install all
 suppressible mitigations. Operator's "I know my host" lever.
 
-- File presence test only — content is ignored. Empty file works.
+- File presence test only, content is ignored. Empty file works.
 - The `/etc/copyfail/` directory is RPM-owned by `copyfail-defense`
   (meta) at `%dir 0755 root:root` so it exists from first install.
   Sentinel is operator-created; package never writes it. **[D-43]**
@@ -1093,13 +1093,13 @@ echo "to apply systemd drop-in changes."
 modprobe / systemd / both subpackages: detect, copy templates / remove
 conditional `/etc/...` files matching the scope, write
 `auto-detect.json`, log to LOG_AUTHPRIV. The helper does NOT call
-`daemon-reload` itself — operator decides when to take the reload hit.
+`daemon-reload` itself, operator decides when to take the reload hit.
 **[D-44]**
 
 **Rev 2 fixup (reviewer L-3):** detect.sh's `report` mode is **dropped
 in v2.0.1**. It was originally specced as a "dry-run JSON to stdout"
 for the auditor to consume, but the final auditor design (§12.9)
-reads the on-disk `auto-detect.json` directly — there's no consumer
+reads the on-disk `auto-detect.json` directly, there's no consumer
 for the `report` mode. Removing it keeps detect.sh's CLI surface
 minimal and removes dead code. If a future caller needs dry-run
 output, add it back with a real consumer wired in the same change.
@@ -1127,7 +1127,7 @@ Plus a new check `check_auto_detect_state()` under MITIGATION:
 
 - `OK` if no workloads detected (or `force_full` set).
 - `INFO` (not WARN) if workloads detected and corresponding
-  mitigations suppressed — that's the package working as designed.
+  mitigations suppressed, that's the package working as designed.
 - `WARN` if `auto-detect.json` is missing on a host where
   `copyfail-defense-modprobe` or `-systemd` is installed (means
   scriptlets failed silently).
@@ -1179,7 +1179,7 @@ mutates `/etc/systemd/system/<unit>.service.d/` when scope is
 
 | Phase | Action |
 |---|---|
-| `%pretrans` | If v2.0.0 monolithic file present AND v2.0.0 RPM was installed, rename to `<path>.rpmsave-v2.0.1` (D-37 — preserves operator hand-edits) |
+| `%pretrans` | If v2.0.0 monolithic file present AND v2.0.0 RPM was installed, rename to `<path>.rpmsave-v2.0.1` (D-37, preserves operator hand-edits) |
 | `%files` | Always-on `99-copyfail-defense-cf1.conf` (RPM-owned, `%config(noreplace)`); templates under `/usr/share/copyfail-defense/conditional/modprobe/` (RPM-owned, no `%config`) |
 | `%post` | Best-effort `rmmod` of cf1 modules only (cf2/rxrpc deferred to %posttrans because we don't yet know whether to apply them); existing LOG_AUTHPRIV trail preserved |
 | `%posttrans` | Run `/usr/libexec/copyfail-defense/detect.sh apply modprobe`. Writes `auto-detect.json`, copies templates → `/etc/modprobe.d/` for non-conflicting cuts, removes any stale conditional files. Does NOT touch `/etc/systemd/system/` (scope is modprobe-only). Run rmmod for cf2/rxrpc if applied. |
@@ -1230,11 +1230,11 @@ operators use the standard systemd drop-in numerical-ordering rule
 helper script's apply mode is fully idempotent:
 
 - Detection re-runs from scratch (no caching of previous result).
-- Template copy uses `install -m 0644 -o root -g root <src> <dst>` —
+- Template copy uses `install -m 0644 -o root -g root <src> <dst>`
   no diff/merge logic; if the file exists with matching content, copy
   is a no-op. **Rev 2 fixup (D-57): if content differs (operator
   hand-edited the file), detect.sh logs a WARN and SKIPS the
-  overwrite — operator's edits are preserved.** Suppression-removal
+  overwrite, operator's edits are preserved.** Suppression-removal
   still proceeds regardless of hand-edits (suppression wins for
   safety).
 - Conditional file removal (`rm -f`) is no-op when the file is absent.
@@ -1256,7 +1256,7 @@ the apply flow. The script is idempotent (D-46), so partial state
 converges to the correct state on next run.
 
 If `auto-detect.json` is missing entirely, the auditor's
-`check_auto_detect_state()` reports WARN per §12.9 — the operator gets
+`check_auto_detect_state()` reports WARN per §12.9, the operator gets
 a visible signal that re-detect is needed. **[D-47]**
 
 ### 12.10.5 Mock-build environment
@@ -1311,7 +1311,7 @@ cPanel-FP regression). **[D-50]**
 
 ## 12.12 Documentation surface
 
-- `README.md` — replace the "Override paths" section. New section:
+- `README.md`, replace the "Override paths" section. New section:
   "Auto-detection of conflicting workloads" describing the three
   detection signals, the JSON report path, the `copyfail-redetect`
   helper, the `force-full` sentinel, and the **systemd-drop-in
@@ -1323,7 +1323,7 @@ cPanel-FP regression). **[D-50]**
   these two standard systemd drop-in patterns:
 
   - **`20-override.conf` (empty-value to neutralize a directive)**
-    — drop a `20-override.conf` next to our `10-`/`12-`/`15-` files
+   , drop a `20-override.conf` next to our `10-`/`12-`/`15-` files
     with empty values for any directive you want to relax. systemd
     drop-ins merge in lex order; `20` > `10`/`12`/`15`, so the
     empty value wins and effectively disables the directive on
@@ -1340,7 +1340,7 @@ cPanel-FP regression). **[D-50]**
     sudo systemctl daemon-reload
     ```
 
-  - **`25-additions.conf` (add a new directive)** — drop a
+  - **`25-additions.conf` (add a new directive)**, drop a
     `25-additions.conf` next to ours with directives you want to
     *add* (not override). The same lex-order merge applies, so
     `25-` lands after `20-`. Use this for adding fleet-wide cuts
@@ -1362,7 +1362,7 @@ cPanel-FP regression). **[D-50]**
     value is added to the union). For
     `RestrictAddressFamilies=` and `RestrictNamespaces=`, the
     `=` (single equals) syntax is union/replace per systemd's
-    rules — empty value clears the union entirely. The
+    rules, empty value clears the union entirely. The
     documented pattern works for the v2.0.1 directive set; for
     other directives consult `man 5 systemd.unit`.
 
@@ -1380,13 +1380,13 @@ cPanel-FP regression). **[D-50]**
   managed by detect.sh and not RPM-owned. Operators wanting to
   pin one of these against detect.sh's decisions should hand-edit
   the file *and accept* that the cmp-and-skip policy (D-57) will
-  preserve their edits — they'll get a WARN in the LOG_AUTHPRIV
+  preserve their edits, they'll get a WARN in the LOG_AUTHPRIV
   trail and a dnf-stderr notice on every %posttrans, but their
   edits survive.
 
-- `STATE.md` — bump to v2.0.1.
-- `BRIEF.md` — no changes (the bug-class story is unchanged).
-- `FOLLOWUPS.md` — move "operator-side override docs" out of the
+- `STATE.md`, bump to v2.0.1.
+- `BRIEF.md`, no changes (the bug-class story is unchanged).
+- `FOLLOWUPS.md`, move "operator-side override docs" out of the
   open list (subsumed); add the "v2.0.2 watch list" with all
   reviewer-deferred items per the fixup directive (M-5, M-7, M-8,
   L-1, L-2, L-4, L-5, L-6, L-8) plus the v2.1.0 forward-cleanup
@@ -1401,13 +1401,13 @@ cPanel-FP regression). **[D-50]**
 - **D-30** `RestrictAddressFamilies=~AF_ALG` stays unconditional
   (no realistic legitimate-userspace consumer). `~AF_RXRPC` becomes
   **conditional** on AFS detection (rev 2 fixup per reviewer C-3:
-  AFS userspace tooling — `aklog`, `kinit -A`, `pts`, `vos` —
+  AFS userspace tooling, `aklog`, `kinit -A`, `pts`, `vos`
   opens userspace AF_RXRPC sockets to vlserver/ptserver). The
   conditional `~AF_RXRPC` ships in the new
   `12-copyfail-defense-rxrpc-af.conf` drop-in, gated by the same
   AFS signals as the `rxrpc` modprobe blacklist.
 - **D-31** No runtime-state checks (`ip xfrm`, `mount`, `docker info`)
-  — flaky in mock and during scriptlets.
+, flaky in mock and during scriptlets.
 - **D-32** Split monolithic conf files: 3 modprobe + 2-per-unit
   systemd.
 - **D-33** systemd userns drop-in numbered `15-` (between always-on
@@ -1430,7 +1430,7 @@ cPanel-FP regression). **[D-50]**
   (per D-56).
 - **D-39** Stopped-but-enabled IPsec daemon counts as detected.
 - **D-40** Rootless container signals (rev 2 fixup per reviewer C-1
-  / M-4 / L-7): storage-tree based — per-user
+  / M-4 / L-7): storage-tree based, per-user
   `~/.local/share/containers/storage/overlay-containers/`,
   `/var/lib/containers/storage/` non-empty + recent mtime,
   `/run/user/<UID>/containers/`, `podman.socket` enabled
@@ -1440,7 +1440,7 @@ cPanel-FP regression). **[D-50]**
   D-41's stale-subuid concern moot. Operators who pre-stage user
   accounts but never run rootless containers no longer trip the
   signal at all.
-- **D-42** `auto-detect.json` schema v2 (rev 2 bump from v1 — keys
+- **D-42** `auto-detect.json` schema v2 (rev 2 bump from v1, keys
   expanded for `12-rxrpc-af`); auditor consumes it; rejects
   unknown schema versions with WARN + structured field
   `posture.auto_detect.schema_unrecognized: true` (D-53).
@@ -1470,14 +1470,14 @@ cPanel-FP regression). **[D-50]**
   rebuilds); REMOVE `frr` (BGP-only deployments dominate FRR; FP
   cost greater than FN cost). Reviewer M-1 / M-2.
 - **D-52** detect.sh JSON emission uses `python3 -c 'import
-  json,sys; ...'` not bash heredoc — properly escapes control
+  json,sys; ...'` not bash heredoc, properly escapes control
   chars and signal text containing quotes. python3 is already a
   runtime dep of the auditor. Reviewer M-6.
 - **D-53** auditor schema-rejection adds
   `posture.auto_detect.schema_unrecognized: true` field; check
   returns WARN (existing behavior, no new exit code).
   Reviewer M-3.
-- **D-54** detect.sh `report` mode dropped — was unused by the
+- **D-54** detect.sh `report` mode dropped, was unused by the
   final auditor design (auditor reads the on-disk file directly).
   Trim dead code. Reviewer L-3.
 - **D-55** detect.sh failure surfaces to dnf stderr (via tee) so
@@ -1498,7 +1498,7 @@ cPanel-FP regression). **[D-50]**
   Reviewer C-7.
 - **D-58** README documents `20-override.conf` (empty values to
   neutralize a directive) and `25-additions.conf` (add new
-  directives) as the operator escape hatches — both are standard
+  directives) as the operator escape hatches, both are standard
   systemd drop-in patterns and survive package upgrade.
   Removes the `chattr +i` recommendation entirely. Includes the
   systemd numerical-ordering rule (lower numbers lose to higher
@@ -1517,7 +1517,7 @@ fixup directive):** M-5 (find /home perf + auditd noise), M-7
 redundant write), L-1, L-2, L-4, L-5, L-6, L-8. See FOLLOWUPS.md
 for the deferral list.
 
-## 12.14 Self-review (challenge pass — v2.0.1)
+## 12.14 Self-review (challenge pass, v2.0.1)
 
 - **Does the split survive `dnf reinstall`?** Yes. `%pretrans` only
   fires on upgrade (RPM passes `$1 == 2`). On reinstall, the v2.0.1
@@ -1557,7 +1557,7 @@ for the deferral list.
   `/etc/openafs/`, `/etc/subuid`, `/etc/ipsec.conf` paths are all
   upstream-Linux conventional, present on all three.
 - **Race between detect.sh and concurrent dnf?** RPM serializes
-  scriptlets — only one transaction at a time. `auto-detect.json`
+  scriptlets, only one transaction at a time. `auto-detect.json`
   atomic-writes via tmpfile + `mv -f`. No race.
 - **Operator runs `copyfail-redetect` while a `%posttrans` from a
   separate dnf is in progress?** Both invoke the same detect.sh; the
@@ -1565,7 +1565,7 @@ for the deferral list.
   atomic `mv -f` means the JSON is always either the old or new
   state, never a blend. Acceptable.
 
-**Reviewer's three open questions — resolved in rev 2 fixup:**
+**Reviewer's three open questions, resolved in rev 2 fixup:**
 
 1. **Operator-edit policy for conditional `15-*` files
    (overwrite-on-detect vs cmp-and-skip)?** **Resolved: cmp-and-skip
@@ -1600,7 +1600,7 @@ for the deferral list.
   host with `aklog` retains AF_RXRPC userspace socket access. A
   non-AFS host still gets the cut. Edge case: a host that runs
   the kernel selftest suite for AF_RXRPC (as the rev 1 draft
-  cited as the only userspace consumer) — rev 2 still applies
+  cited as the only userspace consumer), rev 2 still applies
   the cut on those hosts (no AFS signal trips). Acceptable;
   selftest is a developer workflow, not a production deployment.
 - **Per-subpackage detect.sh scope vs orphan files.** With
@@ -1611,7 +1611,7 @@ for the deferral list.
   drop-ins (because `-systemd` was never installed). detect.sh
   still writes `auto-detect.json` regardless of scope (it's a
   shared report). Edge case: operator installs `-modprobe`,
-  later installs `-systemd` — `-systemd` `%posttrans apply
+  later installs `-systemd`, `-systemd` `%posttrans apply
   systemd` adds the systemd files; the modprobe state is
   unchanged (correct, idempotent). Verified.
 - **`.rpmsave-v2.0.1` rename vs operator hand-edits.** Rename
@@ -1625,7 +1625,7 @@ for the deferral list.
   decides to *suppress* that cut (operator added IPsec
   post-install), the file is removed (suppression wins over
   hand-edit). Counter-edge: operator who edited the file to
-  *strengthen* the cut and then enabled IPsec — they lose the
+  *strengthen* the cut and then enabled IPsec, they lose the
   edit on next %posttrans, which is correct because the cut
   conflicts with their now-enabled IPsec. Documented in
   README "Manual override (finer than detection)" subsection.
@@ -1659,29 +1659,29 @@ documented for the next reviewer pass to inspect.
 
 ---
 
-## 13. v2.1.0 architecture — PinTheft, ssh-keysign-pwn, EL7
+## 13. v2.1.0 architecture, PinTheft, ssh-keysign-pwn, EL7
 
 ### 13.1 Scope of v2.1.0
 
 Two new bug-class additions and one new build target. The package
 family naming, scriptlet structure, auto-detection framework, and
 auditor JSON schema (v2) are unchanged. v2.1.0 layers new mitigation
-rungs onto the existing six subpackages — no subpackage rename, no
+rungs onto the existing six subpackages, no subpackage rename, no
 new subpackage. **[D-59]**
 
-- **PinTheft** (CVE pending) — RDS zerocopy double-free + io_uring
+- **PinTheft** (CVE pending), RDS zerocopy double-free + io_uring
   fixed-buffer page-cache overwrite of SUID binary. Same outcome as
   cf1; different entry path. Covered by a new `-modprobe` blacklist
   for `rds`/`rds_tcp`/`rds_rdma`, a new `RestrictAddressFamilies=~AF_RDS`
   entry in the always-on `10-copyfail-defense.conf` systemd drop-in,
   a new auditd key `copyfail_afrds`, and an opt-in
   `kernel.io_uring_disabled=2` sysctl.
-- **ssh-keysign-pwn** (CVE-2026-46333) — `__ptrace_may_access()` race
+- **ssh-keysign-pwn** (CVE-2026-46333), `__ptrace_may_access()` race
   + `pidfd_getfd` on exiting SUID binary. FD-theft / privilege
   confusion class, not page-cache overwrite. Covered by a new
   `kernel.yama.ptrace_scope=2` sysctl entry and a new auditd key
   `copyfail_pidfd_getfd`.
-- **EL7** — build target restored. Mock chroot uses
+- **EL7**, build target restored. Mock chroot uses
   `vault.centos.org/centos/7.9.2009/{os,updates,extras}/x86_64/` +
   EPEL archive at `archives.fedoraproject.org/pub/archive/epel/7/x86_64/`.
   Native rpmbuild on the existing EL7 toolchain is the fallback if
@@ -1693,7 +1693,7 @@ new subpackage. **[D-59]**
 |---           |---                                                 |---     |
 | `-modprobe`  | `/etc/modprobe.d/99-copyfail-defense-rds.conf`     | `install rds /bin/true` for `rds`, `rds_tcp`, `rds_rdma`; conditional (suppressed by detect.sh on RDS-workload hosts) **[D-60]** |
 | `-systemd`   | extends always-on `10-copyfail-defense.conf` on the 5 tenant units with `~AF_RDS` in the `RestrictAddressFamilies=` list (joined with existing `~AF_ALG ~AF_KEY ~AF_RXRPC`) | unconditional **[D-61]** |
-| `-sysctl`    | extends `/etc/sysctl.d/99-copyfail-defense-userns.conf` with `kernel.yama.ptrace_scope = 2` (active) and `# kernel.io_uring_disabled = 2` (commented out — opt-in) | active line unconditional; opt-in line operator-uncomments **[D-62]** |
+| `-sysctl`    | extends `/etc/sysctl.d/99-copyfail-defense-userns.conf` with `kernel.yama.ptrace_scope = 2` (active) and `# kernel.io_uring_disabled = 2` (commented out, opt-in) | active line unconditional; opt-in line operator-uncomments **[D-62]** |
 | `-audit`     | extends `/etc/audit/rules.d/99-copyfail-defense.rules` with two new rules: `socket(a0=21)` keyed `copyfail_afrds`, and `pidfd_getfd` (numeric syscall 438) keyed `copyfail_pidfd_getfd` | unconditional **[D-63]** |
 
 ### 13.3 RDS workload detection
@@ -1710,7 +1710,7 @@ IPsec / AFS / rootless detectors. Signals (any of):
 When detected, `apply_modprobe` suppresses
 `99-copyfail-defense-rds.conf`. The auto-detect.json `detected` map
 gains a `rds_workload` entry; the `suppressed` map gains
-`modprobe_rds`. **Schema version remains 2** — keys are additive,
+`modprobe_rds`. **Schema version remains 2**, keys are additive,
 existing SIEM consumers ignore them gracefully. **[D-64]**
 
 The AF_RDS entry in the always-on systemd drop-in is **NOT**
@@ -1724,17 +1724,17 @@ specific tenant unit legitimately needs AF_RDS. **[D-65]**
 
 `copyfail-local-check` gains four new checks:
 
-- `check_rds_modprobe` (MITIGATION) — verifies
+- `check_rds_modprobe` (MITIGATION), verifies
   `99-copyfail-defense-rds.conf` presence and content (or
   acknowledges suppression via `auto-detect.json`)
-- `check_af_rds_restrict` (MITIGATION) — verifies
+- `check_af_rds_restrict` (MITIGATION), verifies
   `10-copyfail-defense.conf` contains `~AF_RDS` in
   `RestrictAddressFamilies=` for all 5 tenant units
-- `check_ptrace_scope` (HARDENING) — reads
+- `check_ptrace_scope` (HARDENING), reads
   `/proc/sys/kernel/yama/ptrace_scope`, OK at 2, INFO at 1, WARN
   at 0 (only WARNs if the `-sysctl` package is installed, per
   D-45 pattern)
-- `check_pidfd_getfd_auditd_rule` (DETECTION) — verifies the
+- `check_pidfd_getfd_auditd_rule` (DETECTION), verifies the
   `copyfail_pidfd_getfd` key exists in the loaded audit ruleset
 
 The per-class surface matrix gains two rows: `pintheft` and
@@ -1758,11 +1758,11 @@ operator explicitly accepts a deferred EL7 build. **[D-67]**
 - **D-59** v2.1.0 adds bug-class coverage via new mitigation rungs
   on the existing six subpackages; no rename, no new subpackage.
 - **D-60** PinTheft modprobe cut is a separate conf file
-  (`99-copyfail-defense-rds.conf`), conditional via detect.sh —
+  (`99-copyfail-defense-rds.conf`), conditional via detect.sh
   parallels the cf2-xfrm and rxrpc conditional-file pattern from
   v2.0.1 (D-32).
 - **D-61** PinTheft systemd cut extends the existing always-on
-  10-* drop-in's `RestrictAddressFamilies=` list — does NOT add a
+  10-* drop-in's `RestrictAddressFamilies=` list, does NOT add a
   new file. Aligns with the existing always-on-vs-conditional
   split: tenant-unit address-family restrictions are universal
   (D-30) so AF_RDS belongs in the universal block.
@@ -1771,7 +1771,7 @@ operator explicitly accepts a deferred EL7 build. **[D-67]**
   commented out) both extend the existing
   `99-copyfail-defense-userns.conf` file. The file is renamed
   semantically (still keeps its filename for `%config(noreplace)`
-  continuity) — its scope broadens from "userns lockdown" to
+  continuity), its scope broadens from "userns lockdown" to
   "kernel hardening for the cf-class + adjacent classes."
 - **D-63** Two new auditd rules added to the existing
   `99-copyfail-defense.rules` file; no new audit rule file.
@@ -1779,7 +1779,7 @@ operator explicitly accepts a deferred EL7 build. **[D-67]**
 - **D-64** auto-detect.json `schema_version` stays at "2". New keys
   (`rds_workload`, `modprobe_rds`) are additive. v2.0.x auditors
   reading a v2.1.0 host's auto-detect.json see the existing keys
-  unchanged and ignore the new ones — backward compatible.
+  unchanged and ignore the new ones, backward compatible.
 - **D-65** AF_RDS in systemd drop-in is unconditional even on
   RDS-detected hosts; matches D-30 (AF_ALG unconditional on
   IPsec-detected hosts). Operator's `20-override.conf` is the
@@ -1787,7 +1787,7 @@ operator explicitly accepts a deferred EL7 build. **[D-67]**
 - **D-66** Auditor JSON `posture.bug_classes` map gains `pintheft`
   and `keysign-pwn` entries. `bug_classes_covered` array gains
   them when mitigated. Schema version on auditor JSON stays at
-  "2.0" — additive, backward compatible.
+  "2.0", additive, backward compatible.
 - **D-67** EL7 build is best-effort: mock chroot preferred,
   native rpmbuild fallback documented in CHANGELOG. Release
   proceeds with EL7 deferred only on explicit operator

@@ -1607,7 +1607,7 @@ assert_no_scriptlet_fail() {
 
 # Container kernel = host kernel (containers cannot fake uname). The
 # scenario only makes sense where the production OS ships >= 6.6 by
-# default — that is EL10+ today. EL7/8/9 production kernels are < 6.6;
+# default, that is EL10+ today. EL7/8/9 production kernels are < 6.6;
 # the iouring_old_kernel scenario covers those distros. SKIP here.
 . /etc/os-release
 case "${VERSION_ID%%.*}" in
@@ -1646,7 +1646,7 @@ jq -e '.applied.sysctl_iouring == true' \
 # Unprivileged podman containers share /proc/sys with the host kernel
 # (no per-namespace sysctl writes) and lack CAP_SYS_ADMIN to mutate it.
 # The package correctness gate is (1) drop-in file installed and
-# (2) JSON state reports applied — both asserted above. Bare-metal
+# (2) JSON state reports applied, both asserted above. Bare-metal
 # operators see kernel.io_uring_disabled=2 after sysctl -p runs in
 # the live %posttrans on a real host.
 

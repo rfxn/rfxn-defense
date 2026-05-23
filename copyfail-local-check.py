@@ -157,7 +157,7 @@ CF_CLASS_MODULES = [
 # v2.0.0: tenant-facing systemd units that should carry the cf-class
 # RestrictAddressFamilies + RestrictNamespaces drop-in.
 CF_CLASS_TENANT_UNITS = ["sshd", "user@", "cron", "crond", "atd"]
-# Optional opt-in units (container runtimes — INFO not WARN if missing).
+# Optional opt-in units (container runtimes, INFO not WARN if missing).
 CF_CLASS_OPTIONAL_UNITS = ["containerd", "docker", "podman"]
 
 # --- Color/output ----------------------------------------------------------
@@ -1826,7 +1826,7 @@ def check_io_uring_disabled():
         detect_state = {}
     sup_blob = (detect_state or {}).get("suppressed", {}).get("sysctl_iouring")
     # sysctl_iouring is a dict {suppressed, reason} (v2.1.1+) or
-    # absent (older detect.sh) — handle both.
+    # absent (older detect.sh), handle both.
     if isinstance(sup_blob, dict):
         suppressed = bool(sup_blob.get("suppressed", False))
         reason = sup_blob.get("reason", "unknown")
@@ -1852,7 +1852,7 @@ def check_io_uring_disabled():
                      "mitigation active)".format(v),
                      details={"value": v, "detect_reason": reason})
 
-    # v == "0" — io_uring enabled.
+    # v == "0", io_uring enabled.
     if suppressed is True:
         return Check("io_uring_disabled", "MITIGATION", Status.INFO,
                      "io_uring_disabled=0; auto-suppressed (reason={}) "
@@ -1866,7 +1866,7 @@ def check_io_uring_disabled():
                      details={"value": v, "detect_reason": reason},
                      remediation="sysctl -p /etc/sysctl.d/99-copyfail-defense-iouring.conf "
                                  "; run copyfail-redetect")
-    # suppressed is None — older detect.sh or no install.
+    # suppressed is None, older detect.sh or no install.
     return Check("io_uring_disabled", "MITIGATION", Status.INFO,
                  "io_uring_disabled=0; detect.sh state unavailable",
                  details={"value": v, "detect_reason": reason})
@@ -2023,7 +2023,7 @@ def check_auditd_rules_extended():
 def check_pidfd_getfd_auditd_rule():
     """v2.1.0 DETECTION: report on pidfd_getfd audit rule presence.
 
-    pidfd_getfd(2) lets a tracer steal an open fd from a tracee — the
+    pidfd_getfd(2) lets a tracer steal an open fd from a tracee, the
     primitive behind the pintheft class (extract live TLS pins, agent
     socket fds, keyring handles). The rule key copyfail_pidfd_getfd is
     written by --emit-remediation and matches the canonical augenrules
@@ -2098,7 +2098,7 @@ AF_ALG_LEGITIMATE = (
 def check_af_alg_holders():
     """v2.0.0: snapshot processes currently holding AF_ALG sockets.
 
-    Useful as a baseline before enabling the shim — operators can
+    Useful as a baseline before enabling the shim, operators can
     confirm no legitimate process actively uses AF_ALG before enforcing
     a global block. Best-effort: depends on `ss` or `lsof`; degrades to
     SKIP if neither is available."""

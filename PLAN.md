@@ -1,8 +1,8 @@
-# PLAN — `copyfail-defense` v2.0.1
+# PLAN, `copyfail-defense` v2.0.1
 
 **Source:** `SPEC.md` §12 (drafted 2026-05-08; rev 2 after reviewer
-fixup pass — folds in C-1..C-8 + M-1..M-12 in-scope items).
-**Status:** SHIPPED 2026-05-08 — tag `v2.0.1` at commit `e16f739`,
+fixup pass, folds in C-1..C-8 + M-1..M-12 in-scope items).
+**Status:** SHIPPED 2026-05-08, tag `v2.0.1` at commit `e16f739`,
 gh-pages live at `94dedf4`, GH release with 20 assets. All 9 phases
 complete (Phases 1-7 by engineer dispatcher in commit `25e4f58`;
 Phases 8-9 by hand with detect.sh hotfix `e16f739` for the
@@ -26,7 +26,7 @@ D-51..D-58 per the reviewer report.
 ```
             ┌──────────────────────┐
             │ Phase 1              │
-            │ File-layout split    │  (foundational — splits monolithic
+            │ File-layout split    │  (foundational, splits monolithic
             │ (sources only)       │   conf into 3 modprobe + 2-per-unit
             └──────────┬───────────┘   systemd)
                        │
@@ -34,7 +34,7 @@ D-51..D-58 per the reviewer report.
             ▼                      ▼
 ┌──────────────────────┐  ┌──────────────────────┐
 │ Phase 2              │  │ Phase 3              │
-│ detect.sh helper     │  │ Spec scriptlet       │  (parallel — different
+│ detect.sh helper     │  │ Spec scriptlet       │  (parallel, different
 │ + auto-detect.json   │  │ rewrite              │   files; can do both)
 └──────────┬───────────┘  └──────────┬───────────┘
            │                         │
@@ -94,7 +94,7 @@ D-51..D-58 per the reviewer report.
 | `packaging/copyfail-modprobe.conf` | rename → `copyfail-modprobe-cf1.conf` | Phase 1 |
 | `packaging/copyfail-modprobe-cf2-xfrm.conf` | new | Phase 1 |
 | `packaging/copyfail-modprobe-rxrpc.conf` | new | Phase 1 |
-| `packaging/copyfail-systemd-dropin.conf` | rewrite (always-on body only — `~AF_ALG` only, no `~AF_RXRPC`) | Phase 1 |
+| `packaging/copyfail-systemd-dropin.conf` | rewrite (always-on body only, `~AF_ALG` only, no `~AF_RXRPC`) | Phase 1 |
 | `packaging/copyfail-systemd-dropin-rxrpc-af.conf` | new (rev 2: `~AF_RXRPC` body, gated on AFS detection) | Phase 1 |
 | `packaging/copyfail-systemd-dropin-userns.conf` | new (suppressible body) | Phase 1 |
 | `packaging/copyfail-systemd-dropin-containers.conf` | rewrite (concatenate all 3 bodies for the example) | Phase 1 |
@@ -122,7 +122,7 @@ D-51..D-58 per the reviewer report.
 
 ---
 
-## Phase 1 — File-layout split (sources only)
+## Phase 1, File-layout split (sources only)
 
 **Goal.** Split the monolithic v2.0.0 conf files into v2.0.1 layout
 per SPEC §12.4. No spec changes yet (Phase 3 wires them up). Pure
@@ -204,7 +204,7 @@ final paths).
   blacklist rxrpc
   ```
 
-- [ ] **1.5** Rewrite `packaging/copyfail-systemd-dropin.conf` to retain ONLY the always-on body. Rev 2 fixup (reviewer C-3): drop `~AF_RXRPC` from this file — it moves into the new conditional `12-copyfail-defense-rxrpc-af.conf` that's gated on AFS detection.
+- [ ] **1.5** Rewrite `packaging/copyfail-systemd-dropin.conf` to retain ONLY the always-on body. Rev 2 fixup (reviewer C-3): drop `~AF_RXRPC` from this file, it moves into the new conditional `12-copyfail-defense-rxrpc-af.conf` that's gated on AFS detection.
 
   ```
   # /etc/systemd/system/<unit>.service.d/10-copyfail-defense.conf
@@ -336,13 +336,13 @@ Spec wiring + scriptlets land in the next commit.
 
 ---
 
-## Phase 2 — `detect.sh` helper + `auto-detect.json`
+## Phase 2, `detect.sh` helper + `auto-detect.json`
 
 **Goal.** Implement `/usr/libexec/copyfail-defense/detect.sh` per
 SPEC §12.5, §12.6, §12.10 (rev 2 fixup). Bash + python3 (for JSON
 emission per D-52). ~200 lines. Single mode: `apply <scope>` where
 scope is one of `modprobe`, `systemd`, `both` (per D-56). The
-former `report` mode is dropped (per D-54 / reviewer L-3) — there
+former `report` mode is dropped (per D-54 / reviewer L-3), there
 is no consumer for it; the auditor reads the on-disk file directly.
 
 **Mode.** serial-context (Phase 3 spec depends on detect.sh path/contract).
@@ -612,7 +612,7 @@ LOG_AUTHPRIV either way.
   }
   ```
 
-- [ ] **2.7** Implement `cmp_and_install()` helper + `apply_modprobe()` + `apply_systemd()`. Rev 2 fixup (reviewer C-7 / D-57): cmp-and-skip on the deployed `/etc/...` file vs the template — preserves operator hand-edits. Rev 2 (D-56): each apply function only mutates its own scope; the dispatcher in `main()` selects which to call. The new `12-rxrpc-af` drop-in is installed for all 5 units when AFS is not detected.
+- [ ] **2.7** Implement `cmp_and_install()` helper + `apply_modprobe()` + `apply_systemd()`. Rev 2 fixup (reviewer C-7 / D-57): cmp-and-skip on the deployed `/etc/...` file vs the template, preserves operator hand-edits. Rev 2 (D-56): each apply function only mutates its own scope; the dispatcher in `main()` selects which to call. The new `12-rxrpc-af` drop-in is installed for all 5 units when AFS is not detected.
 
   ```bash
   # cmp-and-skip helper: install src to dst only if dst doesn't
@@ -628,10 +628,10 @@ LOG_AUTHPRIV either way.
           return 0
       fi
       if cmp -s "${src}" "${dst}"; then
-          # Same content — nothing to do.
+          # Same content, nothing to do.
           return 0
       fi
-      # Different content — operator hand-edit. Skip overwrite.
+      # Different content, operator hand-edit. Skip overwrite.
       # tee to stderr so dnf surfaces the warning (D-55).
       printf 'copyfail-defense: WARN: %s diverged from template; preserving operator edits (cmp-and-skip per D-57)\n' \
           "${dst}" | tee /dev/stderr | logger -t "${LOGGER_TAG}" -p authpriv.warning 2>/dev/null || true
@@ -809,7 +809,7 @@ LOG_AUTHPRIV either way.
   }
   ```
 
-  Note: there is no longer a stdout/`-` mode — the dropped `report`
+  Note: there is no longer a stdout/`-` mode, the dropped `report`
   mode (D-54) was the only consumer. detect.sh always writes to a
   real path.
 
@@ -889,7 +889,7 @@ verification happens in Phase 6 (test-repo.sh).
 
 - Empty `IPSEC_SIGNALS`/etc arrays: bash 4.x `set -u` complains on
   `${arr[@]}` when `arr=()`. The `${arr[@]+...}` idiom + NUL-blob
-  marshalling handles this — the python3 reader treats empty input
+  marshalling handles this, the python3 reader treats empty input
   as an empty list.
 - `python3` absent (extreme minimal chroots): JSON emission fails.
   The spec adds `Requires: /usr/bin/python3` to `-modprobe` and
@@ -951,7 +951,7 @@ Spec wiring lands in the next commit; the helper is idle until
 
 ---
 
-## Phase 3 — Spec scriptlet rewrite
+## Phase 3, Spec scriptlet rewrite
 
 **Goal.** Wire detect.sh into the spec. Add `%pretrans` for v2.0.0
 upgrade cleanup (D-37), reshape `%files`, add new `Source*` lines, add
@@ -984,7 +984,7 @@ phases depend on spec contract).
   Source5:        copyfail-systemd-dropin-containers.conf
   ```
 
-  New (rev 2 — Source10 deferred to Phase 4):
+  New (rev 2, Source10 deferred to Phase 4):
   ```spec
   Version:        2.0.1
   Release:        1%{?dist}
@@ -1208,7 +1208,7 @@ phases depend on spec contract).
   install -d -m 0755 %{buildroot}/etc/copyfail
   ```
 
-- [ ] **3.7** Add `%pretrans` blocks for `-modprobe` and `-systemd` to handle v2.0.0 → v2.0.1 upgrade cleanup (D-37). Rev 2 fixup (reviewer C-4 / D-37): rename to `<path>.rpmsave-v2.0.1` instead of deleting — preserves operator hand-edits to v2.0.0 monolithic files. Insert before the existing `%post modprobe` block (line 353):
+- [ ] **3.7** Add `%pretrans` blocks for `-modprobe` and `-systemd` to handle v2.0.0 → v2.0.1 upgrade cleanup (D-37). Rev 2 fixup (reviewer C-4 / D-37): rename to `<path>.rpmsave-v2.0.1` instead of deleting, preserves operator hand-edits to v2.0.0 monolithic files. Insert before the existing `%post modprobe` block (line 353):
 
   ```spec
   # %pretrans modprobe - v2.0.0 → v2.0.1 upgrade cleanup (D-37).
@@ -1378,7 +1378,7 @@ phases depend on spec contract).
 
   Note: detect.sh is shipped only in `-modprobe %files` per the
   Phase 3 step 3.4 layout. The `-systemd` subpackage's `%postun` calls
-  detect.sh too — the inline-fallback `rm -f` lines protect against
+  detect.sh too, the inline-fallback `rm -f` lines protect against
   the race where -modprobe is removed first, then -systemd %postun
   runs without detect.sh. The fallback only handles the modprobe
   scope; -systemd %postun uses its own fallback for systemd files.
@@ -1481,7 +1481,7 @@ phases depend on spec contract).
   ```
 
   `auto-detect.json` cleanup is owned by the meta package's `%postun`
-  (added in step 3.10) — not here, since `-modprobe` may still be
+  (added in step 3.10), not here, since `-modprobe` may still be
   installed and rely on it.
 
 - [ ] **3.14** Update the `%changelog` to add a v2.0.1 entry at the top:
@@ -1519,7 +1519,7 @@ phases depend on spec contract).
 
 - [ ] `rpm --specfile packaging/copyfail-defense.spec --qf '%{name}-%{epoch}:%{version}\n' | sort -u` shows `copyfail-defense-1:2.0.1`, `copyfail-defense-shim-1:2.0.1`, `copyfail-defense-modprobe-1:2.0.1`, `copyfail-defense-systemd-1:2.0.1`, `copyfail-defense-auditor-1:2.0.1`.
 - [ ] `rpm --specfile packaging/copyfail-defense.spec -P | grep -E 'pretrans|posttrans' | wc -l` returns at least 4 (modprobe + systemd %pretrans + %posttrans).
-- [ ] `rpmlint packaging/copyfail-defense.spec 2>&1 | grep -vE '^(.+: I: |0 packages)' | head -5` — should show no `E:` errors.
+- [ ] `rpmlint packaging/copyfail-defense.spec 2>&1 | grep -vE '^(.+: I: |0 packages)' | head -5`, should show no `E:` errors.
 - [ ] Spec parses cleanly: `rpmspec -P packaging/copyfail-defense.spec >/dev/null` returns 0.
 - [ ] `grep -c 'apply modprobe' packaging/copyfail-defense.spec` returns 1 (the -modprobe %posttrans invocation, scope arg per D-56).
 - [ ] `grep -c 'apply systemd' packaging/copyfail-defense.spec` returns 1 (the -systemd %posttrans).
@@ -1578,7 +1578,7 @@ copyfail-redetect helper script lands in the next commit.
 
 ---
 
-## Phase 4 — `copyfail-redetect` helper + force-full sentinel
+## Phase 4, `copyfail-redetect` helper + force-full sentinel
 
 **Goal.** Ship the operator-facing on-demand redetect helper. Per
 SPEC §12.7, §12.8.
@@ -1650,7 +1650,7 @@ test wiring).
       %{buildroot}%{_sbindir}/copyfail-redetect
   ```
 
-  (The `%{_sbindir}` directory was already installed by the shim subpackage's earlier `install -d` — but a duplicate `install -d` is idempotent.)
+  (The `%{_sbindir}` directory was already installed by the shim subpackage's earlier `install -d`, but a duplicate `install -d` is idempotent.)
 
 - [ ] **4.4** Modify the meta `%files` block (currently lines 412-415, including the `%dir /etc/copyfail` added in Phase 3 step 3.3). Add `copyfail-redetect` under the meta package since both `-modprobe` and `-systemd` operators benefit from on-demand redetect:
 
@@ -1663,7 +1663,7 @@ test wiring).
   ```
 
   Note: Phase 3 step 3.5 (rewritten in rev 2) no longer lists
-  `%{_sbindir}/copyfail-redetect` under `%files systemd` — that line
+  `%{_sbindir}/copyfail-redetect` under `%files systemd`, that line
   was removed from the Phase 3 plan and added here under the meta
   package. Phase 3's diff stays scoped to spec scriptlets + split
   files; Phase 4's diff is scoped to the redetect helper.
@@ -1694,7 +1694,7 @@ Helper does NOT call daemon-reload; operator decides reload timing.
 
 ---
 
-## Phase 5 — Auditor extension (`auto_detect` posture surface)
+## Phase 5, Auditor extension (`auto_detect` posture surface)
 
 **Goal.** Read `/var/lib/copyfail-defense/auto-detect.json`, expose
 under `posture.auto_detect`, add `check_auto_detect_state()` MITIGATION
@@ -1938,7 +1938,7 @@ matrix.
 
 ---
 
-## Phase 6 — `test-repo.sh` extension
+## Phase 6, `test-repo.sh` extension
 
 **Goal.** Add 7 new test scenarios per SPEC §12.11 (5 detection
 scenarios + redetect + v2.0.0→v2.0.1 split-file upgrade). Existing
@@ -2361,7 +2361,7 @@ v2.0.0 tests preserved.
 
 - [ ] **6.3** Update the script header comment block (lines 8-32) to reflect the new check count: 26 per EL (was 18 in v2.0.0; rev 2 added 8 scenarios = 7 detection + 1 cPanel-FP regression).
 
-- [ ] **6.4** Update the v2.0.0 main `run_test_in()` (lines 71-230) to assert the new file paths. The existing line 104 checks for `/etc/modprobe.d/99-copyfail-defense.conf` (the monolithic v2.0.0 path) — this must be replaced with checks for the three split files (cf1 / cf2-xfrm / rxrpc all present on clean container).
+- [ ] **6.4** Update the v2.0.0 main `run_test_in()` (lines 71-230) to assert the new file paths. The existing line 104 checks for `/etc/modprobe.d/99-copyfail-defense.conf` (the monolithic v2.0.0 path), this must be replaced with checks for the three split files (cf1 / cf2-xfrm / rxrpc all present on clean container).
 
   Old (line 104):
   ```bash
@@ -2377,7 +2377,7 @@ v2.0.0 tests preserved.
   done
   ```
 
-  Likewise update the regex in the existing test (lines 122-126) — the
+  Likewise update the regex in the existing test (lines 122-126), the
   count should still be 9 module install lines but distributed across
   three files:
 
@@ -2428,7 +2428,7 @@ Phase 8 against built+signed RPMs in mock+staging.
 
 - The `run_split_upgrade_test_in` requires v2.0.0 RPMs to remain in the
   gh-pages repo. Per D-22 they're retained for one cycle (through
-  v2.0.1 ship), and v2.0.0 was just published 2026-05-08 — the cycle
+  v2.0.1 ship), and v2.0.0 was just published 2026-05-08, the cycle
   has not yet expired. If by the time this lands in build the cycle
   HAS expired, the test exits 77 (SKIP) with a clean message, matching
   the existing v1.0.1 upgrade test pattern.
@@ -2458,7 +2458,7 @@ instead of the monolithic /etc/modprobe.d/99-copyfail-defense.conf.
 
 ---
 
-## Phase 7 — Documentation surface
+## Phase 7, Documentation surface
 
 **Goal.** Per SPEC §12.12. Replace README's "Override paths" section
 with auto-detection narrative; bump STATE.md to v2.0.1; trim
@@ -2477,7 +2477,7 @@ cross-file state).
 
 ### Steps
 
-- [ ] **7.1** `README.md` — replace the "Override paths" section (lines 261-315) with a new "Auto-detection of conflicting workloads" section. Keep the `## Verifying signatures` section (line 318+) unchanged.
+- [ ] **7.1** `README.md`, replace the "Override paths" section (lines 261-315) with a new "Auto-detection of conflicting workloads" section. Keep the `## Verifying signatures` section (line 318+) unchanged.
 
   New section content:
 
@@ -2493,11 +2493,11 @@ cross-file state).
   | Workload | Detection signals (any) | Suppresses |
   |---|---|---|
   | **IPsec** (strongSwan, libreswan, openswan) | `systemctl is-enabled` returns enabled for strongswan/strongswan-starter/strongswan-swanctl/ipsec/libreswan/openswan/pluto; OR `/etc/ipsec.conf` has a `conn` stanza; OR non-empty `/etc/swanctl/conf.d/`, `/etc/ipsec.d/`, `/etc/strongswan/conf.d/`, `/etc/strongswan.d/` | `99-copyfail-defense-cf2-xfrm.conf` (esp4, esp6, xfrm_user, xfrm_algo blacklist) |
-  | **AFS** (openafs, kafs) | `systemctl is-enabled` for openafs-client/openafs-server/kafs/afsd; OR `/etc/openafs/CellServDB` or `/etc/openafs/ThisCell` exists; OR `/etc/krb5.conf.d/openafs*` exists; OR `/proc/fs/afs/` registered | `99-copyfail-defense-rxrpc.conf` (rxrpc modprobe blacklist) AND `12-copyfail-defense-rxrpc-af.conf` (RestrictAddressFamilies=~AF_RXRPC on all 5 tenant units) — preserves AFS userspace tooling like aklog |
+  | **AFS** (openafs, kafs) | `systemctl is-enabled` for openafs-client/openafs-server/kafs/afsd; OR `/etc/openafs/CellServDB` or `/etc/openafs/ThisCell` exists; OR `/etc/krb5.conf.d/openafs*` exists; OR `/proc/fs/afs/` registered | `99-copyfail-defense-rxrpc.conf` (rxrpc modprobe blacklist) AND `12-copyfail-defense-rxrpc-af.conf` (RestrictAddressFamilies=~AF_RXRPC on all 5 tenant units), preserves AFS userspace tooling like aklog |
   | **Rootless containers** (rootless podman/buildah) | `/home/*/.local/share/containers/storage/overlay-containers/` present (rootless podman storage tree, recent mtime); OR `/var/lib/containers/storage/` non-empty with mtime <90d; OR `/run/user/<UID>/containers/` for any UID >= 1000; OR `podman.socket` enabled (system or per-user) | `15-copyfail-defense-userns.conf` on `user@.service.d` ONLY (other tenant units stay protected) |
 
   Note: `/etc/subuid` populated by `useradd` is NOT a rootless
-  detection signal in v2.0.1 rev 2 — shadow-utils auto-populates
+  detection signal in v2.0.1 rev 2, shadow-utils auto-populates
   subuid for every regular user regardless of container intent,
   which produced near-100% false positives on cPanel-shaped fleets.
   The detection now requires *active rootless usage* (storage tree,
@@ -2520,7 +2520,7 @@ cross-file state).
 
   The helper re-runs detection, refreshes `auto-detect.json`, and
   copies/removes the conditional drop-in files in `/etc/`. It does
-  NOT auto-reload systemd — the operator decides when running
+  NOT auto-reload systemd, the operator decides when running
   services pick up the change.
 
   ### Force full install (skip detection)
@@ -2590,7 +2590,7 @@ cross-file state).
   via `%config(noreplace)`.
 
   The earlier (incorrect) recommendation to `chattr +i` a managed
-  file is **removed** — it broke dnf via EPERM on the next
+  file is **removed**, it broke dnf via EPERM on the next
   `install -m 0644` from `%posttrans`. Use the cmp-and-skip
   behavior or `force-full` instead.
   ```
@@ -2622,17 +2622,17 @@ cross-file state).
     },
     ```
 
-- [ ] **7.2** `STATE.md` — bump to v2.0.1.
+- [ ] **7.2** `STATE.md`, bump to v2.0.1.
 
   - Line 3 timestamp: keep at 2026-05-08 (same-day release).
   - Line 7-12 "Latest release": rewrite to:
 
     ```markdown
-    - **v2.0.1** — Hotfix on top of v2.0.0: auto-detect IPsec / AFS /
+    - **v2.0.1**, Hotfix on top of v2.0.0: auto-detect IPsec / AFS /
       rootless-container workloads at install time and suppress only
       the conflicting drop-ins. Replaces the README's operator-driven
       "Override paths" section with package-driven detection.
-    - **v2.0.0** (2026-05-08) — `copyfail-defense` umbrella covering
+    - **v2.0.0** (2026-05-08), `copyfail-defense` umbrella covering
       cf1 (CVE-2026-31431), cf2 (xfrm-ESP), and Dirty Frag (xfrm-ESP +
       RxRPC). Renamed from `afalg-defense`. Signed RPMs, EL8 / EL9 /
       EL10, x86_64 only.
@@ -2674,9 +2674,9 @@ cross-file state).
 
     Operator interaction:
 
-    - `/usr/sbin/copyfail-redetect` — re-run detection on demand (scope=both)
-    - `/etc/copyfail/force-full` — sentinel that skips detection (apply all)
-    - `/var/lib/copyfail-defense/auto-detect.json` — schema-versioned
+    - `/usr/sbin/copyfail-redetect`, re-run detection on demand (scope=both)
+    - `/etc/copyfail/force-full`, sentinel that skips detection (apply all)
+    - `/var/lib/copyfail-defense/auto-detect.json`, schema-versioned
       report consumed by the auditor and SIEM dashboards
     ```
 
@@ -2690,11 +2690,11 @@ cross-file state).
     is not known until Phase 9 commits the changes. Phase 7's
     STATE.md edit leaves the v2.0.0 reference intact and adds a
     placeholder note: `(v2.0.1 commit hash filled in at release
-    time — see Phase 9)`. Phase 9's commit step (after the actual
+    time, see Phase 9)`. Phase 9's commit step (after the actual
     git commit produces a hash) does a follow-up edit to fill in
     the real hash. This avoids shipping a TBD-marker to gh-pages.
 
-- [ ] **7.3** `FOLLOWUPS.md` — the v2.0.0-shipped file already has a
+- [ ] **7.3** `FOLLOWUPS.md`, the v2.0.0-shipped file already has a
   "Subsumed by v2.0.1" section and a stub "v2.0.2 watch list". Rev 2
   fixup expands the watch list with all reviewer-deferred items
   per the in-scope/deferral directive, and adds a v2.1.0 forward-
@@ -2712,14 +2712,14 @@ cross-file state).
 
   Carried from v2.0.0 ship:
 
-  - [ ] **AF_ALG legitimate userspace consumers** — v2.0.1 keeps
+  - [ ] **AF_ALG legitimate userspace consumers**, v2.0.1 keeps
     `RestrictAddressFamilies=~AF_ALG` unconditional on the assumption
     that no production workload uses AF_ALG. If a counter-example
     surfaces (some QEMU + AF_ALG deployment), add the detection
     signal to detect.sh and ship as v2.0.2.
     (AF_RXRPC was conditionalized in v2.0.1 rev 2 per reviewer C-3.)
   - [ ] **Cross-subpackage removal: detection drift on partial
-    uninstall** — `dnf remove copyfail-defense-systemd` (keeping
+    uninstall**, `dnf remove copyfail-defense-systemd` (keeping
     -modprobe) does not currently re-run detection. Auditor flags
     drift on next audit run. If operationally noisy, hook `%preun`
     to re-run detect.sh for the surviving subpackages.
@@ -2734,42 +2734,42 @@ cross-file state).
     that only checks active users. Watch for scriptlet timeouts
     in production reports.
   - [ ] **Conditional `daemon-reload` optimization** (reviewer M-7)
-    — detect.sh always returns rc=0 on apply success regardless of
+   , detect.sh always returns rc=0 on apply success regardless of
     whether any conditional file actually changed. `%posttrans
     systemd` always runs `daemon-reload`. Optimization: detect.sh
     returns rc=2 when no /etc/... changes happened; %posttrans
     skips daemon-reload on rc=2. Saves cosmetic reload work on
     re-runs. Defer until profiling shows a need.
-  - [ ] **Test fixture redundant write cleanup** (reviewer M-8) —
+  - [ ] **Test fixture redundant write cleanup** (reviewer M-8)
     a few of the rev 2 detection-scenario tests do redundant
     `echo > file` followed by `printf > file` writes (force-full
     test pre-stages /etc/ipsec.conf twice). Tighten on next
     revision.
-  - [ ] **v2.0.0 yank vs v2.0.1 hotfix narrative** (reviewer L-1) —
+  - [ ] **v2.0.0 yank vs v2.0.1 hotfix narrative** (reviewer L-1)
     document in BRIEF.md / external article whether v2.0.0 should
     be tagged "yanked" given the same-day v2.0.1 ship. Current
     plan: keep v2.0.0 RPMs in the repo through v2.0.x line per
     D-22 retention.
-  - [ ] **`%{_libexecdir}` macro adoption** (reviewer L-2) — v2.0.1
+  - [ ] **`%{_libexecdir}` macro adoption** (reviewer L-2), v2.0.1
     hard-codes `/usr/libexec/copyfail-defense/` in the spec.
     Convert to `%{_libexecdir}/copyfail-defense/` macro in v2.0.2
     for distro-portability cleanliness.
   - [ ] **test-repo.sh file-count assertion tightening** (reviewer
-    L-4) — clean-host test asserts presence of 18 expected files
+    L-4), clean-host test asserts presence of 18 expected files
     but does not fail on *additional* unexpected files. Add a
     `find ... | wc -l` exact-count assertion in v2.0.2.
   - [ ] **mock chroot UID_MIN assumption documentation** (reviewer
-    L-5) — D-48 documents that mock chroots have only system
+    L-5), D-48 documents that mock chroots have only system
     users (UID < 1000), so rootless detection signal (4) for
     `loginctl list-users` returns false. Add an INTERNAL-NOTES.md
     entry citing `/etc/login.defs` `UID_MIN` and tying our
     detection threshold (1000) to that convention.
-  - [ ] **Per-mitigation force flags** (reviewer L-6) — current
+  - [ ] **Per-mitigation force flags** (reviewer L-6), current
     `force-full` is a single boolean. Operators may want
     `force-modprobe-cf2-xfrm` etc. as more granular existence-based
     flags. Defer until requested; the `force-full` lever covers
     the documented use cases.
-  - [ ] **STATE.md cross-repo state line** (reviewer L-8) —
+  - [ ] **STATE.md cross-repo state line** (reviewer L-8)
     placeholder TBD-marker for v2.0.1 commit hash got resolved by
     deferring the STATE.md edit to Phase 9 (post-commit). Verify
     Phase 9's STATE.md update did happen and the marker is gone
@@ -2834,7 +2834,7 @@ The phases below need the build host's signing key + mock chroots +
 gh-pages auth. Documented for Ryan's execution; not autonomously
 runnable.
 
-## Phase 8 — Build, sign, repo refresh   *(manual)*
+## Phase 8, Build, sign, repo refresh   *(manual)*
 
 ```sh
 # 1. SRPM
@@ -2872,7 +2872,7 @@ REPO_URL=file:///home/copyfail/rpmbuild/gh-pages-staging/copyfail.repo \
     bash packaging/test-repo.sh
 ```
 
-## Phase 9 — Release v2.0.1   *(manual)*
+## Phase 9, Release v2.0.1   *(manual)*
 
 ```sh
 git add -A
@@ -2938,7 +2938,7 @@ bash packaging/test-repo.sh
   Source0..9 + Source11 (the new rxrpc-af template). Phase 3 step
   3.5 lists `%files systemd` without the redetect helper line; that
   line is added by Phase 4 to the meta `%files` block. No
-  intermediate broken state — the rev 1 in-step Self-correction
+  intermediate broken state, the rev 1 in-step Self-correction
   callouts are removed; code blocks now show the final correct text.
 - **Phase 4 placement:** redetect helper goes under the meta
   package's `%files` block since both `-modprobe` and `-systemd`
@@ -2968,7 +2968,7 @@ bash packaging/test-repo.sh
   `99-copyfail-defense-{cf2-xfrm,rxrpc}.conf`,
   `12-copyfail-defense-rxrpc-af.conf`, and
   `15-copyfail-defense-userns.conf` files are NOT `%config(noreplace)`
-  — they're managed by detect.sh, not RPM. Rev 2 fixup uses `cmp -s`
+, they're managed by detect.sh, not RPM. Rev 2 fixup uses `cmp -s`
   against the
   `/usr/share/copyfail-defense/conditional/` template before
   overwriting. If the deployed file diverges from the template
@@ -2987,7 +2987,7 @@ bash packaging/test-repo.sh
   `/etc/systemd/system/...d/`). An operator who installs `-modprobe`
   alone gets clean modprobe state and no orphan systemd files (the
   rev 1 design's bug per reviewer C-6). When both subpackages are
-  installed in one transaction, both `%posttrans` blocks fire — the
+  installed in one transaction, both `%posttrans` blocks fire, the
   shared `auto-detect.json` is rewritten by each (idempotent).
 - **Phase 6 EL8-specific risk:** AlmaLinux 8 may ship without `jq`
   in the base image. Each detection-scenario test does
@@ -2995,7 +2995,7 @@ bash packaging/test-repo.sh
   If `jq` install fails (no network, mirror down), test fails on the
   first `jq -e` call with a clear error. Acceptable.
 - **detect.sh runs as root only:** the `report` mode that allowed
-  unprivileged dry-run was dropped in rev 2 (D-54 / reviewer L-3 —
+  unprivileged dry-run was dropped in rev 2 (D-54 / reviewer L-3
   no consumer). All invocations are root-only via either
   `%posttrans` or `copyfail-redetect`'s `id -u == 0` guard.
 
@@ -3024,7 +3024,7 @@ reviewer pass:
   `-systemd`. Mock chroots include python3 by default; verified.
 
 Cross-subpackage removal drift (single-subpackage dnf remove not
-triggering detect.sh apply for surviving subpackages) — accepted
+triggering detect.sh apply for surviving subpackages), accepted
 as out of scope for v2.0.1; auditor flags drift. Tracked in
 FOLLOWUPS.md v2.0.2 watch list.
 
@@ -3043,7 +3043,7 @@ FOLLOWUPS.md v2.0.2 watch list.
 - Phase 8 + 9 are manual; same pattern as v2.0.0.
 - `git status` after Phase 7 should show: 5 new packaging/ files
   (detect.sh, redetect, modprobe-cf2-xfrm, modprobe-rxrpc,
-  systemd-dropin-rxrpc-af, systemd-dropin-userns — actually 6 new
+  systemd-dropin-rxrpc-af, systemd-dropin-userns, actually 6 new
   but `copyfail-modprobe.conf` is renamed not added), 1 renamed
   packaging/ file (modprobe → modprobe-cf1), 1 modified spec, 2
   modified packaging/ files (systemd-dropin and

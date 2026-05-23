@@ -11,7 +11,7 @@ Covers three live LPE chains that share the same `splice()` →
 | **cf1** | CVE-2026-31431 | `algif_aead` AEAD scratch-write | 4-byte STORE via `seqno_lo` |
 | **cf2 / Dirty Frag-ESP** | CVE-2026-43284 | `esp_input` skip_cow | 4-byte STORE via `seq_hi` |
 | **Dirty Frag-RxRPC** | CVE-2026-43500 | `rxkad_verify_packet_1` | 4-byte and 8-byte STORE |
-| **Fragnesia** | (no CVE yet — same surface as CVE-2026-43284) | `espintcp` ULP after splice | byte STORE in cached page |
+| **Fragnesia** | (no CVE yet, same surface as CVE-2026-43284) | `espintcp` ULP after splice | byte STORE in cached page |
 | **PinTheft** *(v2.1.0)* | CVE pending | RDS zerocopy double-free + io_uring fixed-buffer | page-cache overwrite of SUID binary |
 | **ssh-keysign-pwn** *(v2.1.0, FD-theft class)* | CVE-2026-46333 | `__ptrace_may_access()` race + `pidfd_getfd` on exiting SUID | open-fd theft from ssh-keysign / chage |
 
@@ -197,7 +197,7 @@ or non-RHEL kernels where `algif_aead` ships modular. On RHEL the
 supported workaround is `grubby --update-kernel ALL --args
 "initcall_blacklist=algif_aead_init"` + reboot; the auditor reports
 this state under MITIGATION.
-³ Detection, not mitigation — telemetry for
+³ Detection, not mitigation, telemetry for
 `socket(AF_ALG/AF_KEY/AF_RXRPC/AF_RDS)` syscalls and `pidfd_getfd`
 from unprivileged users. Real value is on hosts where modprobe
 blacklists are auto-suppressed (IPsec / AFS / RDS workloads) and the
@@ -262,7 +262,7 @@ Review every line before pasting.
 | `chmod 4750 /usr/bin/su && chgrp wheel /usr/bin/su`        | cf2, DF-ESP   | Suppressed when `/etc/passwd` shows non-wheel/admin interactive users (cPanel-style tenant fleets); chmod 4750 would break their `su` workflow. |
 | `grubby --update-kernel ALL --args "initcall_blacklist=algif_aead_init"` + reboot | cf1 | RHEL kernels with `CRYPTO_USER_API_AEAD=y` (modprobe blacklist is a no-op on those); the supported escape per CIQ / Rocky Linux mitigation guidance. |
 | `auditd` rule `cf_userns` (`unshare(CLONE_NEWUSER)`)       | cf2, DF-ESP   | Hosts where `auditd` is tuned for userns events (otherwise high alert noise). Pairs with the v2.0.2 `-audit` subpackage rules. |
-| `auditd` rule `cf_addkey` (`add_key("rxrpc",...)`)         | DF-RxRPC      | Always; rxrpc keyring activity is rare enough that the false-positive rate stays low. The v2.0.2 `-audit` subpackage already installs the `socket(AF_RXRPC,...)` tripwire — `add_key` catches the next step in the chain. |
+| `auditd` rule `cf_addkey` (`add_key("rxrpc",...)`)         | DF-RxRPC      | Always; rxrpc keyring activity is rare enough that the false-positive rate stays low. The v2.0.2 `-audit` subpackage already installs the `socket(AF_RXRPC,...)` tripwire, `add_key` catches the next step in the chain. |
 
 ### CVE / disclosure references
 
@@ -271,9 +271,9 @@ Review every line before pasting.
 | cf1 | [CVE-2026-31431](https://www.rfxn.com/research/copyfail-cve-2026-31431) |
 | cf2 / Dirty Frag-ESP | CVE-2026-43284 |
 | Dirty Frag-RxRPC | CVE-2026-43500 |
-| Fragnesia | (no CVE yet — same surface as CVE-2026-43284) |
-| PinTheft | CVE pending — RDS zerocopy + io_uring fixed-buffer page-cache overwrite of SUID binary |
-| ssh-keysign-pwn | [CVE-2026-46333](https://nvd.nist.gov/vuln/detail/CVE-2026-46333) — `__ptrace_may_access()` race + `pidfd_getfd` on exiting SUID binary |
+| Fragnesia | (no CVE yet, same surface as CVE-2026-43284) |
+| PinTheft | CVE pending, RDS zerocopy + io_uring fixed-buffer page-cache overwrite of SUID binary |
+| ssh-keysign-pwn | [CVE-2026-46333](https://nvd.nist.gov/vuln/detail/CVE-2026-46333), `__ptrace_may_access()` race + `pidfd_getfd` on exiting SUID binary |
 
 > 🔬 **Full writeup:** [Copy Fail (CVE-2026-31431) on rfxn.com/research](https://www.rfxn.com/research/copyfail-cve-2026-31431)
 > covers cf1 kernel mechanics; cf2 and Dirty Frag extend the same
@@ -356,25 +356,25 @@ running production"; nothing else relaxes.
 
 ### Why each workload triggers a carve-out
 
-- **IPsec** — the kernel xfrm/ESP path *is* the cf2 / Dirty Frag-ESP
+- **IPsec**, the kernel xfrm/ESP path *is* the cf2 / Dirty Frag-ESP
   kernel sink. Blacklisting `esp4`/`esp6`/`xfrm_user`/`xfrm_algo`
   disables IPsec tunnels entirely (no SA install, no encrypted
   traffic). Suppression keeps the modprobe drop off and leans on
   systemd `RestrictNamespaces=~user ~net` to block the unprivileged
   `unshare(NEWUSER|NEWNET)` step that gates the cf2 chain.
-- **AFS** — `rxrpc` is both the DF-RxRPC kernel sink and the transport
+- **AFS**, `rxrpc` is both the DF-RxRPC kernel sink and the transport
   AFS itself rides on; blacklisting it breaks `openafs-client`. The
   per-unit `RestrictAddressFamilies=~AF_RXRPC` would also break AFS
   userspace tooling (`aklog`, `kinit`-style PAGs) when invoked from
   any of the five tenant units. Suppression drops both of those
   layers; every other rung still applies.
-- **Rootless containers** — rootless `podman`/`buildah` needs
+- **Rootless containers**, rootless `podman`/`buildah` needs
   `CLONE_NEWUSER` under the calling `user@.service`. Our default
   `RestrictNamespaces=~user ~net` on `user@.service` makes the
   `unshare(2)` return `EPERM`, which kills every rootless container.
-  Suppression strips the userns drop-in **on `user@.service` only** —
+  Suppression strips the userns drop-in **on `user@.service` only**
   `sshd`/`cron`/`crond`/`atd` retain it.
-- **Userns consumers** *(v2.0.2)* — Flatpak runtimes, firejail
+- **Userns consumers** *(v2.0.2)*, Flatpak runtimes, firejail
   sandboxes, and desktop browser renderer sandboxes
   (Chromium/Chrome/Firefox) all rely on unprivileged user namespaces.
   Our v2.0.2 host-wide sysctl drop-in
@@ -391,8 +391,8 @@ running production"; nothing else relaxes.
 | **IPsec** (strongSwan, libreswan, openswan) | `systemctl is-enabled` returns enabled for strongswan/strongswan-starter/strongswan-swanctl/ipsec/libreswan/openswan/pluto; OR `/etc/ipsec.conf` has a `conn` stanza; OR non-empty `*.conf` in `/etc/swanctl/conf.d/`, `/etc/ipsec.d/`, `/etc/strongswan/conf.d/`, `/etc/strongswan.d/` | `99-copyfail-defense-cf2-xfrm.conf` (esp4, esp6, xfrm_user, xfrm_algo blacklist) |
 | **AFS** (openafs, kafs) | `systemctl is-enabled` for openafs-client/openafs-server/kafs/afsd; OR `/etc/openafs/CellServDB` or `/etc/openafs/ThisCell` exists; OR `/etc/krb5.conf.d/openafs*` present; OR `/proc/fs/afs/` registered | `99-copyfail-defense-rxrpc.conf` (rxrpc modprobe blacklist) AND `12-copyfail-defense-rxrpc-af.conf` (`RestrictAddressFamilies=~AF_RXRPC` on all 5 tenant units) |
 | **Rootless containers** (rootless podman/buildah) | `/home/*/.local/share/containers/storage/overlay-containers/` present with mtime within 180d (rootless podman storage tree); OR `/var/lib/containers/storage/` non-empty with mtime <90d; OR `/run/user/<UID>/containers/` present for any UID ≥ 1000 (live rootless tmpfs); OR `podman.socket` enabled (system-wide or any per-user instance) | `15-copyfail-defense-userns.conf` on `user@.service.d` **only** + `/etc/sysctl.d/99-copyfail-defense-userns.conf` (v2.0.2) |
-| **Userns consumers** *(v2.0.2: Flatpak, firejail, desktop browser)* | non-empty `/var/lib/flatpak/{app,runtime}` OR per-user `~/.local/share/flatpak/app` within 180d; OR `/usr/bin/firejail` installed; OR `/usr/bin/{chromium,chromium-browser,google-chrome,firefox,firefox-esr}` present | `/etc/sysctl.d/99-copyfail-defense-userns.conf` (v2.0.2 host-wide userns sysctl) **only** — per-unit `RestrictNamespaces` stays active |
-| **io_uring workload** *(v2.1.1)* | liburing.so in any `/proc/*/maps` (running io_uring consumer); OR known consumer binary present and executable (`postgres`, `scylla`, `mariadbd`, `dockerd`, `redis-server`, `nginx`, `envoy`, `rabbitmq-server`); OR io_uring-named systemd unit listed by `systemctl list-unit-files` | `/etc/sysctl.d/99-copyfail-defense-iouring.conf` **only** — all other layers stay active |
+| **Userns consumers** *(v2.0.2: Flatpak, firejail, desktop browser)* | non-empty `/var/lib/flatpak/{app,runtime}` OR per-user `~/.local/share/flatpak/app` within 180d; OR `/usr/bin/firejail` installed; OR `/usr/bin/{chromium,chromium-browser,google-chrome,firefox,firefox-esr}` present | `/etc/sysctl.d/99-copyfail-defense-userns.conf` (v2.0.2 host-wide userns sysctl) **only**, per-unit `RestrictNamespaces` stays active |
+| **io_uring workload** *(v2.1.1)* | liburing.so in any `/proc/*/maps` (running io_uring consumer); OR known consumer binary present and executable (`postgres`, `scylla`, `mariadbd`, `dockerd`, `redis-server`, `nginx`, `envoy`, `rabbitmq-server`); OR io_uring-named systemd unit listed by `systemctl list-unit-files` | `/etc/sysctl.d/99-copyfail-defense-iouring.conf` **only**, all other layers stay active |
 
 False-positive guards baked into the detector:
 
@@ -683,7 +683,7 @@ The spec lives at `packaging/copyfail-defense.spec`.
   `add_key("rxrpc",...)`) that are out of scope for the default
   install because they depend on operator-tuned auditd context.
 - **v2.0.2 sysctl drop-in:** removing `-sysctl` does NOT reset
-  `user.max_user_namespaces` to the kernel default — the running
+  `user.max_user_namespaces` to the kernel default, the running
   kernel value persists until reboot or another sysctl.d drop-in
   overrides it. See "Re-detect after the host changes" above.
 

@@ -239,7 +239,7 @@ v2.1.0 adds ~AF_RDS to the always-on 10-* drop-in (PinTheft coverage).
 
 # ---------------------------------------------------------------------------
 %package auditor
-Summary:        cf-class host posture auditor (cf1, cf2, Dirty Frag — read-only)
+Summary:        cf-class host posture auditor (cf1, cf2, Dirty Frag, read-only)
 BuildArch:      noarch
 Requires:       python3
 Obsoletes:      afalg-defense-auditor < %{epoch}:%{version}-%{release}
