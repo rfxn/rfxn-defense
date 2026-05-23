@@ -184,7 +184,7 @@ recommends them conditionally.
 | systemd `RestrictNamespaces=~user ~net`          |  ·  | ✅  |  ✅    |    ·     |   ✅      |    ·     |     ·       |
 | sysctl `user.max_user_namespaces=0` *(v2.0.2)*   |  ·  | ✅  |  ✅    |    ·     |   ✅      |    ·     |     ·       |
 | sysctl `kernel.yama.ptrace_scope=2` *(v2.1.0)*   |  ·  |  ·  |   ·    |    ·     |    ·      |    ·     |    ✅       |
-| sysctl `kernel.io_uring_disabled=2` *(v2.1.0)* ⁴ |  ·  |  ·  |   ·    |    ·     |    ·      |   ✅ ⁴   |     ·       |
+| sysctl `kernel.io_uring_disabled=2` *(v2.1.1)* ⁴ |  ·  |  ·  |   ·    |    ·     |    ·      |   ✅ ⁴   |     ·       |
 | auditd tripwire rules *(v2.0.2)*                 | ³   | ³   |  ³     |   ³      |   ³       |    ·     |     ·       |
 | auditd `copyfail_afrds` *(v2.1.0)*               |  ·  |  ·  |   ·    |    ·     |    ·      |   ³      |     ·       |
 | auditd `copyfail_pidfd_getfd` *(v2.1.0)*         |  ·  |  ·  |   ·    |    ·     |    ·      |    ·     |    ³        |
@@ -204,13 +204,17 @@ blacklists are auto-suppressed (IPsec / AFS / RDS workloads) and the
 kernel sink is intentionally reachable; rules become the residual
 tripwire. Query via `ausearch -k copyfail_afalg` / `copyfail_afkey`
 / `copyfail_afrxrpc` / `copyfail_afrds` / `copyfail_pidfd_getfd`.
-⁴ `kernel.io_uring_disabled=2` is operator opt-in (the v2.1.0
-`-sysctl` drop-in ships the line commented out). io_uring is widely
-used by databases, runtimes, and container engines; uncomment only
-after confirming no in-tree workload depends on it. PinTheft's
-primary cut is the `rds`/`rds_tcp`/`rds_rdma` modprobe blacklist;
-io_uring is secondary defense for the few hosts where RDS is
-intentionally reachable.
+⁴ `kernel.io_uring_disabled=2` is auto-applied by v2.1.1 in a
+separate `/etc/sysctl.d/99-copyfail-defense-iouring.conf` drop-in
+(Linux 6.6+ only). Auto-detect suppresses it on rootless-container,
+Flatpak/firejail/browser, and io_uring-workload hosts (liburing.so
+in `/proc/*/maps`, known consumer binaries, or io_uring-named systemd
+units), and on kernels older than 6.6 (`reason=kernel_too_old`).
+Operator escape hatch: `CFD_SUPPRESS_IOURING_DISABLE=1` (suppress)
+or `CFD_FORCE_IOURING_DISABLE=1` (force-apply). PinTheft's primary
+cut is the `rds`/`rds_tcp`/`rds_rdma` modprobe blacklist; io_uring
+is the secondary layer for hosts where RDS is intentionally
+reachable.
 
 ### Reference: kernel patches and detection signatures
 
@@ -331,7 +335,7 @@ deploying every rung this package ships.
 | `copyfail-defense-shim` | x86_64 | `/usr/lib64/no-afalg.so` + `copyfail-shim-{enable,disable}` |
 | `copyfail-defense-modprobe` | noarch | `/etc/modprobe.d/99-copyfail-defense-{cf1,cf2-xfrm,rxrpc}.conf` (cf-class entry-point cuts) |
 | `copyfail-defense-systemd` | noarch | drop-ins for `user@`/`sshd`/`cron`/`crond`/`atd` + container-runtime examples |
-| `copyfail-defense-sysctl` *(v2.0.2)* | noarch | `/etc/sysctl.d/99-copyfail-defense-userns.conf` (host-wide userns disable, suppressed on userns-consumer hosts) |
+| `copyfail-defense-sysctl` *(v2.0.2+)* | noarch | `/etc/sysctl.d/99-copyfail-defense-userns.conf` (host-wide userns disable, suppressed on userns-consumer hosts); `/etc/sysctl.d/99-copyfail-defense-iouring.conf` *(v2.1.1)* (io_uring disable, suppressed on io_uring-workload/rootless/Flatpak/kernel<6.6 hosts) |
 | `copyfail-defense-auditor` | noarch | `/usr/sbin/copyfail-local-check` (Python, stdlib-only, read-only) |
 | `copyfail-defense-audit` *(v2.0.2)* | noarch | `/etc/audit/rules.d/99-copyfail-defense.rules` (syscall tripwires for AF_ALG / AF_KEY / AF_RXRPC) |
 
@@ -388,6 +392,7 @@ running production"; nothing else relaxes.
 | **AFS** (openafs, kafs) | `systemctl is-enabled` for openafs-client/openafs-server/kafs/afsd; OR `/etc/openafs/CellServDB` or `/etc/openafs/ThisCell` exists; OR `/etc/krb5.conf.d/openafs*` present; OR `/proc/fs/afs/` registered | `99-copyfail-defense-rxrpc.conf` (rxrpc modprobe blacklist) AND `12-copyfail-defense-rxrpc-af.conf` (`RestrictAddressFamilies=~AF_RXRPC` on all 5 tenant units) |
 | **Rootless containers** (rootless podman/buildah) | `/home/*/.local/share/containers/storage/overlay-containers/` present with mtime within 180d (rootless podman storage tree); OR `/var/lib/containers/storage/` non-empty with mtime <90d; OR `/run/user/<UID>/containers/` present for any UID ≥ 1000 (live rootless tmpfs); OR `podman.socket` enabled (system-wide or any per-user instance) | `15-copyfail-defense-userns.conf` on `user@.service.d` **only** + `/etc/sysctl.d/99-copyfail-defense-userns.conf` (v2.0.2) |
 | **Userns consumers** *(v2.0.2: Flatpak, firejail, desktop browser)* | non-empty `/var/lib/flatpak/{app,runtime}` OR per-user `~/.local/share/flatpak/app` within 180d; OR `/usr/bin/firejail` installed; OR `/usr/bin/{chromium,chromium-browser,google-chrome,firefox,firefox-esr}` present | `/etc/sysctl.d/99-copyfail-defense-userns.conf` (v2.0.2 host-wide userns sysctl) **only** — per-unit `RestrictNamespaces` stays active |
+| **io_uring workload** *(v2.1.1)* | liburing.so in any `/proc/*/maps` (running io_uring consumer); OR known consumer binary present and executable (`postgres`, `scylla`, `mariadbd`, `dockerd`, `redis-server`, `nginx`, `envoy`, `rabbitmq-server`); OR io_uring-named systemd unit listed by `systemctl list-unit-files` | `/etc/sysctl.d/99-copyfail-defense-iouring.conf` **only** — all other layers stay active |
 
 False-positive guards baked into the detector:
 
@@ -583,7 +588,7 @@ Out-of-band verification of a downloaded RPM:
 ```sh
 curl -sSL https://rfxn.github.io/copyfail/RPM-GPG-KEY-copyfail \
   | sudo rpm --import /dev/stdin
-rpm -K copyfail-defense-2.1.0-1.el9.x86_64.rpm
+rpm -K copyfail-defense-2.1.1-1.el9.x86_64.rpm
 # expect: digests signatures OK
 ```
 
@@ -644,7 +649,7 @@ To rebuild the RPMs from the published SRPM (under your own signing):
 
 ```sh
 mock -r centos-stream+epel-9-x86_64 --rebuild \
-  https://github.com/rfxn/copyfail/releases/download/v2.1.0/copyfail-defense-2.1.0-1.el9.src.rpm
+  https://github.com/rfxn/copyfail/releases/download/v2.1.1/copyfail-defense-2.1.1-1.el9.src.rpm
 ```
 
 The spec lives at `packaging/copyfail-defense.spec`.

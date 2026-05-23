@@ -203,8 +203,22 @@ v2.0.2" above — landed early as `copyfail-defense-sysctl`.)
 
 - [ ] **2028-04-29 — signing key expires.** Either extend (`gpg --edit-key proj@rfxn.com expire`) or rotate (generate new key, ship 2.0.0 release whose `.repo` points at the new key URL, bump version so old signed RPMs aren't accidentally trusted). Re-run the backup procedure after either operation.
 
+## v2.1.1 watch list
+
+- **liburing.so detector misses** — auto-detect signal 1 walks
+  /proc/[0-9]*/maps for liburing.so. Statically-linked io_uring
+  consumers (Go binaries with liburing built in, Rust binaries
+  linking statically) won't surface. Track operator reports of
+  io_uring stalls post-v2.1.1 and expand signal 2 (binary list)
+  accordingly.
+
 ## v2.1.0 watch list
 
+- [RESOLVED v2.1.1] **io_uring opt-in** — `kernel.io_uring_disabled=2`
+  shipped commented out in v2.1.0 `-sysctl` drop-in (operator opt-in
+  only). Promoted to auto-applied with layered suppression in v2.1.1:
+  separate drop-in file, detect.sh `detect_io_uring_workload()`,
+  kernel < 6.6 gate, operator env knobs.
 - **DirtyDecrypt (CVE-2026-31635) formal verification.** v2.1.0 ships
   under the assumption that the RXGK/RxRPC primitive is covered by the
   existing rxrpc cuts (modprobe blacklist + ~AF_RXRPC + copyfail_afrxrpc

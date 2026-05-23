@@ -163,10 +163,18 @@ Mitigation in copyfail-defense (v2.1.0+):
     10-* drop-in
   - `copyfail-defense-audit` rule `copyfail_afrds` on
     `socket(AF_RDS=21)` by auid>=1000
-  - operator opt-in: `kernel.io_uring_disabled=2` (Linux 6.6+) — line
-    ships commented out in the v2.1.0 `-sysctl` drop-in because
-    io_uring is widely used by databases, runtimes, and container
-    engines
+  - `copyfail-defense-sysctl` sets `kernel.io_uring_disabled=2` in a
+    new `/etc/sysctl.d/99-copyfail-defense-iouring.conf` drop-in
+    (v2.1.1, auto-applied; see below for suppression conditions)
+
+**v2.1.1 (2026-05-22):** io_uring auto-detect promotion — secondary
+mitigation moved to auto-applied with layered suppression. The v2.1.0 ship-state of
+"commented sysctl, operator opt-in" was inconsistent with every
+other primitive in the package (all auto-applied with detect.sh
+carve-outs). The detector fires on liburing.so in any /proc/*/maps,
+known io_uring consumer binaries, and io_uring-named systemd units.
+Kernel <6.6 hosts are auto-suppressed with reason kernel_too_old.
+Operator escape hatch: `CFD_FORCE_IOURING_DISABLE=1 copyfail-redetect`.
 
 ## ssh-keysign-pwn (CVE-2026-46333)
 

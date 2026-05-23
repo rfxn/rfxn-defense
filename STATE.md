@@ -1,9 +1,19 @@
 # copyfail-defense — shipping state
 
-Snapshot: **2026-05-22**
+Snapshot: **2026-05-23**
 
 ## Latest release
 
+- **v2.1.1** — promotes `kernel.io_uring_disabled=2` from operator
+  opt-in (commented) to auto-applied with layered suppression. New
+  `/etc/sysctl.d/99-copyfail-defense-iouring.conf` drop-in (separate
+  from userns file). detect.sh adds `detect_io_uring_workload()` with
+  three runtime signals (liburing.so in `/proc/*/maps`, known consumer
+  binaries, io_uring-named systemd units); kernel < 6.6 gate
+  auto-suppresses with `reason=kernel_too_old`. Operator env knobs:
+  `CFD_FORCE_IOURING_DISABLE=1` / `CFD_SUPPRESS_IOURING_DISABLE=1`.
+  Signed RPMs for EL7 / EL8 / EL9 / EL10.
+- Tag: <https://github.com/rfxn/copyfail/releases/tag/v2.1.1>
 - **v2.1.0** — adds PinTheft (RDS zerocopy + io_uring) and
   ssh-keysign-pwn (CVE-2026-46333; ptrace exit-race + `pidfd_getfd`)
   coverage; new `-modprobe` cut for `rds`/`rds_tcp`/`rds_rdma`; new
@@ -90,7 +100,7 @@ Do **not** cross-install across ELs.
 | `-systemd` (`~user ~net`) | – | ✅ | ✅ | – | ✅ | – | – |
 | `-sysctl` (`user.max_user_namespaces=0`) *(v2.0.2)* | – | ✅ | ✅ | – | ✅ | – | – |
 | `-sysctl` (`kernel.yama.ptrace_scope=2`) *(v2.1.0)* | – | – | – | – | – | – | ✅ |
-| `-sysctl` (`kernel.io_uring_disabled=2`) *(v2.1.0, opt-in)* | – | – | – | – | – | ✅ (opt-in) | – |
+| `-sysctl` (`kernel.io_uring_disabled=2`) *(v2.1.1, auto-detect)* | – | – | – | – | – | ✅ ⁴ | – |
 | `-audit` (`copyfail_afalg/afkey/afrxrpc`) *(v2.0.2)* | tripwire | tripwire | tripwire | tripwire | tripwire | – | – |
 | `-audit` (`copyfail_afrds`) *(v2.1.0)* | – | – | – | – | – | tripwire | – |
 | `-audit` (`copyfail_pidfd_getfd`) *(v2.1.0)* | – | – | – | – | – | – | tripwire |
@@ -117,7 +127,7 @@ uid:          Copyfail Project Signing Key <proj@rfxn.com>
 
 - Spec: `packaging/copyfail-defense.spec`
 - Helper scripts: `packaging/copyfail-shim-{enable,disable}`
-- Active dropins source: `packaging/copyfail-modprobe-{cf1,cf2-xfrm,rxrpc}.conf`, `packaging/copyfail-systemd-dropin{,-rxrpc-af,-userns}.conf`
+- Active dropins source: `packaging/copyfail-modprobe-{cf1,cf2-xfrm,rxrpc}.conf`, `packaging/copyfail-systemd-dropin{,-rxrpc-af,-userns}.conf`, `packaging/copyfail-sysctl-{userns,iouring}.conf`
 - Container-runtime example dropin source: `packaging/copyfail-systemd-dropin-containers.conf`
 - Workload detection helper: `packaging/copyfail-defense-detect.sh`
 - Operator re-detect helper: `packaging/copyfail-redetect`
