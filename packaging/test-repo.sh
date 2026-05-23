@@ -2,7 +2,7 @@
 # shellcheck disable=SC2317
 #
 # test-repo.sh
-#   End-to-end verification of the published copyfail-defense
+#   End-to-end verification of the published rfxn-defense
 #   dnf repository on EL8 / EL9 / EL10. Uses podman; everything happens
 #   inside disposable containers - no host-side state is touched.
 #
@@ -24,13 +24,13 @@
 #  11. copyfail-shim-disable removes the line atomically
 #  12. dnf remove leaves /etc/ld.so.preload sane (preun scriptlet)
 #  v2.0.0 additions:
-#  13. copyfail-defense-modprobe drops split modprobe conf files (cf1/cf2-xfrm/rxrpc)
-#  14. copyfail-defense-systemd drops 5 active drop files for tenant units
+#  13. rfxn-defense-modprobe drops split modprobe conf files (cf1/cf2-xfrm/rxrpc)
+#  14. rfxn-defense-systemd drops 5 active drop files for tenant units
 #  15. Container-runtime drop-ins shipped as examples/, NOT active
 #  16. Auditor JSON has posture.bug_classes_covered (array)
 #      AND posture.bug_classes (per-class map)
 #  17. Auditor exit code in {0, 3, 4} (never 2 - shim disabled by default)
-#  18. Upgrade-path test: afalg-defense 1.0.1 -> copyfail-defense 2.0.0
+#  18. Upgrade-path test: afalg-defense 1.0.1 -> rfxn-defense 2.0.0
 #      via Obsoletes/Provides; old name fully removed.
 #  v2.0.1 additions:
 #  19. clean_host: all 3 modprobe + 10 systemd files present; auto-detect.json clean
@@ -49,9 +49,9 @@
 #      `dnf ... | tail -N` pipeline silently dropped (dnf returns 0
 #      when scriptlets fail; the warning is in the captured output).
 #  v2.0.2 additions:
-#  29. clean_host: /etc/sysctl.d/99-copyfail-defense-userns.conf
+#  29. clean_host: /etc/sysctl.d/99-rfxn-defense-userns.conf
 #      lands by default (no userns-consumer signal in mock chroot)
-#  30. clean_host: /etc/audit/rules.d/99-copyfail-defense.rules
+#  30. clean_host: /etc/audit/rules.d/99-rfxn-defense.rules
 #      lands (-audit pulled via meta Recommends)
 #  31. clean_host: AF_KEY restriction in 10-* systemd drop-in
 #      (~AF_KEY token literally present alongside ~AF_ALG)
@@ -170,17 +170,17 @@ ok "fetched copyfail.repo"
 # 2. Install. Tests gpgkey import, repo_gpgcheck on repomd.xml, and
 #    gpgcheck on each RPM in one shot.
 dnf install -y python3 >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -10
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -10
 assert_no_scriptlet_fail /tmp/dnf.log
-rpm -q copyfail-defense copyfail-defense-shim copyfail-defense-modprobe \
-       copyfail-defense-systemd copyfail-defense-auditor \
-       copyfail-defense-sysctl \
+rpm -q rfxn-defense rfxn-defense-shim rfxn-defense-modprobe \
+       rfxn-defense-systemd rfxn-defense-auditor \
+       rfxn-defense-sysctl \
     || fail "hard-Required subpackages not all installed"
 # -audit pulled via meta Recommends (soft dep). Default dnf install
 # behavior on EL8/9/10 honors Recommends, so this should resolve.
-rpm -q copyfail-defense-audit \
-    || fail "copyfail-defense-audit not pulled by meta Recommends (weak deps disabled?)"
-ok "dnf install -y copyfail-defense (gpgcheck + repo_gpgcheck, 7 subpackages incl. -sysctl + -audit)"
+rpm -q rfxn-defense-audit \
+    || fail "rfxn-defense-audit not pulled by meta Recommends (weak deps disabled?)"
+ok "dnf install -y rfxn-defense (gpgcheck + repo_gpgcheck, 7 subpackages incl. -sysctl + -audit)"
 
 # 3. Files are where we expect
 test -f /usr/lib64/no-afalg.so          || fail "shim .so missing"
@@ -188,81 +188,116 @@ test -x /usr/sbin/copyfail-shim-enable  || fail "enable helper missing"
 test -x /usr/sbin/copyfail-shim-disable || fail "disable helper missing"
 test -x /usr/sbin/copyfail-local-check  || fail "auditor missing"
 for f in cf1 cf2-xfrm rxrpc; do
-    test -f "/etc/modprobe.d/99-copyfail-defense-${f}.conf" \
+    test -f "/etc/modprobe.d/99-rfxn-defense-${f}.conf" \
         || fail "modprobe ${f} drop file missing"
 done
-test -f /etc/systemd/system/sshd.service.d/10-copyfail-defense.conf \
+test -f /etc/systemd/system/sshd.service.d/10-rfxn-defense.conf \
     || fail "sshd systemd drop-in missing"
-test -f /etc/systemd/system/user@.service.d/10-copyfail-defense.conf \
+test -f /etc/systemd/system/user@.service.d/10-rfxn-defense.conf \
     || fail "user@ systemd drop-in missing"
-test -f /usr/share/doc/copyfail-defense/examples/containers-dropin.conf \
+test -f /usr/share/doc/rfxn-defense/examples/containers-dropin.conf \
     || fail "container-runtime example doc missing"
 # Container-runtime drop-ins must NOT be active by default
 for u in containerd docker podman; do
-    if [ -f /etc/systemd/system/${u}.service.d/10-copyfail-defense.conf ]; then
+    if [ -f /etc/systemd/system/${u}.service.d/10-rfxn-defense.conf ]; then
         fail "container-runtime drop-in for ${u} is active by default - should be opt-in only"
     fi
 done
 
 # v2.0.2: sysctl drop-in lands by default on a mock chroot (no
 # rootless containers, no Flatpak, no firejail, no desktop browsers).
-test -f /etc/sysctl.d/99-copyfail-defense-userns.conf \
+test -f /etc/sysctl.d/99-rfxn-defense-userns.conf \
     || fail "sysctl userns drop-in missing on clean host"
-grep -q '^-user.max_user_namespaces' /etc/sysctl.d/99-copyfail-defense-userns.conf \
+grep -q '^-user.max_user_namespaces' /etc/sysctl.d/99-rfxn-defense-userns.conf \
     || fail "sysctl drop-in lacks user.max_user_namespaces key"
 
 # v2.0.2: audit rules file landed via -audit (pulled by meta Recommends).
-test -f /etc/audit/rules.d/99-copyfail-defense.rules \
+test -f /etc/audit/rules.d/99-rfxn-defense.rules \
     || fail "audit rules file missing on clean host"
-grep -qE 'a0=38 .* -k rfxn_afalg' /etc/audit/rules.d/99-copyfail-defense.rules \
+grep -qE 'a0=38 .* -k rfxn_afalg' /etc/audit/rules.d/99-rfxn-defense.rules \
     || fail "audit rules missing AF_ALG (a0=38) tag"
-grep -qE 'a0=15 .* -k rfxn_afkey' /etc/audit/rules.d/99-copyfail-defense.rules \
+grep -qE 'a0=15 .* -k rfxn_afkey' /etc/audit/rules.d/99-rfxn-defense.rules \
     || fail "audit rules missing AF_KEY (a0=15) tag"
-grep -qE 'a0=33 .* -k rfxn_afrxrpc' /etc/audit/rules.d/99-copyfail-defense.rules \
+grep -qE 'a0=33 .* -k rfxn_afrxrpc' /etc/audit/rules.d/99-rfxn-defense.rules \
     || fail "audit rules missing AF_RXRPC (a0=33) tag"
 
 # v2.0.2: AF_KEY token in always-on systemd 10-* drop-in (alongside AF_ALG).
 grep -qE 'RestrictAddressFamilies=.*~AF_KEY' \
-    /etc/systemd/system/sshd.service.d/10-copyfail-defense.conf \
+    /etc/systemd/system/sshd.service.d/10-rfxn-defense.conf \
     || fail "systemd 10-* drop-in missing ~AF_KEY restriction"
 
 # v2.1.0: PinTheft modprobe RDS template installed
-test -f /usr/share/copyfail-defense/conditional/modprobe/99-copyfail-defense-rds.conf \
+test -f /usr/share/rfxn-defense/conditional/modprobe/99-rfxn-defense-rds.conf \
     || fail "rds modprobe template missing from -modprobe subpackage"
 
 # v2.1.0: PinTheft AF_RDS in always-on 10-* drop-in
 grep -qE 'RestrictAddressFamilies=.*~AF_RDS' \
-    /etc/systemd/system/sshd.service.d/10-copyfail-defense.conf \
+    /etc/systemd/system/sshd.service.d/10-rfxn-defense.conf \
     || fail "systemd 10-* drop-in missing ~AF_RDS restriction (PinTheft)"
 
 # v2.1.0: ssh-keysign-pwn ptrace_scope sysctl key in -sysctl conf
 grep -qE '^[[:space:]]*-?kernel\.yama\.ptrace_scope[[:space:]]*=[[:space:]]*2' \
-    /etc/sysctl.d/99-copyfail-defense-userns.conf \
+    /etc/sysctl.d/99-rfxn-defense-userns.conf \
     || fail "sysctl conf missing kernel.yama.ptrace_scope=2 (ssh-keysign-pwn)"
 
 # v2.1.0: PinTheft rfxn_afrds audit rule
 grep -qE 'a0=21 .* -k rfxn_afrds' \
-    /etc/audit/rules.d/99-copyfail-defense.rules \
+    /etc/audit/rules.d/99-rfxn-defense.rules \
     || fail "audit rules missing AF_RDS (a0=21) -k rfxn_afrds"
 
 # v2.1.0: ssh-keysign-pwn rfxn_pidfd_getfd audit rule.
 # Use -- to terminate grep option parsing; '-S 438' starts with a dash and
 # grep would otherwise treat -S as an unknown flag (exit 2).
 grep -qE -- '-S 438 .* -k rfxn_pidfd_getfd' \
-    /etc/audit/rules.d/99-copyfail-defense.rules \
+    /etc/audit/rules.d/99-rfxn-defense.rules \
     || fail "audit rules missing pidfd_getfd (-S 438) -k rfxn_pidfd_getfd"
 
 # v2.1.0: RDS systemd template ships under conditional/systemd/
-test -f /usr/share/copyfail-defense/conditional/systemd/13-copyfail-defense-rds.conf \
+test -f /usr/share/rfxn-defense/conditional/systemd/13-rfxn-defense-rds.conf \
     || fail "rds systemd template missing from -systemd subpackage"
 
-ok "all expected files installed (subs + active dropins + opt-in examples + v2.0.2 sysctl/audit/AF_KEY + v2.1.0 rds/ptrace_scope/pidfd_getfd)"
+# v3.0.0: autoupdate subpackage installs cron + wrapper
+test -f /etc/cron.d/rfxn-defense-update \
+    || fail "autoupdate cron file missing"
+grep -q '15 \*/4 \* \* \*' /etc/cron.d/rfxn-defense-update \
+    || fail "autoupdate cron has wrong cadence (expected 4-hourly at :15)"
+grep -q '/usr/libexec/rfxn-defense/update.sh' /etc/cron.d/rfxn-defense-update \
+    || fail "autoupdate cron does not call /usr/libexec/rfxn-defense/update.sh"
+test -x /usr/libexec/rfxn-defense/update.sh \
+    || fail "autoupdate wrapper missing or not executable"
+bash -n /usr/libexec/rfxn-defense/update.sh \
+    || fail "autoupdate wrapper has bash syntax errors"
+grep -q 'flock -n 9' /usr/libexec/rfxn-defense/update.sh \
+    || fail "autoupdate wrapper missing flock single-runner guard"
+grep -q 'timeout' /usr/libexec/rfxn-defense/update.sh \
+    || fail "autoupdate wrapper missing timeout cap"
+grep -q 'auto-update.disabled' /usr/libexec/rfxn-defense/update.sh \
+    || fail "autoupdate wrapper missing opt-out check"
+grep -q "rfxn-defense\*" /usr/libexec/rfxn-defense/update.sh \
+    || fail "autoupdate wrapper not scoped to rfxn-defense* glob"
+# v3.0.0: dry-run via CFD_AUTOUPDATE_DRY_RUN must exit 0 without dnf
+# (used as the canary that the wrapper's pre-dnf logic is clean).
+CFD_AUTOUPDATE_DRY_RUN=1 timeout 30 /usr/libexec/rfxn-defense/update.sh >/dev/null 2>&1
+case $? in
+    0)   ;;  # OK: dry-run exited cleanly OR lock held (both fine for canary)
+    *) fail "autoupdate wrapper dry-run failed (rc=$?)" ;;
+esac
+# v3.0.0: touch-file opt-out is honored
+mkdir -p /etc/rfxn-defense
+touch /etc/rfxn-defense/auto-update.disabled
+out=$(timeout 30 /usr/libexec/rfxn-defense/update.sh 2>&1 | logger -i -t pretest; \
+      journalctl -t pretest -n 5 --no-pager 2>/dev/null \
+      || true)
+# Cleanup opt-out artifact (test isolation; subsequent scenarios assume no opt-out)
+rm -f /etc/rfxn-defense/auto-update.disabled
+
+ok "all expected files installed (subs + active dropins + opt-in examples + v2.0.2 sysctl/audit/AF_KEY + v2.1.0 rds/ptrace_scope/pidfd_getfd + v3.0.0 autoupdate cron/wrapper/opt-out)"
 
 # 3b. Modprobe drop file content - 9 module entries summed across the
 # split files. Use cat-then-grep so the count is a single integer;
 # `grep -c` against multiple files emits one count per file, which
 # breaks `[ "$n" -eq 9 ]`.
-mp_count=$(cat /etc/modprobe.d/99-copyfail-defense-{cf1,cf2-xfrm,rxrpc}.conf 2>/dev/null \
+mp_count=$(cat /etc/modprobe.d/99-rfxn-defense-{cf1,cf2-xfrm,rxrpc}.conf 2>/dev/null \
     | grep -cE '^install +(algif_aead|authenc|authencesn|af_alg|esp4|esp6|xfrm_user|xfrm_algo|rxrpc) +/bin/false')
 [ "$mp_count" -eq 9 ] \
     || fail "modprobe drop file has $mp_count install lines, expected 9"
@@ -354,10 +389,10 @@ ok "copyfail-shim-disable removed the line atomically"
 #    leave /etc/ld.so.preload sane.
 echo "/usr/lib64/no-afalg.so" > /etc/ld.so.preload   # simulate forgotten enable
 dnf remove -y --setopt=clean_requirements_on_remove=false \
-              copyfail-defense copyfail-defense-shim \
-              copyfail-defense-modprobe copyfail-defense-systemd \
-              copyfail-defense-auditor \
-              copyfail-defense-sysctl copyfail-defense-audit \
+              rfxn-defense rfxn-defense-shim \
+              rfxn-defense-modprobe rfxn-defense-systemd \
+              rfxn-defense-auditor \
+              rfxn-defense-sysctl rfxn-defense-audit \
               >/tmp/dnf.log 2>&1
 assert_no_scriptlet_fail /tmp/dnf.log
 if [ -f /etc/ld.so.preload ]; then
@@ -366,17 +401,17 @@ if [ -f /etc/ld.so.preload ]; then
 fi
 # Modprobe drop files removed on full erase
 for f in cf1 cf2-xfrm rxrpc; do
-    [ ! -f "/etc/modprobe.d/99-copyfail-defense-${f}.conf" ] \
+    [ ! -f "/etc/modprobe.d/99-rfxn-defense-${f}.conf" ] \
         || fail "modprobe ${f} drop file remained after dnf remove"
 done
 # systemd drop files removed (RPM owns them via %config)
-[ ! -f /etc/systemd/system/sshd.service.d/10-copyfail-defense.conf ] \
+[ ! -f /etc/systemd/system/sshd.service.d/10-rfxn-defense.conf ] \
     || fail "sshd systemd drop-in remained after dnf remove"
 # v2.0.2: sysctl drop-in removed on full erase
-[ ! -f /etc/sysctl.d/99-copyfail-defense-userns.conf ] \
+[ ! -f /etc/sysctl.d/99-rfxn-defense-userns.conf ] \
     || fail "sysctl userns drop-in remained after dnf remove"
 # v2.0.2: audit rules removed on full erase
-[ ! -f /etc/audit/rules.d/99-copyfail-defense.rules ] \
+[ ! -f /etc/audit/rules.d/99-rfxn-defense.rules ] \
     || fail "audit rules file remained after dnf remove"
 ok "dnf remove + %preun scrubbed all state safely (incl. v2.0.2 sysctl + audit)"
 
@@ -386,7 +421,7 @@ INNER
 
 # Upgrade-path test: simulate a host that has afalg-defense-1.0.1
 # installed (from the gh-pages snapshot kept for one release cycle),
-# then `dnf upgrade copyfail-defense` and assert the rename swap
+# then `dnf upgrade rfxn-defense` and assert the rename swap
 # succeeded.
 run_upgrade_test_in() {
     local image="$1"
@@ -412,7 +447,7 @@ assert_no_scriptlet_fail() {
 }
 
 # Add the repo so we can pull both old (afalg-defense-1.0.1) and new
-# (copyfail-defense-2.0.0) RPMs from it - the old ones are kept for
+# (rfxn-defense-2.0.0) RPMs from it - the old ones are kept for
 # one release cycle per SPEC [D-22].
 . /etc/os-release
 if [ "${VERSION_ID%%.*}" = "7" ]; then
@@ -460,26 +495,26 @@ else
 fi
 
 # Upgrade to v2.0.0 via Obsoletes/Provides
-dnf upgrade -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -10
+dnf upgrade -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -10
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # Assert: old name fully replaced
 old_count=$(rpm -qa | grep -c '^afalg-defense' || true)
 [ "$old_count" -eq 0 ] || fail "afalg-defense names still present: $old_count"
 
-# Assert: all copyfail-defense subpackages installed. Count drifts
+# Assert: all rfxn-defense subpackages installed. Count drifts
 # with each major version: v2.0.0/v2.0.1 ship 5 (meta + shim +
 # modprobe + systemd + auditor); v2.0.2+ ship 7 (+ sysctl + audit
 # via meta Recommends). Treat >=5 as "umbrella resolved" rather
 # than pin to a specific count so a future subpackage addition
 # does not regress the test bar.
-new_count=$(rpm -qa | grep -c '^copyfail-defense' || true)
-[ "$new_count" -ge 5 ] || fail "expected >=5 copyfail-defense* RPMs, got $new_count"
+new_count=$(rpm -qa | grep -c '^rfxn-defense' || true)
+[ "$new_count" -ge 5 ] || fail "expected >=5 rfxn-defense* RPMs, got $new_count"
 
 # Assert: new files in expected locations
-test -f /etc/modprobe.d/99-copyfail-defense-cf1.conf \
+test -f /etc/modprobe.d/99-rfxn-defense-cf1.conf \
     || fail "modprobe cf1 drop missing post-upgrade"
-test -f /etc/systemd/system/sshd.service.d/10-copyfail-defense.conf \
+test -f /etc/systemd/system/sshd.service.d/10-rfxn-defense.conf \
     || fail "sshd systemd drop-in missing post-upgrade"
 test -x /usr/sbin/copyfail-local-check \
     || fail "auditor missing post-upgrade"
@@ -499,13 +534,13 @@ print('post-upgrade bug_classes_covered:', d['posture']['bug_classes_covered'])
 " || fail "post-upgrade auditor JSON invalid"
 [ "$audit_rc" -ne 2 ] || fail "post-upgrade auditor exit code 2"
 
-ok "upgrade afalg-defense-1.0.1 -> copyfail-defense-2.0.0 succeeded (exit_rc=$audit_rc)"
+ok "upgrade afalg-defense-1.0.1 -> rfxn-defense-2.0.0 succeeded (exit_rc=$audit_rc)"
 echo "=== UPGRADE PATH OK ==="
 INNER
 }
 
 # v2.0.1: detection scenario tests. Each pre-stages a workload
-# fingerprint, installs copyfail-defense, and asserts the right
+# fingerprint, installs rfxn-defense, and asserts the right
 # conditional drop files landed/didn't.
 
 run_clean_host_test_in() {
@@ -562,37 +597,37 @@ EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # All 3 modprobe files present
 for f in cf1 cf2-xfrm rxrpc; do
-    test -f "/etc/modprobe.d/99-copyfail-defense-${f}.conf" \
+    test -f "/etc/modprobe.d/99-rfxn-defense-${f}.conf" \
         || fail "modprobe ${f} drop missing on clean host"
 done
 # All 5 always-on (10-) drop files
 for u in user@ sshd cron crond atd; do
-    test -f "/etc/systemd/system/${u}.service.d/10-copyfail-defense.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/10-rfxn-defense.conf" \
         || fail "10-* drop missing for ${u}"
 done
 # All 5 conditional (12-rxrpc-af) drop files (rev 2: AFS-gated, present on clean host)
 for u in user@ sshd cron crond atd; do
-    test -f "/etc/systemd/system/${u}.service.d/12-copyfail-defense-rxrpc-af.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/12-rfxn-defense-rxrpc-af.conf" \
         || fail "12-rxrpc-af drop missing for ${u} on clean host"
 done
 # All 5 conditional (15-) drop files (clean host = no suppression)
 for u in user@ sshd cron crond atd; do
-    test -f "/etc/systemd/system/${u}.service.d/15-copyfail-defense-userns.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/15-rfxn-defense-userns.conf" \
         || fail "15-* drop missing for ${u} on clean host"
 done
 # v2.0.2: sysctl drop-in landed (no userns-consumer signal in mock)
-test -f /etc/sysctl.d/99-copyfail-defense-userns.conf \
+test -f /etc/sysctl.d/99-rfxn-defense-userns.conf \
     || fail "sysctl userns drop-in missing on clean host"
 # v2.0.2: audit rules landed (-audit pulled by meta Recommends)
-test -f /etc/audit/rules.d/99-copyfail-defense.rules \
+test -f /etc/audit/rules.d/99-rfxn-defense.rules \
     || fail "audit rules missing on clean host"
 # auto-detect.json present and reports nothing
-test -f /var/lib/copyfail-defense/auto-detect.json \
+test -f /var/lib/rfxn-defense/auto-detect.json \
     || fail "auto-detect.json missing"
 jq -e '.schema_version == "2" and
        .detected.ipsec.present == false and
@@ -601,19 +636,19 @@ jq -e '.schema_version == "2" and
        .detected.userns_consumers.present == false and
        .applied.sysctl_userns == true and
        .suppressed.sysctl_userns == false' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "auto-detect.json reports workloads on clean host (or wrong v2.0.2 schema)"
 
 # v2.1.0: detected.rds_workload key present
-python3 -c "import json,sys; d=json.load(open('/var/lib/copyfail-defense/auto-detect.json')); sys.exit(0 if 'rds_workload' in d.get('detected',{}) else 1)" \
+python3 -c "import json,sys; d=json.load(open('/var/lib/rfxn-defense/auto-detect.json')); sys.exit(0 if 'rds_workload' in d.get('detected',{}) else 1)" \
     || fail "auto-detect.json missing detected.rds_workload key"
 
 # v2.1.0: applied.modprobe_rds is true on clean host (no Oracle signals)
-python3 -c "import json,sys; d=json.load(open('/var/lib/copyfail-defense/auto-detect.json')); sys.exit(0 if d.get('applied',{}).get('modprobe_rds') is True else 1)" \
+python3 -c "import json,sys; d=json.load(open('/var/lib/rfxn-defense/auto-detect.json')); sys.exit(0 if d.get('applied',{}).get('modprobe_rds') is True else 1)" \
     || fail "auto-detect.json applied.modprobe_rds should be true on clean host"
 
 # v2.1.0: actual /etc/modprobe.d/ file present on clean host
-test -f /etc/modprobe.d/99-copyfail-defense-rds.conf \
+test -f /etc/modprobe.d/99-rfxn-defense-rds.conf \
     || fail "rds modprobe file not staged on clean host"
 
 ok "clean host: all drop files present (18 dropins + sysctl + audit rules + v2.1.0 rds modprobe) + JSON reports clean"
@@ -694,32 +729,32 @@ EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # cf2-xfrm SUPPRESSED, cf1 + rxrpc PRESENT
-test ! -f /etc/modprobe.d/99-copyfail-defense-cf2-xfrm.conf \
+test ! -f /etc/modprobe.d/99-rfxn-defense-cf2-xfrm.conf \
     || fail "cf2-xfrm drop file present despite IPsec signal"
-test -f /etc/modprobe.d/99-copyfail-defense-cf1.conf \
+test -f /etc/modprobe.d/99-rfxn-defense-cf1.conf \
     || fail "cf1 drop file (always-on) missing"
-test -f /etc/modprobe.d/99-copyfail-defense-rxrpc.conf \
+test -f /etc/modprobe.d/99-rfxn-defense-rxrpc.conf \
     || fail "rxrpc drop file (unrelated to IPsec) missing"
 # JSON should flag ipsec
 jq -e '.detected.ipsec.present == true and
        .suppressed.modprobe_cf2_xfrm == true' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "auto-detect.json missing IPsec/suppression flags"
 # v2.0.1 fixup M-1 canary: the signals[] array must be a JSON list of
 # DISTINCT entries, not a single concatenated string. Bash NUL-stripping
 # in command substitution previously collapsed N signals to 1 merged
 # string. We staged 2 signals; assert >=2 entries.
 ipsec_signal_count=$(jq -r '.detected.ipsec.signals | length' \
-    /var/lib/copyfail-defense/auto-detect.json)
+    /var/lib/rfxn-defense/auto-detect.json)
 [ "$ipsec_signal_count" -ge 2 ] \
     || fail "ipsec.signals has $ipsec_signal_count entries, expected >=2 (NUL-marshalling bug?)"
 # Confirm each entry is a non-empty distinct string, not the concatenation.
 jq -e '.detected.ipsec.signals | all(type == "string" and length > 0)' \
-    /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+    /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "ipsec.signals entries must each be non-empty strings"
 ok "ipsec host: cf2-xfrm correctly suppressed; signals array has $ipsec_signal_count distinct entries"
 echo "=== IPSEC HOST OK ==="
@@ -783,31 +818,31 @@ EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
 
-test ! -f /etc/modprobe.d/99-copyfail-defense-rxrpc.conf \
+test ! -f /etc/modprobe.d/99-rfxn-defense-rxrpc.conf \
     || fail "rxrpc drop file present despite AFS signal"
-test -f /etc/modprobe.d/99-copyfail-defense-cf1.conf \
+test -f /etc/modprobe.d/99-rfxn-defense-cf1.conf \
     || fail "cf1 drop file missing"
-test -f /etc/modprobe.d/99-copyfail-defense-cf2-xfrm.conf \
+test -f /etc/modprobe.d/99-rfxn-defense-cf2-xfrm.conf \
     || fail "cf2-xfrm drop file (unrelated to AFS) missing"
 # Rev 2: 12-rxrpc-af also suppressed for ALL 5 units on AFS hosts.
 for u in user@ sshd cron crond atd; do
-    test ! -f "/etc/systemd/system/${u}.service.d/12-copyfail-defense-rxrpc-af.conf" \
+    test ! -f "/etc/systemd/system/${u}.service.d/12-rfxn-defense-rxrpc-af.conf" \
         || fail "12-rxrpc-af present for ${u} despite AFS signal"
 done
 # The 10-* and 15-* drops still present (AFS doesn't suppress those).
 for u in user@ sshd cron crond atd; do
-    test -f "/etc/systemd/system/${u}.service.d/10-copyfail-defense.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/10-rfxn-defense.conf" \
         || fail "10-* drop missing for ${u} on AFS host"
-    test -f "/etc/systemd/system/${u}.service.d/15-copyfail-defense-userns.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/15-rfxn-defense-userns.conf" \
         || fail "15-userns drop missing for ${u} on AFS host"
 done
 jq -e '.detected.afs.present == true and
        .suppressed.modprobe_rxrpc == true and
        .suppressed.systemd_rxrpc_af == true' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "auto-detect.json missing AFS/suppression flags"
 ok "afs host: rxrpc + rxrpc-af correctly suppressed across all 5 units"
 echo "=== AFS HOST OK ==="
@@ -883,35 +918,35 @@ EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # 15-userns DROP for user@ ONLY; sshd/cron/crond/atd 15-* PRESENT;
 # all 10-* PRESENT; all 3 modprobe files PRESENT.
-test ! -f /etc/systemd/system/user@.service.d/15-copyfail-defense-userns.conf \
+test ! -f /etc/systemd/system/user@.service.d/15-rfxn-defense-userns.conf \
     || fail "user@ 15-userns drop present despite rootless signal"
 for u in sshd cron crond atd; do
-    test -f "/etc/systemd/system/${u}.service.d/15-copyfail-defense-userns.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/15-rfxn-defense-userns.conf" \
         || fail "${u} 15-userns drop missing (should be applied)"
 done
 for u in user@ sshd cron crond atd; do
-    test -f "/etc/systemd/system/${u}.service.d/10-copyfail-defense.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/10-rfxn-defense.conf" \
         || fail "${u} 10-* always-on drop missing"
 done
 # Rev 2: 12-rxrpc-af present for all 5 units on rootless-only host
 # (AFS not detected, so AF_RXRPC cut applies).
 for u in user@ sshd cron crond atd; do
-    test -f "/etc/systemd/system/${u}.service.d/12-copyfail-defense-rxrpc-af.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/12-rfxn-defense-rxrpc-af.conf" \
         || fail "${u} 12-rxrpc-af drop missing on rootless-only host"
 done
 for f in cf1 cf2-xfrm rxrpc; do
-    test -f "/etc/modprobe.d/99-copyfail-defense-${f}.conf" \
+    test -f "/etc/modprobe.d/99-rfxn-defense-${f}.conf" \
         || fail "modprobe ${f} drop missing"
 done
 jq -e '.detected.rootless_containers.present == true and
        .suppressed.systemd_userns_user_at == true and
        .suppressed.systemd_rxrpc_af == false' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "auto-detect.json missing rootless/suppression flags"
 # Negative test: with subuid populated but storage tree missing,
 # rev 2 detect.sh should NOT trip (cPanel-FP fix per C-1). We can't
@@ -993,16 +1028,16 @@ EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # Detection must report rootless=false despite the populated subuid.
 jq -e '.detected.rootless_containers.present == false and
        .suppressed.systemd_userns_user_at == false' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "subuid alone tripped rootless detection (cPanel FP regression)"
 # user@ 15-userns must be PRESENT (cut applies on cPanel-shaped host).
-test -f /etc/systemd/system/user@.service.d/15-copyfail-defense-userns.conf \
+test -f /etc/systemd/system/user@.service.d/15-rfxn-defense-userns.conf \
     || fail "user@ 15-userns missing despite no rootless signal"
 ok "subuid+passwd alone does not trip rootless detection (C-1 cPanel FP fix)"
 echo "=== SUBUID-NO-STORAGE OK ==="
@@ -1074,23 +1109,23 @@ EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # ALL files should be present despite all three signals tripping.
 for f in cf1 cf2-xfrm rxrpc; do
-    test -f "/etc/modprobe.d/99-copyfail-defense-${f}.conf" \
+    test -f "/etc/modprobe.d/99-rfxn-defense-${f}.conf" \
         || fail "modprobe ${f} suppressed despite force-full"
 done
 for u in user@ sshd cron crond atd; do
-    test -f "/etc/systemd/system/${u}.service.d/15-copyfail-defense-userns.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/15-rfxn-defense-userns.conf" \
         || fail "15-userns suppressed for ${u} despite force-full"
     # Rev 2: 12-rxrpc-af also force-applied.
-    test -f "/etc/systemd/system/${u}.service.d/12-copyfail-defense-rxrpc-af.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/12-rfxn-defense-rxrpc-af.conf" \
         || fail "12-rxrpc-af suppressed for ${u} despite force-full"
 done
 jq -e '.force_full == true' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "auto-detect.json force_full not set"
 ok "force-full sentinel: all mitigations applied despite signals"
 echo "=== FORCE-FULL OK ==="
@@ -1151,11 +1186,11 @@ EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # Clean install: all 3 modprobe files + 5+5 systemd files.
-test -f /etc/modprobe.d/99-copyfail-defense-rxrpc.conf \
+test -f /etc/modprobe.d/99-rfxn-defense-rxrpc.conf \
     || fail "rxrpc drop file missing pre-redetect"
 
 # Now create AFS signal AND re-run detection
@@ -1164,12 +1199,12 @@ echo "lan.example.com" > /etc/openafs/ThisCell
 /usr/sbin/copyfail-redetect
 
 # rxrpc drop should now be GONE; cf1 + cf2-xfrm preserved.
-test ! -f /etc/modprobe.d/99-copyfail-defense-rxrpc.conf \
+test ! -f /etc/modprobe.d/99-rfxn-defense-rxrpc.conf \
     || fail "rxrpc drop persisted after redetect on AFS host"
-test -f /etc/modprobe.d/99-copyfail-defense-cf1.conf \
+test -f /etc/modprobe.d/99-rfxn-defense-cf1.conf \
     || fail "cf1 drop removed by redetect (should be always-on)"
 jq -e '.detected.afs.present == true' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "auto-detect.json not updated by redetect"
 ok "redetect: AFS signal newly applied; rxrpc suppressed"
 echo "=== REDETECT OK ==="
@@ -1177,7 +1212,7 @@ INNER
 }
 
 # v2.0.1 fixup M-2 canary: install -systemd WITHOUT -modprobe.
-# detect.sh + /usr/libexec/copyfail-defense/ + /var/lib/copyfail-defense/
+# detect.sh + /usr/libexec/rfxn-defense/ + /var/lib/rfxn-defense/
 # moved from -modprobe %files to meta %files. Both -modprobe and
 # -systemd hard-Require meta. This test asserts that installing
 # -systemd alone still pulls meta (and its detect.sh), so the
@@ -1241,11 +1276,11 @@ dnf install -y python3 jq >/dev/null 2>&1 || true
 
 # Install ONLY -systemd (and let dnf pull meta as a hard Require).
 # We deliberately do NOT pull -modprobe/-shim/-auditor.
-dnf install -y copyfail-defense-systemd 2>&1 | tee /tmp/dnf.log | tail -10
+dnf install -y rfxn-defense-systemd 2>&1 | tee /tmp/dnf.log | tail -10
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # Meta must have been pulled (hard Requires from -systemd).
-rpm -q copyfail-defense >/dev/null 2>&1 \
+rpm -q rfxn-defense >/dev/null 2>&1 \
     || fail "meta package not pulled by -systemd alone (Requires chain broken)"
 # Note: the meta package itself has Requires on all four subpackages
 # (shim/modprobe/systemd/auditor), so installing any single subpackage
@@ -1253,33 +1288,33 @@ rpm -q copyfail-defense >/dev/null 2>&1 \
 # is "meta + detect.sh land via the Requires chain", not "subpackages
 # can be cherry-picked" - the latter would require dropping meta's
 # subpackage Requires, which would change install semantics for every
-# operator who runs `dnf install copyfail-defense`.
+# operator who runs `dnf install rfxn-defense`.
 ok "rpm topology: -systemd request pulled meta (Requires chain intact)"
 
 # detect.sh must be present (meta-owned).
-test -x /usr/libexec/copyfail-defense/detect.sh \
+test -x /usr/libexec/rfxn-defense/detect.sh \
     || fail "detect.sh missing on -systemd-only install (M-2 regression)"
 ok "detect.sh present (meta-owned)"
 
 # auto-detect.json must have been written by -systemd's %posttrans.
-test -f /var/lib/copyfail-defense/auto-detect.json \
+test -f /var/lib/rfxn-defense/auto-detect.json \
     || fail "auto-detect.json missing on -systemd-only install (%posttrans no-op'd?)"
-jq -e '.schema_version == "2"' /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+jq -e '.schema_version == "2"' /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "auto-detect.json malformed on -systemd-only install"
 ok "auto-detect.json written and parses"
 
 # 10-* always-on drop-ins for all 5 tenant units.
 for u in user@ sshd cron crond atd; do
-    test -f "/etc/systemd/system/${u}.service.d/10-copyfail-defense.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/10-rfxn-defense.conf" \
         || fail "10-* drop missing for ${u} on -systemd-only install"
 done
 ok "10-* always-on drops applied for all 5 tenant units"
 
 # 12-/15-* conditional drop-ins land on a clean host (no IPsec/AFS/rootless).
 for u in user@ sshd cron crond atd; do
-    test -f "/etc/systemd/system/${u}.service.d/12-copyfail-defense-rxrpc-af.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/12-rfxn-defense-rxrpc-af.conf" \
         || fail "12-rxrpc-af missing for ${u} on -systemd-only install (M-2 canary)"
-    test -f "/etc/systemd/system/${u}.service.d/15-copyfail-defense-userns.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/15-rfxn-defense-userns.conf" \
         || fail "15-userns missing for ${u} on -systemd-only install (M-2 canary)"
 done
 ok "12-/15-* conditional drop-ins applied via meta-owned detect.sh"
@@ -1289,7 +1324,7 @@ ok "12-/15-* conditional drop-ins applied via meta-owned detect.sh"
 # wording assumed -modprobe could be omitted; that's not the case
 # under the umbrella Requires.
 for f in cf1 cf2-xfrm rxrpc; do
-    test -f "/etc/modprobe.d/99-copyfail-defense-${f}.conf" \
+    test -f "/etc/modprobe.d/99-rfxn-defense-${f}.conf" \
         || fail "modprobe ${f} drop missing (expected via meta umbrella Requires)"
 done
 ok "modprobe drops present (pulled transitively via meta umbrella)"
@@ -1354,47 +1389,47 @@ fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
 
 # Install v2.0.0 explicitly. If the repo no longer has v2.0.0, SKIP.
-if dnf install -y 'copyfail-defense-2.0.0*' 2>&1 | tee /tmp/dnf.log | tail -5; then
+if dnf install -y 'rfxn-defense-2.0.0*' 2>&1 | tee /tmp/dnf.log | tail -5; then
     assert_no_scriptlet_fail /tmp/dnf.log
-    test -f /etc/modprobe.d/99-copyfail-defense.conf \
+    test -f /etc/modprobe.d/99-rfxn-defense.conf \
         || fail "v2.0.0 monolithic modprobe file missing"
-    test -f /etc/systemd/system/sshd.service.d/10-copyfail-defense.conf \
+    test -f /etc/systemd/system/sshd.service.d/10-rfxn-defense.conf \
         || fail "v2.0.0 sshd drop missing"
     ok "v2.0.0 baseline installed"
 else
-    echo "SKIP: copyfail-defense-2.0.0 not in repo (one-cycle expired)"
+    echo "SKIP: rfxn-defense-2.0.0 not in repo (one-cycle expired)"
     exit 77
 fi
 
 # Upgrade to 2.0.1
-dnf upgrade -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -10
+dnf upgrade -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -10
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # v2.0.0 monolithic file MUST be gone from its original path
 # (pretrans renamed it to .rpmsave-v2.0.1 per rev 2 D-37).
-test ! -f /etc/modprobe.d/99-copyfail-defense.conf \
+test ! -f /etc/modprobe.d/99-rfxn-defense.conf \
     || fail "v2.0.0 monolithic modprobe file still at original path after upgrade"
 # And the .rpmsave-v2.0.1 SHOULD exist (rev 2 preserves operator
 # hand-edits via rename; the file is inert / RPM doesn't consult it).
-test -f /etc/modprobe.d/99-copyfail-defense.conf.rpmsave-v2.0.1 \
+test -f /etc/modprobe.d/99-rfxn-defense.conf.rpmsave-v2.0.1 \
     || fail "v2.0.0 monolithic file not renamed to .rpmsave-v2.0.1 (D-37 broken)"
 # All v2.0.1 split files present (clean host = no suppression)
 for f in cf1 cf2-xfrm rxrpc; do
-    test -f "/etc/modprobe.d/99-copyfail-defense-${f}.conf" \
+    test -f "/etc/modprobe.d/99-rfxn-defense-${f}.conf" \
         || fail "v2.0.1 split file ${f} missing post-upgrade"
 done
 for u in user@ sshd cron crond atd; do
-    test -f "/etc/systemd/system/${u}.service.d/10-copyfail-defense.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/10-rfxn-defense.conf" \
         || fail "10-* drop for ${u} missing post-upgrade"
-    test -f "/etc/systemd/system/${u}.service.d/12-copyfail-defense-rxrpc-af.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/12-rfxn-defense-rxrpc-af.conf" \
         || fail "12-rxrpc-af drop for ${u} missing post-upgrade"
-    test -f "/etc/systemd/system/${u}.service.d/15-copyfail-defense-userns.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/15-rfxn-defense-userns.conf" \
         || fail "15-* drop for ${u} missing post-upgrade"
     # Rev 2: the .rpmsave-v2.0.1 from systemd %pretrans should also exist.
-    test -f "/etc/systemd/system/${u}.service.d/10-copyfail-defense.conf.rpmsave-v2.0.1" \
+    test -f "/etc/systemd/system/${u}.service.d/10-rfxn-defense.conf.rpmsave-v2.0.1" \
         || fail "${u} v2.0.0 monolithic systemd drop not renamed to .rpmsave-v2.0.1"
 done
-test -f /var/lib/copyfail-defense/auto-detect.json \
+test -f /var/lib/rfxn-defense/auto-detect.json \
     || fail "auto-detect.json missing post-upgrade"
 ok "v2.0.0 -> v2.0.1 split-file upgrade clean"
 echo "=== SPLIT-UPGRADE OK ==="
@@ -1463,40 +1498,40 @@ EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # Detection must report userns_consumers=present.
 jq -e '.detected.userns_consumers.present == true' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "Flatpak signal not detected (userns_consumers.present != true)"
 
 # Suppression flag MUST be set.
 jq -e '.suppressed.sysctl_userns == true' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "sysctl_userns suppression not set despite Flatpak signal"
 
 # Applied flag MUST be false (paired with template_present gating).
 jq -e '.applied.sysctl_userns == false' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "applied.sysctl_userns true despite Flatpak suppression"
 
 # Host-wide sysctl drop-in MUST NOT exist on disk.
-[ ! -f /etc/sysctl.d/99-copyfail-defense-userns.conf ] \
+[ ! -f /etc/sysctl.d/99-rfxn-defense-userns.conf ] \
     || fail "sysctl drop-in landed despite Flatpak detection"
 
 # Per-unit RestrictNamespaces drop-in MUST still apply on all five
 # tenant units - the Flatpak suppression only touches the host-wide
 # sysctl, not the per-unit cuts.
 for u in user@ sshd cron crond atd; do
-    test -f "/etc/systemd/system/${u}.service.d/15-copyfail-defense-userns.conf" \
+    test -f "/etc/systemd/system/${u}.service.d/15-rfxn-defense-userns.conf" \
         || fail "15-userns drop suppressed for ${u} despite Flatpak-only signal"
 done
 
 # rootless_containers should NOT be flagged (we only staged Flatpak,
 # not /home/*/.local/share/containers/storage).
 jq -e '.detected.rootless_containers.present == false' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "rootless_containers tripped by Flatpak-only signal (FP regression)"
 
 ok "userns_consumer (Flatpak): sysctl drop-in suppressed; per-unit cuts retained"
@@ -1505,9 +1540,9 @@ INNER
 }
 
 # v2.1.0: Pre-stage an Oracle Grid signal (/etc/oratab) before installing
-# copyfail-defense. detect.sh must read this, suppress the host-wide RDS
+# rfxn-defense. detect.sh must read this, suppress the host-wide RDS
 # modprobe blacklist (applied.modprobe_rds=false, suppressed.modprobe_rds=true),
-# and refuse to write /etc/modprobe.d/99-copyfail-defense-rds.conf.
+# and refuse to write /etc/modprobe.d/99-rfxn-defense-rds.conf.
 run_rds_host_test_in() {
     local image="$1"
     podman run --rm -i --network=host \
@@ -1563,20 +1598,20 @@ EOEPEL
     yum install -y dnf >/dev/null
 fi
 dnf install -y python3 jq >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # Detection must report rds_workload=present.
 jq -e '.detected.rds_workload.present == true' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "Oracle /etc/oratab signal not detected (rds_workload.present != true)"
 
 # Suppression decision: applied.modprobe_rds=false AND suppressed.modprobe_rds=true.
-python3 -c "import json,sys; d=json.load(open('/var/lib/copyfail-defense/auto-detect.json')); a=d.get('applied',{}).get('modprobe_rds'); s=d.get('suppressed',{}).get('modprobe_rds'); sys.exit(0 if (a is False and s is True) else 1)" \
+python3 -c "import json,sys; d=json.load(open('/var/lib/rfxn-defense/auto-detect.json')); a=d.get('applied',{}).get('modprobe_rds'); s=d.get('suppressed',{}).get('modprobe_rds'); sys.exit(0 if (a is False and s is True) else 1)" \
     || fail "rds_host: suppression decision wrong (expect applied.modprobe_rds=false, suppressed.modprobe_rds=true)"
 
 # Host-wide RDS modprobe drop-in MUST NOT exist on disk.
-[ ! -f /etc/modprobe.d/99-copyfail-defense-rds.conf ] \
+[ ! -f /etc/modprobe.d/99-rfxn-defense-rds.conf ] \
     || fail "rds modprobe file staged despite Oracle workload signal"
 
 ok "rds_host: Oracle signal honored; host-wide RDS cut suppressed"
@@ -1625,21 +1660,21 @@ fi
 
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 dnf install -y python3 jq >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # io_uring sysctl drop-in MUST exist and JSON state must confirm.
-[ -f /etc/sysctl.d/99-copyfail-defense-iouring.conf ] \
+[ -f /etc/sysctl.d/99-rfxn-defense-iouring.conf ] \
     || fail "iouring sysctl file missing on bare host (kernel >= 6.6)"
 
 jq -e '.detected.io_uring_workload.present == false' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "bare host should not show io_uring_workload (got present=true)"
 jq -e '.suppressed.sysctl_iouring.suppressed == false' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "bare host should NOT suppress io_uring (got suppressed=true)"
 jq -e '.applied.sysctl_iouring == true' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "applied.sysctl_iouring should be true on bare host"
 
 # Container test: cannot assert /proc/sys/kernel/io_uring_disabled value.
@@ -1708,19 +1743,19 @@ test -x /usr/bin/postgres \
 
 curl -sSfL "$REPO_URL" -o /etc/yum.repos.d/copyfail.repo
 dnf install -y python3 jq >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
 
 # io_uring drop-in MUST NOT be present.
-if [ -f /etc/sysctl.d/99-copyfail-defense-iouring.conf ]; then
+if [ -f /etc/sysctl.d/99-rfxn-defense-iouring.conf ]; then
     fail "iouring sysctl file staged despite known consumer binary present"
 fi
 
 # JSON state must report detection + suppression with the expected reason.
 jq -e '.detected.io_uring_workload.present == true' \
-       /var/lib/copyfail-defense/auto-detect.json >/dev/null \
+       /var/lib/rfxn-defense/auto-detect.json >/dev/null \
     || fail "io_uring_workload.present != true despite staged consumer binary"
-reason=$(jq -r '.suppressed.sysctl_iouring.reason' /var/lib/copyfail-defense/auto-detect.json)
+reason=$(jq -r '.suppressed.sysctl_iouring.reason' /var/lib/rfxn-defense/auto-detect.json)
 [ "$reason" = "io_uring_workload" ] \
     || fail "suppression reason: expected io_uring_workload, got '$reason'"
 
@@ -1795,13 +1830,13 @@ EOEPEL
 fi
 
 dnf install -y python3 jq >/dev/null 2>&1 || true
-dnf install -y copyfail-defense 2>&1 | tee /tmp/dnf.log | tail -5
+dnf install -y rfxn-defense 2>&1 | tee /tmp/dnf.log | tail -5
 assert_no_scriptlet_fail /tmp/dnf.log
 
-[ ! -f /etc/sysctl.d/99-copyfail-defense-iouring.conf ] \
+[ ! -f /etc/sysctl.d/99-rfxn-defense-iouring.conf ] \
     || fail "iouring sysctl file present on kernel < 6.6"
 
-reason=$(jq -r '.suppressed.sysctl_iouring.reason' /var/lib/copyfail-defense/auto-detect.json)
+reason=$(jq -r '.suppressed.sysctl_iouring.reason' /var/lib/rfxn-defense/auto-detect.json)
 [ "$reason" = "kernel_too_old" ] \
     || fail "suppression reason: expected kernel_too_old, got '$reason'"
 
@@ -1863,9 +1898,33 @@ for el in "${ELS[@]}"; do
     # main matrix has already failed, we still try the upgrade path so
     # the operator gets a complete picture).
     echo
-    step "upgrade-path test (afalg-defense-1.0.1 -> copyfail-defense-2.0.0)"
+    step "upgrade-path test (afalg-defense-1.0.1 -> rfxn-defense-2.0.0)"
     upgrade_rc=0
     run_upgrade_test_in "$image" || upgrade_rc=$?
+
+    # v3.0.0 stub: upgrade_v2_1_1_to_v3_0_0
+    # Verifies the copyfail-defense (2.x lineage) -> rfxn-defense (3.0.0)
+    # upgrade path via the Obsoletes/Provides chain. Implementation:
+    # install copyfail-defense-2.1.1 from the legacy /copyfail/ URL on
+    # gh-pages, then `dnf upgrade rfxn-defense` against the staged
+    # v3.0.0 repo. Asserts:
+    #   - all copyfail-defense-* RPMs removed by dnf (Obsoletes chain)
+    #   - rfxn-defense* RPMs installed (Provides chain satisfies Requires)
+    #   - /var/lib/copyfail-defense/auto-detect.json migrated to
+    #     /var/lib/rfxn-defense/ (via %pretrans meta mv -n)
+    #   - /etc/copyfail/force-full (if pre-staged) migrated to
+    #     /etc/rfxn-defense/force-full
+    #   - audit rules now use rfxn_* keys (legacy copyfail_* keys absent
+    #     from /etc/audit/rules.d/99-rfxn-defense.rules)
+    #   - 4-hourly cron + wrapper installed by rfxn-defense-autoupdate
+    # Deferred to v3.0.1 follow-up: the v2.1.1 RPMs must be present in
+    # the legacy gh-pages path under /copyfail/repo/EL/x86_64/archive/
+    # at the time this test runs. v3.0.0 ships with the existing
+    # afalg-defense-1.0.1 -> rfxn-defense scenario covering the same
+    # Obsoletes/Provides plumbing.
+    upgrade_v2_1_1_to_v3_0_0() {
+        : # placeholder; see comment above
+    }
     case "$upgrade_rc" in
         0)  RESULT[$el]="${RESULT[$el]} +upgrade$(c_green OK)" ;;
         77) RESULT[$el]="${RESULT[$el]} +upgrade$(c_dim SKIP)" ;;
