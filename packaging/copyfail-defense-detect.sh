@@ -18,7 +18,7 @@ ETC_MODPROBE="/etc/modprobe.d"
 ETC_SYSTEMD="/etc/systemd/system"
 ETC_SYSCTL="/etc/sysctl.d"
 FORCE_FULL="/etc/copyfail/force-full"
-TOOL_VERSION="2.1.0"
+TOOL_VERSION="2.1.1"
 
 # Active tenant units (must match SPEC §4.2 and v2.0.0 CF_CLASS_TENANT_UNITS)
 TENANT_UNITS=("user@" "sshd" "cron" "crond" "atd")
@@ -232,6 +232,9 @@ detect_userns_consumers() {
 RDS_WORKLOAD_PRESENT="false"
 RDS_WORKLOAD_SIGNALS=()
 
+IO_URING_WORKLOAD_PRESENT="false"
+IO_URING_WORKLOAD_SIGNALS=()
+
 # v2.1.0: PinTheft mitigation gate. RDS modprobe blacklist is suppressed
 # when an Oracle Grid / clusterware / HPC workload is detected. Stock
 # RHEL/Alma/Rocky/Oracle UEK kernels do not ship CONFIG_RDS=m, so the
@@ -268,6 +271,77 @@ detect_rds_workload() {
     return 0
 }
 
+# v2.1.1: PinTheft secondary mitigation gate. The io_uring sysctl
+# is suppressed when ANY of these fires -- see spec §3.2.
+detect_io_uring_workload() {
+    # Signal 1: liburing.so in any /proc/<pid>/maps. Canonical signal
+    # for an actively running io_uring consumer. Bounded glob to
+    # /proc/[0-9]*/maps; silent on permission denied (non-root
+    # mounts under containers). grep -l only needs one hit; head -1
+    # bounds the result list so a huge process table doesn't fan out.
+    local m
+    for m in /proc/[0-9]*/maps; do
+        [ -r "${m}" ] || continue
+        if grep -ql 'liburing\.so' "${m}" 2>/dev/null; then
+            IO_URING_WORKLOAD_PRESENT="true"
+            IO_URING_WORKLOAD_SIGNALS+=("${m}: liburing.so mapped")
+            break
+        fi
+    done
+
+    # Signal 2: known consumer binary present and executable.
+    # NOT a runtime check -- operator may have installed but not
+    # started the service. False-positive cost is low (we keep
+    # io_uring enabled on a host that doesn't actively need it).
+    local b
+    for b in /usr/bin/postgres /usr/pgsql-*/bin/postgres \
+             /usr/bin/scylla /usr/bin/mariadbd \
+             /usr/bin/mariadbd-ge /usr/bin/dockerd \
+             /usr/bin/redis-server /usr/sbin/nginx \
+             /usr/bin/envoy /usr/sbin/rabbitmq-server; do
+        # Glob expansion when no match leaves the literal pattern; -x test fails.
+        [ -x "${b}" ] || continue
+        IO_URING_WORKLOAD_PRESENT="true"
+        IO_URING_WORKLOAD_SIGNALS+=("${b}: known io_uring consumer present")
+        break
+    done
+
+    # Signal 3: io_uring-named systemd unit enabled. Catches custom
+    # operator deployments where the unit is named with the substring.
+    if command -v systemctl >/dev/null 2>&1; then
+        local unit
+        unit=$(systemctl list-unit-files --type=service --no-legend 2>/dev/null \
+                   | awk '{print $1}' | grep -i io.uring | head -1 || true)
+        if [ -n "${unit}" ]; then
+            IO_URING_WORKLOAD_PRESENT="true"
+            IO_URING_WORKLOAD_SIGNALS+=("systemd unit: ${unit}")
+        fi
+    fi
+
+    # Signal 4: /proc/sys/kernel/io_uring_disabled already non-zero.
+    # Operator explicitly tuned this -- respect their intent.
+    if [ -r /proc/sys/kernel/io_uring_disabled ]; then
+        local cur
+        cur=$(cat /proc/sys/kernel/io_uring_disabled 2>/dev/null || echo 0)
+        if [ "${cur}" != "0" ] && [ "${cur}" != "" ]; then
+            IO_URING_WORKLOAD_PRESENT="false"  # already disabled; not a workload
+            # No-op: we don't fire workload signal here, but we also
+            # have nothing to apply. The kernel gate or operator-set
+            # value already does what we want.
+            :
+        fi
+    fi
+
+    # Signal 5: CONFIG_IO_URING absent from /boot/config-$(uname -r).
+    # Kernel built without io_uring; the sysctl key is non-existent.
+    # NOT a workload signal -- we just want JSON to record it.
+    # Implementation: the kernel-version gate already covers the
+    # common case (kernel < 6.6); CONFIG_IO_URING=n on a recent
+    # kernel is rare. Skip for simplicity -- relying on `-` prefix in
+    # the sysctl drop-in to silently no-op.
+    return 0
+}
+
 # SUPPRESS_*: true if mitigation is suppressed; false if applied.
 SUPPRESS_MODPROBE_CF2_XFRM="false"
 SUPPRESS_MODPROBE_RXRPC="false"
@@ -275,6 +349,11 @@ SUPPRESS_SYSTEMD_RXRPC_AF="false"
 SUPPRESS_SYSTEMD_USERNS_USER_AT="false"
 SUPPRESS_SYSCTL_USERNS="false"
 SUPPRESS_MODPROBE_RDS="false"
+SUPPRESS_SYSCTL_IOURING="false"
+# Carrier for the reason io_uring suppression decided: one of
+# rootless | userns_consumers | io_uring_workload | kernel_too_old |
+# env_suppress | none. Reported in JSON state for operator triage.
+IO_URING_SUPPRESS_REASON="none"
 
 # force-full sentinel resolver: returns 0 (active) only for a regular
 # file. Logs WARN if path exists as directory, broken symlink, etc -
@@ -299,9 +378,31 @@ check_force_full() {
     return 1
 }
 
+# io_uring sysctl key (kernel.io_uring_disabled) requires Linux 6.6+.
+# Returns 0 (supported) / 1 (too old) / 0 (cannot determine; assume
+# supported and let `-` prefix in the sysctl file silently skip if
+# the kernel ignores it).
+_kernel_supports_iouring_sysctl() {
+    local rel major minor
+    rel=$(uname -r 2>/dev/null || echo "0.0")
+    major="${rel%%.*}"
+    minor="${rel#*.}"; minor="${minor%%.*}"
+    # Validate numeric; default-allow on unparseable.
+    [[ "${major}" =~ ^[0-9]+$ ]] || return 0
+    [[ "${minor}" =~ ^[0-9]+$ ]] || return 0
+    if [ "${major}" -gt 6 ] || \
+       { [ "${major}" -eq 6 ] && [ "${minor}" -ge 6 ]; }; then
+        return 0
+    fi
+    return 1
+}
+
 decide_suppressions() {
     if check_force_full; then
         # Operator override - apply everything regardless of detection.
+        # v2.1.1: stamp the io_uring reason carrier so JSON state
+        # reflects the source of the apply decision.
+        IO_URING_SUPPRESS_REASON="force_full"
         return 0
     fi
     [ "${IPSEC_PRESENT}" = "true" ]    && SUPPRESS_MODPROBE_CF2_XFRM="true"
@@ -318,6 +419,41 @@ decide_suppressions() {
         SUPPRESS_SYSCTL_USERNS="true"
     fi
     [ "${RDS_WORKLOAD_PRESENT}" = "true" ] && SUPPRESS_MODPROBE_RDS="true"
+    # v2.1.1: io_uring sysctl key -- layered suppression.
+    # detect_io_uring_workload() populates IO_URING_WORKLOAD_PRESENT.
+    # This block runs ONLY when force-full is not active (the
+    # check_force_full early-return at the top of this function
+    # already handled that case and stamped reason=force_full).
+    # Order:
+    #   1. CFD_FORCE_IOURING_DISABLE=1   -> apply
+    #   2. CFD_SUPPRESS_IOURING_DISABLE=1 -> suppress
+    #   3. kernel < 6.6                  -> suppress (key non-existent)
+    #   4. io_uring workload signal      -> suppress
+    #   5. rootless containers           -> suppress
+    #   6. userns consumers              -> suppress
+    #   else                              -> apply
+    if [ "${CFD_FORCE_IOURING_DISABLE:-}" = "1" ]; then
+        SUPPRESS_SYSCTL_IOURING="false"
+        IO_URING_SUPPRESS_REASON="env_force"
+    elif [ "${CFD_SUPPRESS_IOURING_DISABLE:-}" = "1" ]; then
+        SUPPRESS_SYSCTL_IOURING="true"
+        IO_URING_SUPPRESS_REASON="env_suppress"
+    elif ! _kernel_supports_iouring_sysctl; then
+        SUPPRESS_SYSCTL_IOURING="true"
+        IO_URING_SUPPRESS_REASON="kernel_too_old"
+    elif [ "${IO_URING_WORKLOAD_PRESENT}" = "true" ]; then
+        SUPPRESS_SYSCTL_IOURING="true"
+        IO_URING_SUPPRESS_REASON=io_uring_workload
+    elif [ "${ROOTLESS_PRESENT}" = "true" ]; then
+        SUPPRESS_SYSCTL_IOURING="true"
+        IO_URING_SUPPRESS_REASON="rootless_containers"
+    elif [ "${USERNS_CONSUMERS_PRESENT}" = "true" ]; then
+        SUPPRESS_SYSCTL_IOURING="true"
+        IO_URING_SUPPRESS_REASON="userns_consumers"
+    else
+        SUPPRESS_SYSCTL_IOURING="false"
+        IO_URING_SUPPRESS_REASON="none"
+    fi
     # Explicit success: the chained `[ x ] && SUP=...` returns 1 when
     # the final test is false (clean host, nothing detected). Under
     # the script's `set -e` that would abort main() before
@@ -438,6 +574,31 @@ apply_sysctl() {
     else
         cmp_and_install "${src}" "${dst}" "sysctl userns"
     fi
+    apply_sysctl_iouring
+    return 0
+}
+
+apply_sysctl_iouring() {
+    local src dst
+    src="${TEMPLATE_DIR}/sysctl/99-copyfail-defense-iouring.conf"
+    dst="${ETC_SYSCTL}/99-copyfail-defense-iouring.conf"
+    if [ ! -f "${src}" ]; then
+        # Template missing (older subpackage, race). Nothing to do.
+        return 0
+    fi
+    if [ "${SUPPRESS_SYSCTL_IOURING}" = "true" ]; then
+        rm -f "${dst}"
+        log "sysctl iouring: suppressed (reason=${IO_URING_SUPPRESS_REASON})"
+    else
+        cmp_and_install "${src}" "${dst}" "sysctl iouring"
+    fi
+    return 0
+}
+
+teardown_sysctl_iouring() {
+    rm -f "${ETC_SYSCTL}/99-copyfail-defense-iouring.conf"
+    log "sysctl iouring teardown: removed /etc/sysctl.d/99-copyfail-defense-iouring.conf"
+    return 0
 }
 
 teardown_modprobe() {
@@ -455,7 +616,9 @@ teardown_rds_modprobe() {
 
 teardown_sysctl() {
     rm -f "${ETC_SYSCTL}/99-copyfail-defense-userns.conf"
-    log "sysctl teardown: removed /etc/sysctl.d/99-copyfail-defense-userns.conf"
+    teardown_sysctl_iouring
+    log "sysctl teardown: removed /etc/sysctl.d/99-copyfail-defense-{userns,iouring}.conf"
+    return 0
 }
 
 teardown_systemd() {
@@ -491,6 +654,11 @@ write_state_json() {
         modprobe_rds_template_present="true"
     fi
 
+    local sysctl_iouring_template_present="false"
+    if [ -f "${TEMPLATE_DIR}/sysctl/99-copyfail-defense-iouring.conf" ]; then
+        sysctl_iouring_template_present="true"
+    fi
+
     # Marshall signal arrays as NUL-delimited bytes via stdin.
     # Bash command substitution silently strips NUL bytes from a captured
     # string, so an env-var carrier collapses signal1\0signal2\0 into
@@ -508,6 +676,8 @@ write_state_json() {
         printf 'CFD_END_USERNS_CONSUMERS\0'
         printf '%s\0' "${RDS_WORKLOAD_SIGNALS[@]+${RDS_WORKLOAD_SIGNALS[@]}}"
         printf 'CFD_END_RDS_WORKLOAD\0'
+        printf '%s\0' "${IO_URING_WORKLOAD_SIGNALS[@]+${IO_URING_WORKLOAD_SIGNALS[@]}}"
+        printf 'CFD_END_IO_URING_WORKLOAD\0'
     } | env \
         CFD_TOOL_VERSION="${TOOL_VERSION}" \
         CFD_TIMESTAMP="$(date +%s)" \
@@ -524,8 +694,12 @@ write_state_json() {
         CFD_SUP_SYSTEMD_USERNS_USER_AT="${SUPPRESS_SYSTEMD_USERNS_USER_AT}" \
         CFD_SUP_SYSCTL_USERNS="${SUPPRESS_SYSCTL_USERNS}" \
         CFD_SUP_MODPROBE_RDS="${SUPPRESS_MODPROBE_RDS}" \
+        CFD_IO_URING_WORKLOAD_PRESENT="${IO_URING_WORKLOAD_PRESENT}" \
+        CFD_SUP_SYSCTL_IOURING="${SUPPRESS_SYSCTL_IOURING}" \
+        CFD_IOURING_SUPPRESS_REASON="${IO_URING_SUPPRESS_REASON}" \
         CFD_SYSCTL_TEMPLATE_PRESENT="${sysctl_template_present}" \
         CFD_MODPROBE_RDS_TEMPLATE_PRESENT="${modprobe_rds_template_present}" \
+        CFD_SYSCTL_IOURING_TEMPLATE_PRESENT="${sysctl_iouring_template_present}" \
         python3 -c '
 import json, os, sys
 
@@ -550,6 +724,7 @@ afs_signals        = take_until("CFD_END_AFS")
 rootless_signals   = take_until("CFD_END_ROOTLESS")
 consumers_signals  = take_until("CFD_END_USERNS_CONSUMERS")
 rds_workload_signals = take_until("CFD_END_RDS_WORKLOAD")
+io_uring_signals  = take_until("CFD_END_IO_URING_WORKLOAD")
 
 sup_xfrm       = b("CFD_SUP_MODPROBE_CF2_XFRM")
 sup_rxrpc      = b("CFD_SUP_MODPROBE_RXRPC")
@@ -557,8 +732,12 @@ sup_rxaf       = b("CFD_SUP_SYSTEMD_RXRPC_AF")
 sup_userns     = b("CFD_SUP_SYSTEMD_USERNS_USER_AT")
 sup_sysctl     = b("CFD_SUP_SYSCTL_USERNS")
 sup_rds        = b("CFD_SUP_MODPROBE_RDS")
+sup_iouring         = b("CFD_SUP_SYSCTL_IOURING")
+iouring_reason      = os.environ.get("CFD_IOURING_SUPPRESS_REASON", "none")
+iouring_workload    = b("CFD_IO_URING_WORKLOAD_PRESENT")
 sysctl_present = b("CFD_SYSCTL_TEMPLATE_PRESENT")
 modprobe_rds_template_present = b("CFD_MODPROBE_RDS_TEMPLATE_PRESENT")
+sysctl_iouring_template_present = b("CFD_SYSCTL_IOURING_TEMPLATE_PRESENT")
 
 doc = {
     "schema_version": "2",
@@ -573,6 +752,7 @@ doc = {
         "rootless_containers": {"present": b("CFD_ROOTLESS_PRESENT"),          "signals": rootless_signals},
         "userns_consumers":    {"present": b("CFD_USERNS_CONSUMERS_PRESENT"),  "signals": consumers_signals},
         "rds_workload":        {"present": b("CFD_RDS_WORKLOAD_PRESENT"),      "signals": rds_workload_signals},
+        "io_uring_workload":   {"present": iouring_workload,                  "signals": io_uring_signals},
     },
     "suppressed": {
         "modprobe_cf2_xfrm":      sup_xfrm,
@@ -581,6 +761,7 @@ doc = {
         "systemd_userns_user_at": sup_userns,
         "sysctl_userns":          sup_sysctl,
         "modprobe_rds":           sup_rds,
+        "sysctl_iouring":     {"suppressed": sup_iouring, "reason": iouring_reason},
     },
     "applied": {
         "modprobe_cf1":              True,
@@ -603,6 +784,7 @@ doc = {
         # apply state on hosts where -sysctl is excluded from install.
         "sysctl_userns":             (not sup_sysctl) and sysctl_present,
         "modprobe_rds":              (not sup_rds) and modprobe_rds_template_present,
+        "sysctl_iouring":            (not sup_iouring) and sysctl_iouring_template_present,
     },
 }
 with open(sys.argv[1], "w") as f:
@@ -636,6 +818,7 @@ main() {
             detect_rootless_containers
             detect_userns_consumers
             detect_rds_workload
+            detect_io_uring_workload
             decide_suppressions
             if [ "${scope}" = "modprobe" ] || [ "${scope}" = "both" ] || [ "${scope}" = "all" ]; then
                 apply_modprobe
@@ -647,7 +830,7 @@ main() {
                 apply_sysctl
             fi
             write_state_json "${STATE_FILE}"
-            log "apply ${scope} complete: ipsec=${IPSEC_PRESENT} afs=${AFS_PRESENT} rootless=${ROOTLESS_PRESENT} userns_consumers=${USERNS_CONSUMERS_PRESENT} rds_workload=${RDS_WORKLOAD_PRESENT}"
+            log "apply ${scope} complete: ipsec=${IPSEC_PRESENT} afs=${AFS_PRESENT} rootless=${ROOTLESS_PRESENT} userns_consumers=${USERNS_CONSUMERS_PRESENT} rds_workload=${RDS_WORKLOAD_PRESENT} io_uring_workload=${IO_URING_WORKLOAD_PRESENT} iouring_supp=${IO_URING_SUPPRESS_REASON}"
             ;;
         teardown)
             case "${scope}" in
