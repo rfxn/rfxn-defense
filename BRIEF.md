@@ -202,3 +202,41 @@ The auditor (`copyfail-local-check`) gains `check_ptrace_scope`
 (HARDENING category) and `check_pidfd_getfd_auditd_rule` (DETECTION
 category) and reports `keysign-pwn` in the per-class surface
 matrix.
+
+## DirtyDecrypt (CVE-2026-31635)
+
+`rxgk_*` (kernel.org net/rxrpc RXGK token-decrypt path) accepts an
+attacker-controlled scratch buffer and performs in-place crypto into
+it, yielding the same page-cache-overwrite primitive shape as
+DF-RxRPC. Discovered late v2.1.x cycle and disclosed 2026-05; entry
+primitive is an `AF_RXRPC` socket with a forged RXGK token, same
+unprivileged-user reachability as DF-RxRPC, same kernel sink module
+(`rxrpc`).
+
+**Verification result (2026-05-23):** covered by the existing rxrpc
+cuts already shipped under cf-class coverage. Specifically:
+
+  - `rfxn-defense-modprobe` blacklists `rxrpc` (install +rxrpc /bin/false)
+  - `rfxn-defense-systemd` 12-* drop-in includes `RestrictAddressFamilies=~AF_RXRPC`
+    on tenant units (sshd, cron, atd, user@.service); applied
+    conditionally with detect.sh suppression on AFS hosts
+  - `rfxn-defense-audit` rule `rfxn_afrxrpc` fires on
+    `socket(AF_RXRPC, ...)` from unprivileged users; tripwire on
+    hosts where the modprobe blacklist is auto-suppressed (AFS
+    workloads)
+
+No new spec coverage required. The DirtyDecrypt threat model maps 1:1
+onto the rxrpc cut surface; the only differences vs DF-RxRPC are the
+kernel sink path (`rxgk_*` vs `rxkad_verify_packet_1`) and the token
+format (RXGK vs rxkad). Both reach via the same `socket(AF_RXRPC)`
+syscall, both blocked by the same modprobe + systemd + auditd primitives.
+
+If a future variant surfaces a non-AF_RXRPC entry primitive (e.g.,
+in-kernel-allocation path, ULP-mediated decrypt), open a v3.1.x
+hotfix.
+
+References:
+  - https://thehackernews.com/2026/05/dirtydecrypt-poc-released-for-linux.html
+  - https://cybersecuritynews.com/dirtydecrypt-cve-2026-31635/
+  - rfxn-defense `rfxn_afrxrpc` audit-key query catches the entry
+    primitive: `ausearch -k rfxn_afrxrpc --start today`
