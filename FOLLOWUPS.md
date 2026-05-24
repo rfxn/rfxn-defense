@@ -1,6 +1,118 @@
 # Outstanding follow-ups
 
-Snapshot: **2026-05-23** (post v3.0.0 ship)
+Snapshot: **2026-05-24** (post v3.0.2 ship)
+
+## Shipped in v3.0.2 (2026-05-24)
+
+EL7 silent-failure closure. Empirical testing on a fresh CentOS
+7.9.2009 VM surfaced four EL7-specific silent-mitigation gaps that
+shipped in every prior 3.0.x build and were masked by the auditor's
+own SKIP path. The defense-in-depth premise — "if a layer is shipped,
+it MUST actually work" — was being violated for the ssh-keysign-pwn
+primary mitigation (CVE-2026-46333) on every EL7 host since v3.0.0.
+
+- **systemd userns drop-in gated out of EL7 builds.** systemd v219
+  (EL7) does not recognise `RestrictNamespaces=` (added v235); the
+  `15-rfxn-defense-userns.conf` drop-in shipped on EL7 was inert at
+  unit-start. Spec gates Source8 + the `%files` entry on
+  `%if 0%{?rhel} != 7`. `detect.sh` `apply_systemd` removes any stale
+  files left by prior installs (verified on v3.0.1 → v3.0.2 upgrade
+  on a live EL7 VM: 5 stale drop-ins cleaned, 0 remaining).
+- **userns sysctl gated out of EL7 builds.** None of the three keys
+  exist on kernel 3.10 (`max_user_namespaces` was 4.9+; the other
+  two are non-RHEL kernel patches), AND EL7 procps-ng 3.3.10
+  mis-parses the `-key` silent-skip prefix (added in 3.3.12), so
+  every key in the file silently no-op'd. RHEL7 kernel-compile
+  defaults already disable unprivileged userns.
+- **ptrace_scope sysctl prefix removed.** Same procps-ng 3.3.10 issue
+  killed `kernel.yama.ptrace_scope=2` host-wide on every EL7 host
+  running v3.0.0 / v3.0.1 — CVE-2026-46333 mitigation latent until
+  reboot. Dropped the `-` prefix; Yama LSM is in every supported RHEL
+  kernel so a missing key is a one-line sysctl error (acceptable
+  visibility on the rare no-Yama kernel) instead of a silent no-op.
+  Also fixed the `%posttrans sysctl` loop in the spec, which only
+  enumerated userns + iouring before — ptrace.conf landed on disk but
+  was never `sysctl`-loaded at install time on ANY distro (regression
+  from the v3.0.1 ptrace-split that omitted the loop entry).
+- **Auditor `systemd_restrict_namespaces`** returned silent SKIP
+  "no tenant units found" on EL7 because `systemctl show -p` doesn't
+  emit the property line on systemd v219. Added a `systemd_version()`
+  probe; when version < 235, emit FAIL with stale-drop-in list or
+  SKIP with explicit "predates v235" reason. Auditor no longer masks
+  the gap.
+- **Auditor `userns_sysctl`** returned OK "unprivileged userns
+  disabled" when kernel/distro defaults set `max_user_namespaces=0`,
+  masking that the rfxn-defense sysctl drop-in was not on disk.
+  Operator falsely believed rfxn-defense was enforcing it. Now
+  distinguishes "by rfxn drop-in" from "by kernel/distro default" in
+  the message + `details.rfxn_sysctl_dropin_present` boolean.
+- **`check_ptrace_scope`** remediation text in both WARN and FAIL
+  branches pointed at the v3.0.0-stale `99-rfxn-defense-userns.conf`
+  path (ptrace_scope split into its own file in v3.0.1). Now points
+  at `99-rfxn-defense-ptrace.conf` and cites the v3.0.2 `-` prefix
+  removal so operators understand why the value was =0 despite the
+  file being present.
+- **NEW permanent EL7 live-host test runner** at
+  `packaging/test-el7-live.sh`. 33 assertions across packaging
+  sanity / auditor JSON / empirical mitigation probes (AF_ALG with
+  shim isolated from modprobe blacklist; ptrace install-time runtime
+  value captured BEFORE any manual sysctl by the runner; systemd-
+  analyze verify on every drop-in) / copyfail-defense 2.1.1 → rfxn-
+  defense 3.0.2 upgrade path including stale-drop-in cleanup. Guards
+  vault.centos.org rewrite with `/etc/redhat-release` check (refuses
+  to run on non-EL7 hosts).
+
+**Spec process improvement.** Adversarial sentinel + engineer-fixup
+cycle was load-bearing: sentinel caught (a) the `%posttrans sysctl`
+loop missing ptrace.conf — the headline EL7 fix was broken at
+install time on every distro; (b) one of two `check_ptrace_scope`
+branches still had the stale remediation text; (c) the AF_ALG shim
+probe in the test runner was a tautology (modprobe blacklist killed
+the syscall before the shim was exercised). All three would have
+shipped without the sentinel pass.
+
+## v3.0.2 watch list
+
+- [ ] `detect.sh` stale-removal of `15-rfxn-defense-userns.conf` and
+      `99-rfxn-defense-userns.conf` does NOT honor D-57 cmp-and-skip
+      for operator hand-edits. The summary `log_warn` and per-unit
+      `log` info lines make removal visible in `journalctl -t
+      rfxn-defense-detect`, but the rm itself proceeds without
+      preserving operator divergence. Realistic case is rare (operator
+      hand-edited a directive that EL7 systemd doesn't support
+      anyway), but sentinel flagged it as a D-57 spirit violation.
+      Possible fix: embed a sentinel comment in shipped templates and
+      grep for it before rm; preserve + WARN on divergence. Defer
+      until an operator actually reports a stale-removal surprise.
+- [ ] **yum-3 on EL7 does not display scriptlet stderr reliably.**
+      Tried 4 capture patterns (procsub tee, tmpfile-tee,
+      cat-to-stderr, `logger -f`) — all deliver every warning to
+      syslog with `authpriv.warning` facility cleanly, but yum-3
+      filters/buffers small scriptlet stderr writes from
+      "successful" scriptlets. dnf-4 on EL8+ displays them. The
+      `%posttrans systemd` comment block documents the limitation
+      and points operators at `journalctl -t rfxn-defense-detect`
+      as the canonical audit trail. Not fixable from the package
+      side; track for any future yum-3 audit-output workarounds.
+- [ ] Auditor `systemd_version()` regex covers `systemd 219`,
+      `systemd 252 (252.34-1.el9_5)`, and `systemd 245~rc1` correctly
+      (anchored `(\d+)` matches the leading integer regardless of
+      suffix). systemd 235-240 had bugs where `RestrictNamespaces=`
+      was accepted at parse time but failed to propagate to
+      template-unit instances; the per-unit `systemctl show -p`
+      check reflects what the running unit actually applies so the
+      mitigation status is correct, but the auditor doesn't surface
+      "broken systemd version" as a category. Track for a future
+      auditor expansion if EL8.4 (systemd 239) hosts surface
+      unexpected mitigation gaps.
+- [ ] `packaging/test-el7-live.sh` is sound on a fresh CentOS 7.9.2009
+      VM but assumes vault.centos.org is reachable. If vault becomes
+      unreachable, the runner exits 2 in the bootstrap phase. Mirror
+      the test for EL8/EL9/EL10 (currently the only empirical
+      mitigation testbed is on EL7; `test-repo.sh` covers the
+      gh-pages published-repo path on all four distros but doesn't
+      exercise mitigation runtime behavior). Defer until a non-EL7
+      silent-failure class actually surfaces.
 
 ## Shipped in v3.0.0 (2026-05-23)
 

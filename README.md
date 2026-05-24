@@ -57,8 +57,8 @@ EL8/9/10, hard dep on EL7 since rpm-4.11 has no `Recommends:`):
 |---|---|
 | `rfxn-defense-shim` | `LD_PRELOAD` `AF_ALG` block (cf1 primary) |
 | `rfxn-defense-modprobe` | kernel-module entry-point cuts (cf1, cf2, Dirty Frag, PinTheft, DirtyDecrypt) |
-| `rfxn-defense-systemd` | per-unit `RestrictAddressFamilies=~AF_ALG ~AF_KEY ~AF_RXRPC ~AF_RDS` + `RestrictNamespaces=~user ~net` |
-| `rfxn-defense-sysctl` | host-wide `user.max_user_namespaces=0` (suppressed on rootless / Flatpak / firejail / browser), `kernel.yama.ptrace_scope=2` (always-applied independent drop-in, v3.0.1+), `kernel.io_uring_disabled=2` (Linux 6.6+, auto-suppressed on io_uring workloads) |
+| `rfxn-defense-systemd` | per-unit `RestrictAddressFamilies=~AF_ALG ~AF_KEY ~AF_RXRPC ~AF_RDS` + `RestrictNamespaces=~user ~net` (EL8+; `RestrictNamespaces=` was added in systemd v235 — EL7's systemd v219 silently ignores it, so v3.0.2 gates the userns drop-in out of EL7 builds) |
+| `rfxn-defense-sysctl` | host-wide `user.max_user_namespaces=0` (suppressed on rootless / Flatpak / firejail / browser; EL8+ only — EL7 procps-ng 3.3.10 mis-parses the `-key` silent-skip prefix added in 3.3.12, so v3.0.2 gates the userns sysctl out of EL7 too), `kernel.yama.ptrace_scope=2` (always-applied independent drop-in since v3.0.1; v3.0.2 dropped the `-` prefix so EL7 procps honours the key), `kernel.io_uring_disabled=2` (Linux 6.6+, auto-suppressed on io_uring workloads) |
 | `rfxn-defense-auditor` | read-only host posture auditor (`rfxn-local-check`) with per-class coverage report |
 | `rfxn-defense-audit` | auditd tripwires (`rfxn_afalg/afkey/afrxrpc/afrds/pidfd_getfd`) |
 | `rfxn-defense-autoupdate` | 4-hourly responsive auto-update cron + flock wrapper |
@@ -100,6 +100,28 @@ sudo dnf install -y rfxn-defense-auditor
 > (CentOS 7 reached EOL 2024-06-30). If your host loses vault access,
 > install via the GitHub release assets directly; the RPMs themselves
 > carry no runtime vault dependency.
+>
+> **v3.0.2 EL7-specific gating.** Three layers shipped through every
+> prior 3.0.x build as silent no-ops on EL7. v3.0.2 closes the gap:
+> - **systemd userns drop-in (`15-rfxn-defense-userns.conf`)** is not
+>   installed on EL7 — systemd v219 (EL7) does not recognise
+>   `RestrictNamespaces=` (added in v235). Stale files from prior
+>   3.0.x installs are removed by `detect.sh` on upgrade.
+> - **userns sysctl (`99-rfxn-defense-userns.conf`)** is not installed
+>   on EL7 — its three keys do not exist on kernel 3.10, and EL7
+>   procps-ng 3.3.10 mis-parses the `-key` silent-skip prefix
+>   (introduced in 3.3.12). RHEL7 kernel-compile defaults already
+>   disable unprivileged userns.
+> - **ptrace_scope sysctl (`99-rfxn-defense-ptrace.conf`)** dropped the
+>   `-` prefix and now actually applies on EL7 (the file shipped in
+>   v3.0.1 was silently no-op'd by EL7 procps-ng).
+>
+> `rfxn-local-check` on EL7 now reports
+> `systemd_restrict_namespaces=SKIP` with an explicit
+> "systemd v219 predates `RestrictNamespaces=` (v235)" message rather
+> than the prior silent "no tenant units found" SKIP, and
+> `userns_sysctl=OK` distinguishes "blocked by rfxn drop-in" from
+> "blocked by kernel/distro default".
 
 ## Verify
 
@@ -172,8 +194,8 @@ break legitimate workloads on a busy fleet.
 | systemd `RestrictAddressFamilies=~AF_KEY`        |  ·  | ✅  |  ✅    |    ·       |   ✅      |    ·     |     ·       |
 | systemd `RestrictAddressFamilies=~AF_RXRPC`      |  ·  |  ·  |   ·    |   ✅       |    ·      |    ·     |     ·       |
 | systemd `RestrictAddressFamilies=~AF_RDS`        |  ·  |  ·  |   ·    |    ·       |    ·      |   ✅     |     ·       |
-| systemd `RestrictNamespaces=~user ~net`          |  ·  | ✅  |  ✅    |    ·       |   ✅      |    ·     |     ·       |
-| sysctl `user.max_user_namespaces=0`              |  ·  | ✅  |  ✅    |    ·       |   ✅      |    ·     |     ·       |
+| systemd `RestrictNamespaces=~user ~net`          |  ·  | ✅ ⁷|  ✅ ⁷  |    ·       |   ✅ ⁷    |    ·     |     ·       |
+| sysctl `user.max_user_namespaces=0`              |  ·  | ✅ ⁷|  ✅ ⁷  |    ·       |   ✅ ⁷    |    ·     |     ·       |
 | sysctl `kernel.yama.ptrace_scope=2` *(always-on)*|  ·  |  ·  |   ·    |    ·       |    ·      |    ·     |    ✅       |
 | sysctl `kernel.io_uring_disabled=2` ⁴            |  ·  |  ·  |   ·    |    ·       |    ·      |   ✅ ⁴   |     ·       |
 | auditd tripwire rules                            | ³   | ³   |  ³     |   ³        |   ³       |   ³      |    ³        |
@@ -206,6 +228,17 @@ loaded `rds*.ko`).
 ⁶ DirtyDecrypt (CVE-2026-31635, `rxgk_*` RXGK token-decrypt in-place
 crypto) is cross-stamped onto the DF-RxRPC column: every AF_RXRPC
 mitigation that covers DF-RxRPC also covers DirtyDecrypt.
+⁷ EL8+ only. EL7 ships systemd v219 (`RestrictNamespaces=` introduced
+v235, so the directive is silently ignored at unit-start) and
+procps-ng 3.3.10 (the `-key` silent-skip prefix arrived in 3.3.12, so
+the sysctl file's keys produce zero effect). v3.0.2 gates both layers
+out of EL7 builds and `detect.sh` removes any stale files from prior
+3.0.x installs on upgrade. RHEL7 kernel-compile defaults already
+disable unprivileged user namespaces, so the userns prerequisite for
+the cf2 / DF-ESP / Fragnesia chains remains blocked on EL7 via the
+kernel, not the rfxn drop-in (the auditor flags this in
+`userns_sysctl.message` so operators see the actual enforcement
+source).
 
 ### Audit keys (`-audit` subpackage)
 
@@ -277,8 +310,8 @@ cron job. That asymmetry is the case for deploying every rung.
 | `rfxn-defense` | x86_64 | meta, pulls all six below (`-audit` as Recommends on EL8/9/10) |
 | `rfxn-defense-shim` | x86_64 | `/usr/lib64/no-afalg.so` + `rfxn-shim-{enable,disable}` |
 | `rfxn-defense-modprobe` | noarch | `/etc/modprobe.d/99-rfxn-defense-{cf1,cf2-xfrm,rxrpc,rds}.conf` |
-| `rfxn-defense-systemd` | noarch | drop-ins for `user@`/`sshd`/`cron`/`crond`/`atd` + container-runtime + RDS opt-in examples |
-| `rfxn-defense-sysctl` | noarch | `/etc/sysctl.d/99-rfxn-defense-{userns,ptrace,iouring}.conf` (each independently auto-suppressed) |
+| `rfxn-defense-systemd` | noarch | drop-ins for `user@`/`sshd`/`cron`/`crond`/`atd` + container-runtime + RDS opt-in examples (EL7 builds omit the `15-rfxn-defense-userns.conf` drop-in — systemd v219 silently ignores `RestrictNamespaces=`) |
+| `rfxn-defense-sysctl` | noarch | `/etc/sysctl.d/99-rfxn-defense-{userns,ptrace,iouring}.conf` (each independently auto-suppressed; EL7 builds omit `userns.conf` — kernel 3.10 lacks the keys and procps-ng 3.3.10 mis-parses the `-` prefix) |
 | `rfxn-defense-auditor` | noarch | `/usr/sbin/rfxn-local-check` (Python, stdlib-only, read-only) |
 | `rfxn-defense-audit` | noarch | `/etc/audit/rules.d/99-rfxn-defense.rules` (syscall tripwires) |
 | `rfxn-defense-autoupdate` | noarch | `/etc/cron.d/rfxn-defense-autoupdate` + `/usr/sbin/rfxn-defense-update` (flock-protected wrapper) |

@@ -18,7 +18,7 @@ ETC_MODPROBE="/etc/modprobe.d"
 ETC_SYSTEMD="/etc/systemd/system"
 ETC_SYSCTL="/etc/sysctl.d"
 FORCE_FULL="/etc/rfxn-defense/force-full"
-TOOL_VERSION="3.0.1"
+TOOL_VERSION="3.0.2"
 
 # Active tenant units (must match SPEC §4.2 and v2.0.0 CF_CLASS_TENANT_UNITS)
 TENANT_UNITS=("user@" "sshd" "cron" "crond" "atd")
@@ -28,6 +28,19 @@ LOGGER_TAG="rfxn-defense-detect"
 
 log() {
     logger -t "${LOGGER_TAG}" -p authpriv.info "$*" 2>/dev/null || true
+}
+
+# v3.0.2: visible-warning log. Goes to BOTH syslog (warning facility) and
+# stderr. %posttrans wraps detect.sh stderr in tee+logger (D-55 idiom),
+# so any message written here appears in `dnf upgrade` scriptlet output.
+# Use only for non-routine state changes the operator should see in real
+# time (stale-file removal, distro-gating decisions). The cmp-and-skip
+# path (D-57) preserves operator hand-edits to LIVE files; this is the
+# complement for files we deliberately RETIRE - operator gets a chance
+# to read the removal notice rolling past during dnf upgrade.
+log_warn() {
+    printf '%s: warn: %s\n' "${LOGGER_TAG}" "$*" >&2
+    logger -t "${LOGGER_TAG}" -p authpriv.warning "$*" 2>/dev/null || true
 }
 
 IPSEC_PRESENT="false"
@@ -565,34 +578,66 @@ apply_systemd() {
         done
     fi
     # 15-* userns drop-in (suppressed on user@ only when rootless detected)
+    # v3.0.2: when source absent (EL7 distro-gated; RestrictNamespaces=
+    # is systemd-235+, EL7 ships 219 and silently ignores it) we still
+    # iterate the tenant units to clean up stale files left by a prior
+    # install that DID ship the template. Per-unit removal goes to
+    # syslog (`log`); a single summary line at the end uses `log_warn`
+    # to survive yum-3 (EL7) scriptlet-display truncation - that yum
+    # only shows the LAST stderr line of a scriptlet, the prior
+    # multi-line warnings are clipped by its progress-bar buffer.
     src="${TEMPLATE_DIR}/systemd/15-rfxn-defense-userns.conf"
-    if [ -f "${src}" ]; then
-        for unit in "${TENANT_UNITS[@]}"; do
-            dst="${ETC_SYSTEMD}/${unit}.service.d/15-rfxn-defense-userns.conf"
-            suppress="false"
-            if [ "${unit}" = "user@" ] && \
-               [ "${SUPPRESS_SYSTEMD_USERNS_USER_AT}" = "true" ]; then
-                suppress="true"
-            fi
-            if [ "${suppress}" = "true" ]; then
+    local userns_removed=0
+    for unit in "${TENANT_UNITS[@]}"; do
+        dst="${ETC_SYSTEMD}/${unit}.service.d/15-rfxn-defense-userns.conf"
+        if [ ! -f "${src}" ]; then
+            if [ -f "${dst}" ]; then
                 rm -f "${dst}"
-                log "systemd userns ${unit}: suppressed (rootless detected)"
-            else
-                cmp_and_install "${src}" "${dst}" "systemd userns ${unit}"
+                log "systemd userns ${unit}: removed ${dst} (template not shipped on this distro)"
+                userns_removed=$((userns_removed + 1))
             fi
-        done
+            continue
+        fi
+        suppress="false"
+        if [ "${unit}" = "user@" ] && \
+           [ "${SUPPRESS_SYSTEMD_USERNS_USER_AT}" = "true" ]; then
+            suppress="true"
+        fi
+        if [ "${suppress}" = "true" ]; then
+            rm -f "${dst}"
+            log "systemd userns ${unit}: suppressed (rootless detected)"
+        else
+            cmp_and_install "${src}" "${dst}" "systemd userns ${unit}"
+        fi
+    done
+    if [ "${userns_removed}" -gt 0 ]; then
+        log_warn "systemd userns: removed ${userns_removed} stale 15-rfxn-defense-userns.conf drop-in(s) (template not shipped on this distro; see 'journalctl -t ${LOGGER_TAG}' for per-unit detail)"
     fi
 }
 
 apply_sysctl() {
+    # v3.0.2: subpackage-present vs feature-present is now distinct. The
+    # ptrace + iouring features have separate sources; userns may be
+    # gated out for this distro. Probe ptrace template as the
+    # subpackage-present signal (always shipped when -sysctl installs).
+    if [ ! -f "${TEMPLATE_DIR}/sysctl/99-rfxn-defense-ptrace.conf" ]; then
+        # Subpackage -sysctl not installed; nothing to do.
+        return 0
+    fi
     local src dst
     src="${TEMPLATE_DIR}/sysctl/99-rfxn-defense-userns.conf"
     dst="${ETC_SYSCTL}/99-rfxn-defense-userns.conf"
     if [ ! -f "${src}" ]; then
-        # Subpackage -sysctl not installed; nothing to do.
-        return 0
-    fi
-    if [ "${SUPPRESS_SYSCTL_USERNS}" = "true" ]; then
+        # Userns template not shipped on this distro (EL7: keys absent
+        # from kernel + `-` prefix unsupported by procps-ng 3.3.10).
+        # Remove any stale file left by a prior install. Single warn
+        # line (only one sysctl userns file ever exists, so no
+        # multi-line truncation concern here).
+        if [ -f "${dst}" ]; then
+            rm -f "${dst}"
+            log_warn "sysctl userns: removed ${dst} (template not shipped on this distro; see 'journalctl -t ${LOGGER_TAG}' for the audit trail)"
+        fi
+    elif [ "${SUPPRESS_SYSCTL_USERNS}" = "true" ]; then
         rm -f "${dst}"
         log "sysctl userns: suppressed (rootless containers or userns-consumer detected)"
     else
@@ -683,11 +728,9 @@ write_state_json() {
     local tmp="${target}.tmp.$$"
 
     # v2.0.2 sentinel fix: applied.sysctl_userns must reflect on-disk
-    # truth, not just !suppressed. When -sysctl is uninstalled but
-    # -modprobe / -systemd are still around, detect.sh runs from their
-    # %posttrans but apply_sysctl() early-returns (template missing).
-    # JSON should show applied=false in that case, even though
-    # suppressed=false.
+    # truth, not just !suppressed. v3.0.2 expands the semantics: this
+    # is also false when the subpackage IS installed but the userns
+    # template is gated out for this distro (EL7).
     local sysctl_template_present="false"
     if [ -f "${TEMPLATE_DIR}/sysctl/99-rfxn-defense-userns.conf" ]; then
         sysctl_template_present="true"

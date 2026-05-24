@@ -65,7 +65,7 @@ import tempfile
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-__version__ = "3.0.1"
+__version__ = "3.0.2"
 
 # --- splice(2) wrapper ----------------------------------------------------
 # os.splice was added in Python 3.10. EL7/8/9 default Pythons are 3.6/3.6/3.9
@@ -304,6 +304,32 @@ def systemd_running():
     if _SYSTEMD_RUNNING is None:
         _SYSTEMD_RUNNING = os.path.exists("/run/systemd/system")
     return _SYSTEMD_RUNNING
+
+_SYSTEMD_VERSION = None
+def systemd_version():
+    """Return integer systemd version, or None if not detectable.
+
+    `systemctl --version` first line is e.g. 'systemd 219' (EL7) or
+    'systemd 252 (252.34-1.el9_5)' (EL9). RestrictNamespaces= was
+    introduced in v235; older systemd silently ignores the directive
+    at unit-start time."""
+    global _SYSTEMD_VERSION
+    if _SYSTEMD_VERSION is not None:
+        return _SYSTEMD_VERSION if _SYSTEMD_VERSION >= 0 else None
+    rc, out, _err = run_cmd(["systemctl", "--version"], timeout=3)
+    if rc != 0:
+        _SYSTEMD_VERSION = -1
+        return None
+    first = out.decode("utf-8", errors="replace").splitlines()[:1]
+    if not first:
+        _SYSTEMD_VERSION = -1
+        return None
+    m = re.match(r"^\s*systemd\s+(\d+)", first[0])
+    if not m:
+        _SYSTEMD_VERSION = -1
+        return None
+    _SYSTEMD_VERSION = int(m.group(1))
+    return _SYSTEMD_VERSION
 
 def _algif_aead_state():
     """Returns one of: 'builtin', 'loaded_module', 'absent'.
@@ -1667,11 +1693,39 @@ def _unit_namespaces_blocked(rn_value):
     toks = re.split(r"[\s,]+", rn)
     return "user" not in toks and "net" not in toks
 
+_USERNS_DROPIN_GLOB = "/etc/systemd/system/*.service.d/15-rfxn-defense-userns.conf"
+
 def check_systemd_restrict_namespaces():
-    """v2.0.0: per-unit RestrictNamespaces coverage for cf2/dirtyfrag-ESP."""
+    """v2.0.0: per-unit RestrictNamespaces coverage for cf2/dirtyfrag-ESP.
+
+    v3.0.2: gate on systemd version. RestrictNamespaces= was introduced
+    in systemd v235; older systemd (EL7 ships v219) silently ignores
+    the directive at unit-start. On those hosts the rfxn-defense-systemd
+    package no longer ships the 15-userns drop-in (spec-gated). If a
+    stale drop-in remains from a prior install, surface it as FAIL so
+    the operator knows the directive is inert."""
     if not systemd_running():
         return Check("systemd_restrict_namespaces", "MITIGATION", Status.SKIP,
                      "systemd not running")
+
+    sv = systemd_version()
+    if sv is not None and sv < 235:
+        stale = sorted(glob.glob(_USERNS_DROPIN_GLOB))
+        if stale:
+            return Check("systemd_restrict_namespaces", "MITIGATION", Status.FAIL,
+                         "systemd {} ignores RestrictNamespaces= (introduced "
+                         "in v235); {} stale drop-in(s) inert".format(
+                             sv, len(stale)),
+                         details={"systemd_version": sv,
+                                  "stale_dropins": stale},
+                         remediation="dnf upgrade rfxn-defense-systemd to "
+                                     ">=3.0.2 (gates the drop-in out on EL7) "
+                                     "OR `rm -f {}`".format(_USERNS_DROPIN_GLOB))
+        return Check("systemd_restrict_namespaces", "MITIGATION", Status.SKIP,
+                     "systemd {} predates RestrictNamespaces= (v235); "
+                     "this layer not shipped on this distro".format(sv),
+                     details={"systemd_version": sv})
+
     findings_ok = []
     findings_missing = []
     findings_optional_ok = []
@@ -1709,7 +1763,8 @@ def check_systemd_restrict_namespaces():
 
     details = {"protected_tenant_units": findings_ok,
                "missing_tenant_units": findings_missing,
-               "protected_optional_units": findings_optional_ok}
+               "protected_optional_units": findings_optional_ok,
+               "systemd_version": sv}
     if findings_ok and not findings_missing:
         return Check("systemd_restrict_namespaces", "MITIGATION", Status.OK,
                      "{} tenant units block user+net namespaces".format(
@@ -1792,10 +1847,18 @@ def check_pam_nullok():
 def check_unprivileged_userns_sysctl():
     """v2.0.0 HARDENING: report userns sysctl posture.
 
-    INFO only - the -userns subpackage is opt-in (deferred to 2.1.0)
-    because turning userns off breaks rootless podman, browser
-    sandboxes, and flatpak. This check informs the operator without
-    recommending action."""
+    INFO only - the -sysctl subpackage shipped the userns drop-in in
+    v2.0.2 (suppressed by detect.sh when rootless containers / Flatpak
+    / firejail / browser detected; v3.0.2 also gates it out entirely on
+    EL7). Turning userns off breaks rootless podman, browser sandboxes,
+    and flatpak; the check informs the operator without recommending
+    action.
+
+    v3.0.2: distinguish "blocked by rfxn-defense sysctl drop-in" from
+    "blocked by kernel/distro default". On EL7 the kernel default is
+    max_user_namespaces=0 and the rfxn-defense sysctl is gated out of
+    the package; reporting OK without context made the operator believe
+    rfxn-defense was doing the work."""
     rhel = read_text_safe("/proc/sys/user/max_user_namespaces")
     deb = read_text_safe("/proc/sys/kernel/unprivileged_userns_clone")
     parts = []
@@ -1808,15 +1871,26 @@ def check_unprivileged_userns_sysctl():
                      "userns sysctls unreadable")
     rhel_blocked = (rhel is not None and rhel.strip() == "0")
     deb_blocked  = (deb  is not None and deb.strip()  == "0")
+    rfxn_dropin = "/etc/sysctl.d/99-rfxn-defense-userns.conf"
+    rfxn_present = os.path.isfile(rfxn_dropin)
+    details = {"sysctls": parts,
+               "rfxn_sysctl_dropin_present": rfxn_present,
+               "rfxn_sysctl_dropin_path": rfxn_dropin}
     if rhel_blocked or deb_blocked:
-        return Check("userns_sysctl", "HARDENING", Status.OK,
-                     "unprivileged userns disabled - cf2 / dirtyfrag-ESP "
-                     "unshare prerequisite blocked",
-                     details={"sysctls": parts})
+        if rfxn_present:
+            msg = ("unprivileged userns disabled by rfxn-defense sysctl "
+                   "drop-in - cf2 / dirtyfrag-ESP unshare prerequisite blocked")
+        else:
+            msg = ("unprivileged userns disabled by kernel/distro default "
+                   "(rfxn-defense sysctl drop-in NOT present; relying on "
+                   "kernel default - operator override at runtime would "
+                   "re-enable without rfxn-defense pulling it back)")
+        return Check("userns_sysctl", "HARDENING", Status.OK, msg,
+                     details=details)
     return Check("userns_sysctl", "HARDENING", Status.INFO,
                  "unprivileged userns enabled: " + "; ".join(parts) +
                  " (cf2 / dirtyfrag-ESP unshare prerequisite reachable)",
-                 details={"sysctls": parts})
+                 details=details)
 
 def check_ptrace_scope():
     """v2.1.0 HARDENING: report kernel.yama.ptrace_scope posture.
@@ -1842,14 +1916,20 @@ def check_ptrace_scope():
                      details={"value": v},
                      remediation="sysctl -w kernel.yama.ptrace_scope=2 ; "
                                  "ensure /etc/sysctl.d/"
-                                 "99-rfxn-defense-userns.conf is loaded")
+                                 "99-rfxn-defense-ptrace.conf is loaded "
+                                 "(v3.0.2: file ships without the `-` prefix "
+                                 "so EL7 procps-ng 3.3.10 honours the key; "
+                                 "older 3.0.x silently no-op'd on EL7)")
     return Check("ptrace_scope", "HARDENING", Status.FAIL,
                  "kernel.yama.ptrace_scope={} (unrestricted; keysign-pwn "
                  "agent reach unblocked)".format(v),
                  details={"value": v},
                  remediation="sysctl -w kernel.yama.ptrace_scope=2 ; "
                              "ensure /etc/sysctl.d/"
-                             "99-rfxn-defense-userns.conf is loaded")
+                             "99-rfxn-defense-ptrace.conf is loaded "
+                             "(v3.0.2: file ships without the `-` prefix "
+                             "so EL7 procps-ng 3.3.10 honours the key; "
+                             "older 3.0.x silently no-op'd on EL7)")
 
 def check_io_uring_disabled():
     """v2.1.1 MITIGATION: PinTheft secondary mitigation reporter.

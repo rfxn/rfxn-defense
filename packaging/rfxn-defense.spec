@@ -21,7 +21,7 @@
 
 Name:           rfxn-defense
 Epoch:          1
-Version:        3.0.1
+Version:        3.0.2
 Release:        1%{?dist}
 Summary:        Defense-in-depth toolkit for the Copy Fail bug class
 
@@ -322,36 +322,48 @@ Requires:       procps-ng
 Requires:       %{name} = %{epoch}:%{version}-%{release}
 
 %description sysctl
-Host-wide sysctl drop-in to /etc/sysctl.d/99-rfxn-defense-userns.conf
-disabling unprivileged user-namespace creation:
-  - user.max_user_namespaces                     = 0
-  - kernel.unprivileged_userns_clone             = 0
-  - kernel.apparmor_restrict_unprivileged_userns = 1
+Host-wide sysctl drop-ins under /etc/sysctl.d/:
 
-The cf2 / Dirty Frag-ESP / Fragnesia chains need CLONE_NEWUSER to
-acquire CAP_NET_ADMIN-in-namespace, which gates the xfrm SA install.
-The systemd RestrictNamespaces=~user drop-in only protects the five
-tenant units; this sysctl closes the same gap host-wide for any
-unprivileged process not started by those units.
+  99-rfxn-defense-userns.conf (EL8+ only — see note below)
+      - user.max_user_namespaces                     = 0
+      - kernel.unprivileged_userns_clone             = 0
+      - kernel.apparmor_restrict_unprivileged_userns = 1
+    Keys carry the sysctl.d(5) `-` prefix so absent keys are
+    silently skipped (none of the three are defined on every distro).
 
-Keys are prefixed with '-' so unknown keys on a given kernel are
-silently skipped (sysctl.d(5)) - the three keys above are not all
-defined on every distro.
+  99-rfxn-defense-ptrace.conf (all supported EL — v2.1.0+)
+      kernel.yama.ptrace_scope = 2
+    No `-` prefix: Yama LSM is present on every supported RHEL
+    kernel, so a missing key is an unusual host-config we want
+    visibility on (one-line sysctl error during boot, not a silent
+    skip). v3.0.2 dropped the prefix so EL7 procps-ng 3.3.10
+    (predates the prefix, added in 3.3.12) honours the key.
+
+  99-rfxn-defense-iouring.conf (kernel >= 6.6, when applicable)
+      kernel.io_uring_disabled = 2
+    PinTheft mitigation; auto-applied on hosts with no io_uring
+    workload signal.
+
+The userns drop-in addresses the cf2 / Dirty Frag-ESP / Fragnesia
+unshare(CLONE_NEWUSER|CLONE_NEWNET) prerequisite host-wide; the
+ptrace_scope drop-in addresses the ssh-keysign-pwn (CVE-2026-46333)
+agent-reach via pidfd_getfd; the iouring drop-in addresses the
+PinTheft secondary primitive.
+
+EL7 NOTE: the userns drop-in is not shipped on EL7. None of its
+three keys exist on EL7 kernel 3.10 (max_user_namespaces was added
+in 4.9; the other two are non-RHEL kernel patches), AND EL7
+procps-ng 3.3.10 mis-parses the `-` prefix - on every prior 3.0.x
+EL7 install the file produced zero effect. RHEL7 kernel-compile
+defaults already disable unprivileged userns; rfxn-defense has no
+work to add at the sysctl layer on EL7.
 
 WILL BREAK workloads that legitimately need unprivileged userns:
 rootless containers (rootless podman/buildah), Flatpak runtimes,
 firejail sandboxes, and desktop browser renderer sandboxes
-(Chromium/Chrome/Firefox). Auto-detection suppresses the drop file
-when these are present; the drop-in is removed if any of
-   - rootless container storage (existing v2.0.1 detector)
-   - Flatpak apps/runtimes
-   - firejail binary
-   - desktop browser binaries
-is detected. See /var/lib/rfxn-defense/auto-detect.json for the
-decision trace.
-
-v2.1.0 adds kernel.yama.ptrace_scope=2 (ssh-keysign-pwn /
-CVE-2026-46333 mitigation).
+(Chromium/Chrome/Firefox). Auto-detection suppresses the userns
+drop-in when these are present; see
+/var/lib/rfxn-defense/auto-detect.json for the decision trace.
 
 # ---------------------------------------------------------------------------
 %package audit
@@ -512,8 +524,16 @@ done
 install -d -m 0755 %{buildroot}/usr/share/rfxn-defense/conditional/systemd
 install -m 0644 %{SOURCE11} \
     %{buildroot}/usr/share/rfxn-defense/conditional/systemd/12-rfxn-defense-rxrpc-af.conf
+# v3.0.2: 15-userns drop-in carries RestrictNamespaces= which was introduced
+# in systemd v235. EL7 ships systemd v219 (rejects it as Unknown lvalue at
+# unit-start). Shipping the file on EL7 was a silent-failure mitigation
+# layer - install fine, drop-in present, directive ignored, zero effect.
+# Gate so the template is absent on EL7; detect.sh apply_systemd then sees
+# a missing source and removes any stale file left by a prior 3.0.x install.
+%if 0%{?rhel} != 7
 install -m 0644 %{SOURCE8} \
     %{buildroot}/usr/share/rfxn-defense/conditional/systemd/15-rfxn-defense-userns.conf
+%endif
 install -m 0644 %{SOURCE15} \
     %{buildroot}/usr/share/rfxn-defense/conditional/systemd/13-rfxn-defense-rds.conf
 
@@ -527,8 +547,20 @@ install -m 0644 %{SOURCE5} \
 # /etc/sysctl.d/ in %posttrans iff no userns-consumer is detected
 # (rootless containers, Flatpak, firejail, desktop browser).
 install -d -m 0755 %{buildroot}/usr/share/rfxn-defense/conditional/sysctl
+# v3.0.2: userns sysctl ships three keys, none of which exist on the EL7
+# kernel (max_user_namespaces is 4.9+; unprivileged_userns_clone is the
+# Ubuntu/Debian patch; apparmor_restrict_unprivileged_userns is the AA
+# patch). v3.0.1 used the `-key = val` prefix to silently skip absent
+# keys per sysctl.d(5), but EL7 procps-ng 3.3.10 predates that prefix
+# (added in 3.3.12) and tries to stat `/proc/sys/-key/...` instead -
+# every key in the file errors and the file produces zero effect.
+# Userns is also blocked by EL7 kernel compile-time defaults on RHEL,
+# so this file has no work to do on EL7. Gate it out; detect.sh sees
+# a missing source and removes any stale file from prior installs.
+%if 0%{?rhel} != 7
 install -m 0644 %{SOURCE12} \
     %{buildroot}/usr/share/rfxn-defense/conditional/sysctl/99-rfxn-defense-userns.conf
+%endif
 install -m 0644 %{SOURCE16} \
     %{buildroot}/usr/share/rfxn-defense/conditional/sysctl/99-rfxn-defense-iouring.conf
 # v3.0.1: ptrace drop-in is in the "conditional/" tree only for layout
@@ -833,11 +865,29 @@ exit 0
 # v2.0.1 rev 2: scope=systemd per D-56. -modprobe %posttrans uses
 # scope=modprobe and never touches /etc/systemd/system/...d/. This
 # %posttrans only manages systemd drop-ins. Both write
-# auto-detect.json (idempotent rewrite). stderr tees to dnf
-# scriptlet output per D-55.
-/usr/libexec/rfxn-defense/detect.sh apply systemd 2> >(tee /dev/stderr \
-    | logger -t rfxn-defense -p authpriv.info 2>/dev/null) \
-    || true
+# auto-detect.json (idempotent rewrite).
+#
+# v3.0.2: tmpfile-based stderr capture (was: `2> >(tee ... | logger)`
+# process-substitution). The process-sub idiom raced with the
+# scriptlet exit on rpm 4.11 (EL7) - if detect.sh wrote multiple
+# stderr lines and the scriptlet returned before the tee subprocess
+# flushed, only the last line surfaced in dnf scriptlet output.
+# tmpfile capture is fully synchronous on bash 4.2 (no procsub wait
+# support).
+#
+# yum-3 (EL7) caveat: yum-3's scriptlet-stderr display is unreliable
+# - it sometimes shows zero lines even when the scriptlet writes to
+# stderr (rpm 4.11 buffers small writes; yum filters successful
+# scriptlets). The canonical audit trail for stale-removal warnings
+# is `journalctl -t rfxn-defense-detect`. dnf-4 on EL8+ displays the
+# tee output reliably.
+DETECT_ERR=$(mktemp -t rfxn-detect-systemd.XXXXXX)
+/usr/libexec/rfxn-defense/detect.sh apply systemd 2>"${DETECT_ERR}" || true
+if [ -s "${DETECT_ERR}" ]; then
+    cat "${DETECT_ERR}" >&2
+    logger -t rfxn-defense -p authpriv.warning -f "${DETECT_ERR}" 2>/dev/null || true
+fi
+rm -f "${DETECT_ERR}"
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload || true
     systemctl try-reload-or-restart sshd.service 2>/dev/null || true
@@ -886,20 +936,29 @@ exit 0
 
 %posttrans sysctl -p /bin/bash
 # Detection-driven file placement first, then sysctl --system to load
-# whatever landed. detect.sh emits the same proc-sub stderr-tee idiom
-# as the modprobe/systemd %posttrans (D-55); requires -p /bin/bash.
-/usr/libexec/rfxn-defense/detect.sh apply sysctl 2> >(tee /dev/stderr \
-    | logger -t rfxn-defense -p authpriv.info 2>/dev/null) \
-    || true
+# whatever landed.
+#
+# v3.0.2: tmpfile-based stderr capture (see %posttrans systemd note
+# above for the EL7 rpm-4.11 race rationale + yum-3 display caveat).
+# Requires -p /bin/bash for the mktemp/local-var idiom.
+DETECT_ERR=$(mktemp -t rfxn-detect-sysctl.XXXXXX)
+/usr/libexec/rfxn-defense/detect.sh apply sysctl 2>"${DETECT_ERR}" || true
+if [ -s "${DETECT_ERR}" ]; then
+    cat "${DETECT_ERR}" >&2
+    logger -t rfxn-defense -p authpriv.warning -f "${DETECT_ERR}" 2>/dev/null || true
+fi
+rm -f "${DETECT_ERR}"
 
-for f in /etc/sysctl.d/99-rfxn-defense-userns.conf \
-         /etc/sysctl.d/99-rfxn-defense-iouring.conf; do
-    if [ -f "$f" ]; then
-        sysctl -p "$f" 2>&1 \
-            | logger -t rfxn-defense -p authpriv.info 2>/dev/null \
-            || true
-    fi
-done
+# v3.0.2: `sysctl --system` (not a targeted -p loop). The prior loop
+# enumerated only userns + iouring, omitting ptrace - so on every
+# distro the ptrace_scope file landed on disk but never applied at
+# install time (CVE-2026-46333 mitigation latent until next reboot or
+# operator-initiated `sysctl --system`). Matches %postun behavior at
+# the bottom of this file; also picks up any future drop-ins without
+# requiring a spec edit.
+sysctl --system 2>&1 \
+    | logger -t rfxn-defense -p authpriv.info 2>/dev/null \
+    || true
 exit 0
 
 %postun sysctl -p /bin/bash
@@ -1035,7 +1094,10 @@ exit 0
 %dir /usr/share/rfxn-defense/conditional/systemd
 /usr/share/rfxn-defense/conditional/systemd/12-rfxn-defense-rxrpc-af.conf
 /usr/share/rfxn-defense/conditional/systemd/13-rfxn-defense-rds.conf
+# v3.0.2: gated on EL7 (systemd 219 silently ignores RestrictNamespaces=)
+%if 0%{?rhel} != 7
 /usr/share/rfxn-defense/conditional/systemd/15-rfxn-defense-userns.conf
+%endif
 # %dir /var/lib/rfxn-defense moved to meta %files (v2.0.1 fixup M-2).
 # Existing example doc unchanged.
 %dir %{_docdir}/%{name}/examples
@@ -1054,7 +1116,11 @@ exit 0
 # (suppressed when rootless containers, Flatpak, firejail, or a
 # desktop browser is detected on the host).
 %dir /usr/share/rfxn-defense/conditional/sysctl
+# v3.0.2: userns sysctl gated on EL7 (none of the 3 keys exist on kernel
+# 3.10; '-' prefix unsupported by procps-ng 3.3.10)
+%if 0%{?rhel} != 7
 /usr/share/rfxn-defense/conditional/sysctl/99-rfxn-defense-userns.conf
+%endif
 /usr/share/rfxn-defense/conditional/sysctl/99-rfxn-defense-iouring.conf
 /usr/share/rfxn-defense/conditional/sysctl/99-rfxn-defense-ptrace.conf
 
@@ -1085,6 +1151,65 @@ exit 0
 
 # ===========================================================================
 %changelog
+* Sun May 24 2026 Ryan MacDonald <ryan@rfxn.com> - 1:3.0.2-1
+- EL7 silent-failure release. Empirically validated against a fresh
+  CentOS 7.9.2009 VM (systemd 219, procps-ng 3.3.10, kernel 3.10).
+  Closes three EL7-only silent-mitigation gaps that shipped in every
+  prior 3.0.x build and were masked by the auditor's own SKIP path:
+  * CRITICAL: systemd v219 (EL7) does not recognise the
+    RestrictNamespaces= directive (introduced in systemd v235, Oct
+    2017). The 15-rfxn-defense-userns.conf drop-in installed on
+    sshd/cron/crond/atd/user@.service.d/ was parsed at unit-start as
+    "Unknown lvalue", the directive silently dropped, every drop-in
+    inert. cf2 / dirtyfrag-ESP unshare prerequisite reachable inside
+    every tenant unit on every EL7 host running 3.0.x. Gated the
+    Source8 install with `%if 0%{?rhel} != 7`; detect.sh's
+    apply_systemd now also removes any stale drop-in on EL7 upgrades.
+  * CRITICAL: 99-rfxn-defense-ptrace.conf and -userns.conf used the
+    `-key = value` sysctl.d(5) prefix to silently skip absent keys.
+    The prefix was added in procps-ng 3.3.12 (Feb 2017); EL7 ships
+    3.3.10, which interprets `-kernel.yama.ptrace_scope` literally
+    as a path under /proc/sys/-kernel/yama/... and fails the stat.
+    Every key in both files no-op'd on EL7. ssh-keysign-pwn primary
+    mitigation (CVE-2026-46333) silently absent on every EL7 host.
+    Dropped the `-` prefix from ptrace.conf (Yama is in every
+    supported RHEL kernel; one-line boot error on a no-Yama kernel is
+    visibility we want). Gated userns.conf install with
+    `%if 0%{?rhel} != 7` (none of its three keys exist on EL7 kernel
+    3.10 anyway; userns is gated at kernel-compile time on RHEL7).
+  * Auditor (rfxn-local-check): check_systemd_restrict_namespaces
+    returned `SKIP "no tenant units found in this systemd instance"`
+    on EL7 because `systemctl show -p RestrictNamespaces <unit>`
+    emits no property line on systemd v219 - the whole tenant-unit
+    loop hit the rc!=0 continue and findings_missing stayed empty.
+    Added a systemd_version() probe; when version < 235, glob
+    /etc/systemd/system/*.service.d/15-rfxn-defense-userns.conf and
+    emit FAIL when stale drop-ins are present (with rm remediation),
+    SKIP with explicit "v235 directive" reason otherwise.
+  * Auditor: check_unprivileged_userns_sysctl returned OK
+    "unprivileged userns disabled" when kernel/distro defaults set
+    max_user_namespaces=0, masking the fact that the rfxn-defense
+    sysctl drop-in is not on disk. Operator believed rfxn-defense
+    was enforcing it; runtime operator override would re-enable
+    userns without rfxn-defense pulling it back. Distinguish
+    "blocked by rfxn drop-in" from "blocked by kernel default" in
+    the OK message; details.rfxn_sysctl_dropin_present reports
+    on-disk truth.
+  * Auditor: check_ptrace_scope remediation message referenced
+    99-rfxn-defense-userns.conf (stale from v3.0.0 before the v3.0.1
+    ptrace-split). Now references 99-rfxn-defense-ptrace.conf and
+    cites the v3.0.2 `-` prefix removal so EL7 operators understand
+    why ptrace_scope was =0 despite the file being present.
+  * NEW: packaging/test-el7-live.sh - permanent live-host EL7 test
+    runner. Bootstraps vault.centos.org repos (EL7 EOL mirrorlist is
+    dead), installs the local RPM set, runs 27 assertions across
+    packaging sanity / auditor JSON / empirical mitigation probes
+    (AF_ALG socket creation with shim, ptrace_scope runtime value,
+    systemd-analyze verify on all drop-ins) / upgrade path from
+    copyfail-defense 2.1.1. Replaces ad-hoc /tmp test scripts.
+  Tool version bumps: detect.sh 3.0.1 -> 3.0.2; rfxn-local-check
+  __version__ 3.0.1 -> 3.0.2.
+
 * Sun May 24 2026 Ryan MacDonald <ryan@rfxn.com> - 1:3.0.1-1
 - Fixup release validated against two live EL10 hosts (cPanel tenant
   fleet + admin host). Closes several mitigation-effectiveness gaps
