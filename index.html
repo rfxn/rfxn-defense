@@ -674,11 +674,11 @@ Per-commit history:
         <code>-key</code> silent-skip prefix (added in 3.3.12), so
         every key in <code>99-rfxn-defense-ptrace.conf</code> and
         <code>99-rfxn-defense-userns.conf</code> silently no-op'd
-        &mdash; ssh-keysign-pwn (CVE-2026-46333) primary mitigation
+        - ssh-keysign-pwn (CVE-2026-46333) primary mitigation
         latent on every EL7 host. Both layers now distro-gated; the
         ptrace_scope sysctl dropped the <code>-</code> prefix.
         <strong>Critical:</strong> <code>%posttrans sysctl</code>
-        loop omitted <code>ptrace.conf</code> entirely &mdash;
+        loop omitted <code>ptrace.conf</code> entirely -
         replaced with <code>sysctl --system</code> so the file
         actually applies at install time on every distro. Auditor:
         <code>systemd_restrict_namespaces</code> no longer silent-
