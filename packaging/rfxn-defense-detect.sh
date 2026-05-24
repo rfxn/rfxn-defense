@@ -18,7 +18,7 @@ ETC_MODPROBE="/etc/modprobe.d"
 ETC_SYSTEMD="/etc/systemd/system"
 ETC_SYSCTL="/etc/sysctl.d"
 FORCE_FULL="/etc/rfxn-defense/force-full"
-TOOL_VERSION="3.0.0"
+TOOL_VERSION="3.0.1"
 
 # Active tenant units (must match SPEC §4.2 and v2.0.0 CF_CLASS_TENANT_UNITS)
 TENANT_UNITS=("user@" "sshd" "cron" "crond" "atd")
@@ -114,14 +114,38 @@ detect_rootless_containers() {
         ROOTLESS_SIGNALS+=("/home/*/.local/share/containers/storage/overlay-containers: present")
     fi
 
-    # Signal 2: rootful container storage tree with recent activity.
-    # Rejects long-stale podman installs (operator may have purged
-    # rootless workflows but left the directory). 90-day mtime gate.
-    if [ -d /var/lib/containers/storage ] && \
-       find /var/lib/containers/storage -mindepth 1 -maxdepth 1 \
-            -mtime -90 2>/dev/null | grep -q .; then
-        ROOTLESS_PRESENT="true"
-        ROOTLESS_SIGNALS+=("/var/lib/containers/storage: non-empty + mtime<90d")
+    # Signal 2: rootful container storage tree with actual artifacts.
+    # v3.0.1: tightened from "any non-empty subdir" to "real
+    # container/image present". containers-common + podman create the
+    # storage tree (tmp/, overlay-containers/containers.lock,
+    # overlay-images/images.lock, db.sql, libpod/, ...) on first touch
+    # WITHOUT any actual container ever running. The old signal
+    # (mtime<90d on any subdir) FP'd on every RHEL host with podman
+    # installed-but-unused. New signal: require at least one entry
+    # other than the lockfile inside overlay-containers/, overlay-images/,
+    # or vfs-containers/ - those directories are populated by real
+    # container/image creation, not by storage-tree initialization.
+    if [ -d /var/lib/containers/storage ]; then
+        local -a real_artifact_dirs=(
+            /var/lib/containers/storage/overlay-containers
+            /var/lib/containers/storage/overlay-images
+            /var/lib/containers/storage/vfs-containers
+            /var/lib/containers/storage/vfs-images
+        )
+        local _dir _found_artifact=""
+        for _dir in "${real_artifact_dirs[@]}"; do
+            [ -d "${_dir}" ] || continue
+            # Count entries excluding *.lock; first non-lock entry wins.
+            if find "${_dir}" -mindepth 1 -maxdepth 1 \
+                    ! -name '*.lock' 2>/dev/null | grep -q .; then
+                _found_artifact="${_dir}"
+                break
+            fi
+        done
+        if [ -n "${_found_artifact}" ]; then
+            ROOTLESS_PRESENT="true"
+            ROOTLESS_SIGNALS+=("${_found_artifact}: non-lock artifact present (real container/image storage)")
+        fi
     fi
 
     # Signal 3: per-user runtime tmpfs (live or recent rootless
@@ -575,6 +599,25 @@ apply_sysctl() {
         cmp_and_install "${src}" "${dst}" "sysctl userns"
     fi
     apply_sysctl_iouring
+    apply_sysctl_ptrace
+    return 0
+}
+
+apply_sysctl_ptrace() {
+    # ssh-keysign-pwn (CVE-2026-46333) primary mitigation. Split out
+    # of the userns drop-in in v3.0.1 so suppression of userns/iouring
+    # for rootless / Flatpak / firejail / browser does NOT drop
+    # keysign-pwn coverage. ptrace_scope has no known suppression
+    # criteria: setting it to 2 leaves gdb-as-root working and only
+    # blocks attempts to ptrace a non-descendant - a constraint that
+    # is invisible to nearly every legitimate workflow.
+    local src dst
+    src="${TEMPLATE_DIR}/sysctl/99-rfxn-defense-ptrace.conf"
+    dst="${ETC_SYSCTL}/99-rfxn-defense-ptrace.conf"
+    if [ ! -f "${src}" ]; then
+        return 0
+    fi
+    cmp_and_install "${src}" "${dst}" "sysctl ptrace"
     return 0
 }
 
@@ -616,8 +659,9 @@ teardown_rds_modprobe() {
 
 teardown_sysctl() {
     rm -f "${ETC_SYSCTL}/99-rfxn-defense-userns.conf"
+    rm -f "${ETC_SYSCTL}/99-rfxn-defense-ptrace.conf"
     teardown_sysctl_iouring
-    log "sysctl teardown: removed /etc/sysctl.d/99-rfxn-defense-{userns,iouring}.conf"
+    log "sysctl teardown: removed /etc/sysctl.d/99-rfxn-defense-{userns,ptrace,iouring}.conf"
     return 0
 }
 
@@ -652,6 +696,11 @@ write_state_json() {
     local modprobe_rds_template_present="false"
     if [ -f "${TEMPLATE_DIR}/modprobe/99-rfxn-defense-rds.conf" ]; then
         modprobe_rds_template_present="true"
+    fi
+
+    local sysctl_ptrace_template_present="false"
+    if [ -f "${TEMPLATE_DIR}/sysctl/99-rfxn-defense-ptrace.conf" ]; then
+        sysctl_ptrace_template_present="true"
     fi
 
     local sysctl_iouring_template_present="false"
@@ -700,6 +749,7 @@ write_state_json() {
         CFD_SYSCTL_TEMPLATE_PRESENT="${sysctl_template_present}" \
         CFD_MODPROBE_RDS_TEMPLATE_PRESENT="${modprobe_rds_template_present}" \
         CFD_SYSCTL_IOURING_TEMPLATE_PRESENT="${sysctl_iouring_template_present}" \
+        CFD_SYSCTL_PTRACE_TEMPLATE_PRESENT="${sysctl_ptrace_template_present}" \
         python3 -c '
 import json, os, sys
 
@@ -738,6 +788,7 @@ iouring_workload    = b("CFD_IO_URING_WORKLOAD_PRESENT")
 sysctl_present = b("CFD_SYSCTL_TEMPLATE_PRESENT")
 modprobe_rds_template_present = b("CFD_MODPROBE_RDS_TEMPLATE_PRESENT")
 sysctl_iouring_template_present = b("CFD_SYSCTL_IOURING_TEMPLATE_PRESENT")
+sysctl_ptrace_template_present  = b("CFD_SYSCTL_PTRACE_TEMPLATE_PRESENT")
 
 doc = {
     "schema_version": "2",
@@ -785,6 +836,11 @@ doc = {
         "sysctl_userns":             (not sup_sysctl) and sysctl_present,
         "modprobe_rds":              (not sup_rds) and modprobe_rds_template_present,
         "sysctl_iouring":            (not sup_iouring) and sysctl_iouring_template_present,
+        # v3.0.1: ptrace_scope drop-in is unconditionally applied
+        # (no suppression criteria). Mirror the same template-present
+        # pattern for honest reporting on hosts where -sysctl was
+        # excluded from install.
+        "sysctl_ptrace":             sysctl_ptrace_template_present,
     },
 }
 with open(sys.argv[1], "w") as f:

@@ -21,7 +21,7 @@
 
 Name:           rfxn-defense
 Epoch:          1
-Version:        3.0.0
+Version:        3.0.1
 Release:        1%{?dist}
 Summary:        Defense-in-depth toolkit for the Copy Fail bug class
 
@@ -52,6 +52,10 @@ Source16:       rfxn-sysctl-iouring.conf
 # mitigations land on hosts within 4 hours of the release tag.
 Source17:       rfxn-defense-autoupdate.cron
 Source18:       rfxn-defense-update.sh
+# v3.0.1: ptrace_scope split into its own drop-in (was bundled inside
+# rfxn-sysctl-userns.conf in v3.0.0; suppressed for rootless workloads
+# even though keysign-pwn coverage is orthogonal to userns concerns).
+Source19:       rfxn-sysctl-ptrace.conf
 
 # x86_64 only: no-afalg.c has an explicit #error for non-x86_64. The auditor
 # is portable, but the shim is a load-bearing primitive of this package
@@ -527,6 +531,12 @@ install -m 0644 %{SOURCE12} \
     %{buildroot}/usr/share/rfxn-defense/conditional/sysctl/99-rfxn-defense-userns.conf
 install -m 0644 %{SOURCE16} \
     %{buildroot}/usr/share/rfxn-defense/conditional/sysctl/99-rfxn-defense-iouring.conf
+# v3.0.1: ptrace drop-in is in the "conditional/" tree only for layout
+# uniformity. detect.sh applies it unconditionally (no suppression
+# criteria); the file ships as a template so it can still be inspected
+# under /usr/share/ alongside the others.
+install -m 0644 %{SOURCE19} \
+    %{buildroot}/usr/share/rfxn-defense/conditional/sysctl/99-rfxn-defense-ptrace.conf
 
 # --- audit subpackage layout (v2.0.2) ---
 # Rules drop directly into /etc/audit/rules.d/. Mode 0640 matches the
@@ -1046,6 +1056,7 @@ exit 0
 %dir /usr/share/rfxn-defense/conditional/sysctl
 /usr/share/rfxn-defense/conditional/sysctl/99-rfxn-defense-userns.conf
 /usr/share/rfxn-defense/conditional/sysctl/99-rfxn-defense-iouring.conf
+/usr/share/rfxn-defense/conditional/sysctl/99-rfxn-defense-ptrace.conf
 
 %files audit
 %license LICENSE
@@ -1074,6 +1085,75 @@ exit 0
 
 # ===========================================================================
 %changelog
+* Sun May 24 2026 Ryan MacDonald <ryan@rfxn.com> - 1:3.0.1-1
+- Fixup release validated against two live EL10 hosts (cPanel tenant
+  fleet + admin host). Closes several mitigation-effectiveness gaps
+  that lay dormant since v2.0.2 onwards:
+  * CRITICAL: systemd drop-in deny-list syntax was ~A ~B ~C, which
+    systemd parses as "~" prefix + tokens "A" and "~B" - the second
+    token is invalid, so systemd LOGS A WARNING AND DROPS THE WHOLE
+    DIRECTIVE. RestrictNamespaces=~user ~net became RestrictNamespaces=no
+    (default: no restriction). RestrictAddressFamilies=~AF_ALG ~AF_KEY
+    ~AF_RDS collapsed to just ~AF_ALG. Fixed: only the FIRST token
+    carries ~ (per systemd.exec(5) semantics); the remaining tokens
+    join the deny-list. Now: RestrictAddressFamilies=~AF_ALG AF_KEY
+    AF_RDS and RestrictNamespaces=~user net. Files touched:
+    rfxn-systemd-dropin.conf, rfxn-systemd-dropin-userns.conf,
+    rfxn-systemd-dropin-containers.conf (the optional example).
+    Empirical verification: a test unit running unshare --user --net
+    failed under the FIXED drop-in (status=1) but succeeded under the
+    BROKEN drop-in (status=0).
+  * CRITICAL: kernel.yama.ptrace_scope=2 (ssh-keysign-pwn primary
+    mitigation, CVE-2026-46333) was bundled inside
+    rfxn-sysctl-userns.conf. When userns suppression fired (rootless
+    containers / Flatpak / firejail / browser detected), the entire
+    file was removed - taking ptrace_scope with it. keysign-pwn
+    coverage was therefore missing on the bulk of modern Linux
+    hosts. Split into a new always-applied drop-in
+    /etc/sysctl.d/99-rfxn-defense-ptrace.conf (new file
+    packaging/rfxn-sysctl-ptrace.conf, Source19). detect.sh gains
+    apply_sysctl_ptrace() with no suppression criteria.
+  * CRITICAL: detect_rootless_containers Signal 2 fired on the
+    storage tree initialization (tmp/, overlay-containers/containers.lock,
+    overlay-images/images.lock, libpod/, db.sql, ...) that
+    containers-common / podman install creates without any actual
+    container run. Both test hosts FP'd: zero podman containers
+    ever ran, signal still fired, sysctl_userns suppressed (and
+    pre-fix, ptrace_scope died with it via the bundled-file bug
+    above). Tightened to require a non-lockfile entry inside
+    overlay-containers/, overlay-images/, vfs-containers/, or
+    vfs-images/ - those directories receive children only when real
+    containers or images are created. Eliminates the false positive
+    on RHEL hosts with podman/buildah pre-installed but unused.
+  * Auditor (rfxn-local-check): audit_rule_af_alg regex was a0=38
+    (decimal); auditctl -l prints a0=0x26 (hex), so all 5 loaded
+    rfxn_* rules were misreported as MISSING. Switched to key-name
+    match (key=rfxn_afalg / afkey / afrxrpc / afrds / pidfd_getfd);
+    works regardless of auditctl's a0= rendering. Old "splice
+    audit rule" check removed (was never shipped). Adds explicit
+    OK reporting for the 4 non-AF_ALG rfxn_* keys.
+  * Auditor: cf1 applicability now derives from algif_aead_state
+    (kernel sink reachability) instead of af_alg_socket (userspace
+    reachability). The shim returning EPERM is a mitigation, not a
+    "sink not reachable" signal - the old logic mis-credited cf1 as
+    n/a on every host where the shim worked. After fix, cf1 row in
+    the matrix correctly shows "YES / yes / ld_preload_shim".
+  * Auditor: systemd_restrict_namespaces no longer silently drops
+    units whose RestrictNamespaces parses but does not block both
+    user+net (cascade from the parse-fail bug above; surfaced
+    "no tenant units found" on production hosts where 5 drop-ins
+    were installed).
+  * Auditor banner reframed from "Copy Fail bug-class Checker /
+    cf1 / cf2 / Dirty Frag" to "rfxn-defense host posture auditor /
+    cf1 / cf2 / DF-ESP / DF-RxRPC / Fragnesia / PinTheft /
+    DirtyDecrypt / keysign-pwn" - covers all 7 shipped classes.
+  * v3.0.1 auto-detect.json adds applied.sysctl_ptrace boolean
+    (true iff -sysctl subpackage shipped the template); no
+    schema_version bump (additive per the established protocol).
+  Tool version bumps: detect.sh 3.0.0 -> 3.0.1; rfxn-local-check
+  __version__ 3.0.0 -> 3.0.1. README and gh-pages landing matrix
+  rows annotated with the suppression-decoupling notes.
+
 * Sat May 23 2026 Ryan MacDonald <ryan@rfxn.com> - 1:3.0.0-1
 - Project rename: copyfail-defense -> rfxn-defense. The package family
   is now positioned as a responsive defense layer that ships mitigations

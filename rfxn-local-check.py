@@ -65,7 +65,7 @@ import tempfile
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-__version__ = "3.0.0"
+__version__ = "3.0.1"
 
 # --- splice(2) wrapper ----------------------------------------------------
 # os.splice was added in Python 3.10. EL7/8/9 default Pythons are 3.6/3.6/3.9
@@ -1177,23 +1177,47 @@ def check_auditd():
     if active and is_root():
         rc, sout, serr = run_cmd(["auditctl", "-l"], timeout=3)
         rules = sout.decode("utf-8", "replace")
-        has_afalg = bool(re.search(r"-S\s+\S*socket\S*.*-F\s+a0=38", rules))
-        has_splice = bool(re.search(r"-S\s+\S*splice\S*", rules))
+        # v3.0.1: auditctl -l renders a0= in hex (a0=0x26) but our
+        # shipped /etc/audit/rules.d/99-rfxn-defense.rules uses
+        # decimal (a0=38). Match by the canonical key name instead -
+        # works regardless of how auditctl formats the arg value.
+        # AF_ALG=38=0x26, AF_KEY=15=0xF, AF_RXRPC=33=0x21, AF_RDS=21=0x15.
+        has_afalg   = "key=rfxn_afalg"        in rules
+        has_afkey   = "key=rfxn_afkey"        in rules
+        has_afrxrpc = "key=rfxn_afrxrpc"      in rules
+        has_afrds   = "key=rfxn_afrds"        in rules
+        has_pidfd   = "key=rfxn_pidfd_getfd"  in rules
         has_su_exec = "/usr/bin/su" in rules and "execve" in rules
         out.append(Check("audit_rule_af_alg", "DETECTION",
                          Status.OK if has_afalg else Status.FAIL,
-                         "AF_ALG socket audit rule: {}".format(
+                         "AF_ALG socket audit rule (rfxn_afalg): {}".format(
                              "present" if has_afalg else "MISSING"),
                          remediation=None if has_afalg else
-                         "auditctl -a always,exit -F arch=b64 -S socket "
-                         "-F a0=38 -k afalg_attempt"))
-        out.append(Check("audit_rule_splice", "DETECTION",
-                         Status.OK if has_splice else Status.FAIL,
-                         "splice audit rule: {}".format(
-                             "present" if has_splice else "MISSING"),
-                         remediation=None if has_splice else
-                         "auditctl -a always,exit -F arch=b64 -S splice "
-                         "-k splice_call"))
+                         "dnf install rfxn-defense-audit"))
+        out.append(Check("audit_rule_af_key", "DETECTION",
+                         Status.OK if has_afkey else Status.WARN,
+                         "AF_KEY socket audit rule (rfxn_afkey): {}".format(
+                             "present" if has_afkey else "missing"),
+                         remediation=None if has_afkey else
+                         "dnf install rfxn-defense-audit"))
+        out.append(Check("audit_rule_af_rxrpc", "DETECTION",
+                         Status.OK if has_afrxrpc else Status.WARN,
+                         "AF_RXRPC socket audit rule (rfxn_afrxrpc): {}".format(
+                             "present" if has_afrxrpc else "missing"),
+                         remediation=None if has_afrxrpc else
+                         "dnf install rfxn-defense-audit"))
+        out.append(Check("audit_rule_af_rds", "DETECTION",
+                         Status.OK if has_afrds else Status.WARN,
+                         "AF_RDS socket audit rule (rfxn_afrds): {}".format(
+                             "present" if has_afrds else "missing"),
+                         remediation=None if has_afrds else
+                         "dnf install rfxn-defense-audit"))
+        out.append(Check("audit_rule_pidfd_getfd", "DETECTION",
+                         Status.OK if has_pidfd else Status.WARN,
+                         "pidfd_getfd audit rule (rfxn_pidfd_getfd): {}".format(
+                             "present" if has_pidfd else "missing"),
+                         remediation=None if has_pidfd else
+                         "dnf install rfxn-defense-audit"))
         out.append(Check("audit_rule_su_exec", "DETECTION",
                          Status.OK if has_su_exec else Status.WARN,
                          "/usr/bin/su execve audit rule: {}".format(
@@ -1204,13 +1228,21 @@ def check_auditd():
     return out
 
 def _scan_text_for_ioc(text):
-    """Returns (shim_blocks, afalg_audit, splice_audit) counts in text."""
+    """Returns (shim_blocks, afalg_audit, addl_audit) counts in text.
+
+    v3.0.1: counts both legacy (afalg_attempt) and current (rfxn_afalg)
+    key names. Third tuple element now counts any rfxn_* tripwire hit
+    (rfxn_afkey, rfxn_afrxrpc, rfxn_afrds, rfxn_pidfd_getfd) so the
+    IOC summary surfaces a hit on any rfxn_* key even when AF_ALG
+    itself wasn't the trigger.
+    """
     shim_blocks = 0
     if "no-afalg" in text and "blocked AF_ALG" in text:
         shim_blocks = text.count("blocked AF_ALG")
-    return (shim_blocks,
-            text.count("afalg_attempt"),
-            text.count("splice_call"))
+    afalg = text.count("afalg_attempt") + text.count("rfxn_afalg")
+    addl  = (text.count("rfxn_afkey") + text.count("rfxn_afrxrpc")
+             + text.count("rfxn_afrds") + text.count("rfxn_pidfd_getfd"))
+    return (shim_blocks, afalg, addl)
 
 def check_recent_ioc_signals():
     """Look for shim/audit IOCs in recent logs (root-only, non-fatal).
@@ -1666,6 +1698,14 @@ def check_systemd_restrict_namespaces():
                 findings_ok.append(d)
             else:
                 findings_optional_ok.append(d)
+        else:
+            # v3.0.1: rn parsed but does not block both user+net (e.g.
+            # systemd reported "no" because our 15-* drop-in had a
+            # parse error, or operator override at 20- neutralised it).
+            # Previously silently dropped; now flagged as missing so
+            # the auditor surfaces the gap.
+            if d in CF_CLASS_TENANT_UNITS:
+                findings_missing.append(d)
 
     details = {"protected_tenant_units": findings_ok,
                "missing_tenant_units": findings_missing,
@@ -2442,7 +2482,15 @@ def _aggregate_bug_classes(by_name):
         return r.status if r is not None else None
 
     # cf1 - CVE-2026-31431 / algif_aead
-    cf1_app = (status_of("af_alg_socket") not in (Status.OK, None)) or \
+    # v3.0.1: applicability is determined by the KERNEL's ability to
+    # produce the sink (algif_aead loaded / builtin) - NOT by whether
+    # the userspace socket() probe succeeds. The shim returning EPERM
+    # is a mitigation signal, not a "sink not reachable" signal: the
+    # kernel still has algif_aead in-tree, the shim just prevents
+    # unprivileged programs from reaching it. Treating shim-EPERM as
+    # "n/a" hides the shim's contribution from the layer credit.
+    aead_state = status_of("algif_aead_state")
+    cf1_app = aead_state in (Status.WARN, Status.FAIL, Status.VULN) or \
               (status_of("trigger_probe") == Status.VULN)
     cf1_mit = is_ok("shim_blocks_af_alg") or is_ok("systemd_restrict") or \
               is_ok("modprobe_extended") or is_ok("modprobe_blacklist") or \
@@ -2688,7 +2736,7 @@ def main():
     PROGRESS = Progress(enabled=not args.no_progress and not args.json)
 
     if PROGRESS.enabled or PROGRESS.plain:
-        sys.stderr.write("rfxn-defense checker (cf1+cf2+Dirty Frag) "
+        sys.stderr.write("rfxn-defense posture auditor (7 LPE classes) "
                          "starting on {} ({})\n".format(
             os.uname().nodename, os.uname().release))
         sys.stderr.flush()
@@ -2732,9 +2780,10 @@ def main():
         print(json.dumps(out, indent=2, default=str))
     else:
         print(colorize("=" * 78, C.DIM))
-        print(colorize("Copy Fail bug-class Checker  ", C.BOLD)
+        print(colorize("rfxn-defense host posture auditor  ", C.BOLD)
               + colorize("({})".format(os.uname().nodename), C.DIM))
-        print(colorize("cf1 (CVE-2026-31431) / cf2 (xfrm-ESP) / Dirty Frag",
+        print(colorize("cf1 / cf2 / Dirty Frag-ESP / DF-RxRPC / Fragnesia / "
+                       "PinTheft / DirtyDecrypt / keysign-pwn",
                        C.DIM))
         print(colorize("rfxn.com - forged in prod - github.com/rfxn/rfxn-defense",
                        C.DIM))

@@ -58,7 +58,7 @@ EL8/9/10, hard dep on EL7 since rpm-4.11 has no `Recommends:`):
 | `rfxn-defense-shim` | `LD_PRELOAD` `AF_ALG` block (cf1 primary) |
 | `rfxn-defense-modprobe` | kernel-module entry-point cuts (cf1, cf2, Dirty Frag, PinTheft, DirtyDecrypt) |
 | `rfxn-defense-systemd` | per-unit `RestrictAddressFamilies=~AF_ALG ~AF_KEY ~AF_RXRPC ~AF_RDS` + `RestrictNamespaces=~user ~net` |
-| `rfxn-defense-sysctl` | host-wide `user.max_user_namespaces=0`, `kernel.yama.ptrace_scope=2`, `kernel.io_uring_disabled=2` (auto-suppressed where unsafe) |
+| `rfxn-defense-sysctl` | host-wide `user.max_user_namespaces=0` (suppressed on rootless / Flatpak / firejail / browser), `kernel.yama.ptrace_scope=2` (always-applied independent drop-in, v3.0.1+), `kernel.io_uring_disabled=2` (Linux 6.6+, auto-suppressed on io_uring workloads) |
 | `rfxn-defense-auditor` | read-only host posture auditor (`rfxn-local-check`) with per-class coverage report |
 | `rfxn-defense-audit` | auditd tripwires (`rfxn_afalg/afkey/afrxrpc/afrds/pidfd_getfd`) |
 | `rfxn-defense-autoupdate` | 4-hourly responsive auto-update cron + flock wrapper |
@@ -174,7 +174,7 @@ break legitimate workloads on a busy fleet.
 | systemd `RestrictAddressFamilies=~AF_RDS`        |  ·  |  ·  |   ·    |    ·       |    ·      |   ✅     |     ·       |
 | systemd `RestrictNamespaces=~user ~net`          |  ·  | ✅  |  ✅    |    ·       |   ✅      |    ·     |     ·       |
 | sysctl `user.max_user_namespaces=0`              |  ·  | ✅  |  ✅    |    ·       |   ✅      |    ·     |     ·       |
-| sysctl `kernel.yama.ptrace_scope=2`              |  ·  |  ·  |   ·    |    ·       |    ·      |    ·     |    ✅       |
+| sysctl `kernel.yama.ptrace_scope=2` *(always-on)*|  ·  |  ·  |   ·    |    ·       |    ·      |    ·     |    ✅       |
 | sysctl `kernel.io_uring_disabled=2` ⁴            |  ·  |  ·  |   ·    |    ·       |    ·      |   ✅ ⁴   |     ·       |
 | auditd tripwire rules                            | ³   | ³   |  ³     |   ³        |   ³       |   ³      |    ³        |
 
@@ -297,7 +297,7 @@ do no harm to running production; nothing else relaxes.
 |---|---|---|
 | **IPsec** (strongSwan, libreswan, openswan) | enabled systemd unit (strongswan/libreswan/openswan/ipsec/pluto); `/etc/ipsec.conf` `conn` stanza; non-empty `*.conf` under `/etc/swanctl/conf.d/`, `/etc/ipsec.d/`, `/etc/strongswan{,/conf.d}/` | `99-rfxn-defense-cf2-xfrm.conf` (esp4, esp6, xfrm_user, xfrm_algo blacklist) |
 | **AFS** (openafs, kafs) | enabled systemd unit (openafs-client/server, kafs, afsd); `/etc/openafs/{CellServDB,ThisCell}`; `/etc/krb5.conf.d/openafs*`; `/proc/fs/afs/` registered | `99-rxrpc.conf` + `12-rxrpc-af.conf` (`RestrictAddressFamilies=~AF_RXRPC` on all 5 tenant units) |
-| **Rootless containers** | `/home/*/.local/share/containers/storage/overlay-containers/` (mtime ≤180d); `/var/lib/containers/storage/` non-empty (mtime ≤90d); `/run/user/<UID≥1000>/containers/`; `podman.socket` enabled | `15-userns.conf` on **`user@.service` only** + `99-rfxn-defense-userns.conf` host-wide sysctl |
+| **Rootless containers** | `/home/*/.local/share/containers/storage/overlay-containers/` (mtime ≤180d); `/var/lib/containers/storage/overlay-{containers,images}/` or `vfs-{containers,images}/` contains a non-lockfile artifact (real container or image stored, not just storage-tree init); `/run/user/<UID≥1000>/containers/`; `podman.socket` enabled | `15-userns.conf` on **`user@.service` only** + `99-rfxn-defense-userns.conf` host-wide sysctl. `kernel.yama.ptrace_scope=2` is **NOT** affected (own drop-in since v3.0.1) |
 | **Userns consumers** (Flatpak, firejail, desktop browser) | non-empty `/var/lib/flatpak/{app,runtime}` or per-user `~/.local/share/flatpak/app` (mtime ≤180d); `/usr/bin/firejail`; `/usr/bin/{chromium,chromium-browser,google-chrome,firefox,firefox-esr}` | `99-rfxn-defense-userns.conf` host-wide sysctl **only**; per-unit `RestrictNamespaces` stays active |
 | **io_uring workload** | `liburing.so` in `/proc/*/maps`; known consumer binary executable (`postgres`, `scylla`, `mariadbd`, `dockerd`, `redis-server`, `nginx`, `envoy`, `rabbitmq-server`); io_uring-named systemd unit | `99-rfxn-defense-iouring.conf` **only** |
 
