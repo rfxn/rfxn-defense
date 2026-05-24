@@ -40,7 +40,7 @@
 
 <h1>rfxn-defense</h1>
 <div class="badges">
-  <a class="badge" href="https://github.com/rfxn/rfxn-defense/releases/latest">Latest: v3.0.1</a>
+  <a class="badge" href="https://github.com/rfxn/rfxn-defense/releases/latest">Latest: v3.0.2</a>
   <span class="badge alt">EL7 / EL8 / EL9 / EL10</span>
   <span class="badge alt">x86_64</span>
   <span class="badge alt">7 LPE classes</span>
@@ -482,8 +482,8 @@ VULN-but-mitigated, <code>4</code> hardening recommendations only.
 Each release on
 <a href="https://github.com/rfxn/rfxn-defense/releases/latest">github.com/rfxn/rfxn-defense/releases</a>
 ships per-EL binary RPMs, an SRPM, the <code>.repo</code> file, and the
-public signing key as release assets. v3.0.1 is the current line; older
-v3.0.0 / 2.0.x / 2.1.x RPMs are archived under
+public signing key as release assets. v3.0.2 is the current line; older
+v3.0.0 / v3.0.1 / 2.0.x / 2.1.x RPMs are archived under
 <code>repo/N/x86_64/archive/</code> in the dnf repodata so
 <code>dnf upgrade</code> resolves cleanly from any installed version.
 </p>
@@ -504,93 +504,93 @@ EL8: 2.28 split <code>libdl</code>; EL9/EL10: 2.34+ merged
 <h3>EL7 (CentOS 7 / RHEL 7, vault.centos.org build)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-3.0.1-1.el7.x86_64.rpm">rfxn-defense-3.0.1-1.el7.x86_64.rpm</a></td>
-    <td class="sha">21febdd832199f54fa037e4a78c3aeb3c71589a418f6d8b5c0b2559fc196d582</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-audit-3.0.1-1.el7.noarch.rpm">rfxn-defense-audit-3.0.1-1.el7.noarch.rpm</a></td>
-    <td class="sha">206c7d7067b7a802f0de61c80efacbdd65744cf9dd540b7297a7fd3d9c27288c</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-auditor-3.0.1-1.el7.noarch.rpm">rfxn-defense-auditor-3.0.1-1.el7.noarch.rpm</a></td>
-    <td class="sha">49707d2d8558e34009f053806add4725c8f9c9ad638bb4068c8413c21f6ea8b8</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-autoupdate-3.0.1-1.el7.noarch.rpm">rfxn-defense-autoupdate-3.0.1-1.el7.noarch.rpm</a></td>
-    <td class="sha">496e0a1f3c2347484423455208dad627c769b6ba550d73c7ef9f9b17d12b3722</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-modprobe-3.0.1-1.el7.noarch.rpm">rfxn-defense-modprobe-3.0.1-1.el7.noarch.rpm</a></td>
-    <td class="sha">5a8f9504cb841d248c469e78b33a2079d52535c448c98e0087b0535d5e5d4da0</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-shim-3.0.1-1.el7.x86_64.rpm">rfxn-defense-shim-3.0.1-1.el7.x86_64.rpm</a></td>
-    <td class="sha">ad0874b0a2d6205e01cc87dbf71e68875034d1365b917742f30753dff3b1e631</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-sysctl-3.0.1-1.el7.noarch.rpm">rfxn-defense-sysctl-3.0.1-1.el7.noarch.rpm</a></td>
-    <td class="sha">f600b22ddd4bd725acb527e5f85e9c53ad70dde46085f10a01e4db35c3622012</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-systemd-3.0.1-1.el7.noarch.rpm">rfxn-defense-systemd-3.0.1-1.el7.noarch.rpm</a></td>
-    <td class="sha">85ac0492b6d5fa8cd71a76ed9a079dd03180f478bcf78aa8cac5fc40566cbb3c</td></tr>
-<tr><td><a href="repo/7/x86_64/rfxn-defense-3.0.1-1.el7.src.rpm">rfxn-defense-3.0.1-1.el7.src.rpm</a></td>
-    <td class="sha">a1bdc2c03046fa2d9a088bdd19707d32081ab4409e933cd2ad7ba6d3e84aba94</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-3.0.2-1.el7.x86_64.rpm">rfxn-defense-3.0.2-1.el7.x86_64.rpm</a></td>
+    <td class="sha">8f77d9f780190cc119a086ccd6412cd8f10c6c20b7aa64b17b4c2c7e8049c948</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-audit-3.0.2-1.el7.noarch.rpm">rfxn-defense-audit-3.0.2-1.el7.noarch.rpm</a></td>
+    <td class="sha">491eb8a04efde5c5863cc9c4d92f8a5b8d23189ce32f3b0a6f94063ecb98ea0d</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-auditor-3.0.2-1.el7.noarch.rpm">rfxn-defense-auditor-3.0.2-1.el7.noarch.rpm</a></td>
+    <td class="sha">e8f534b8779ff2e36a64c246c84f4147aaa4bff07d4f9f09a9bd12ae4d426053</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-autoupdate-3.0.2-1.el7.noarch.rpm">rfxn-defense-autoupdate-3.0.2-1.el7.noarch.rpm</a></td>
+    <td class="sha">a7ea637ee8270a4c2b5e67245c75f6b81ab3fa45c9e01732c74eb2258a1fa255</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-modprobe-3.0.2-1.el7.noarch.rpm">rfxn-defense-modprobe-3.0.2-1.el7.noarch.rpm</a></td>
+    <td class="sha">81d3b922d9f7cb36d543f556e5c64e0f68c87d702cf11c4a863fc63b7b23b56c</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-shim-3.0.2-1.el7.x86_64.rpm">rfxn-defense-shim-3.0.2-1.el7.x86_64.rpm</a></td>
+    <td class="sha">bb179e2c7654b6ed4e8da4fe88836b911030f4242f5bd9f04633d3d9a1ba24be</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-sysctl-3.0.2-1.el7.noarch.rpm">rfxn-defense-sysctl-3.0.2-1.el7.noarch.rpm</a></td>
+    <td class="sha">d143dc30a1b57e2b529bc19d0b59a46ec540b8640935a46c67841a2ef2fb6990</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-systemd-3.0.2-1.el7.noarch.rpm">rfxn-defense-systemd-3.0.2-1.el7.noarch.rpm</a></td>
+    <td class="sha">3c2f8bb8a44a5bd3dc462ad2631dbaaa51b14f1f2c54aefd9095ca76590f1fe0</td></tr>
+<tr><td><a href="repo/7/x86_64/rfxn-defense-3.0.2-1.el7.src.rpm">rfxn-defense-3.0.2-1.el7.src.rpm</a></td>
+    <td class="sha">517c25d7032e76d1bebacb0fb1a0e3f65b6abde0ea2b75d5abf8463cf93909f9</td></tr>
 </table>
 
 <h3>EL8 (RHEL/Alma/Rocky/CentOS Stream 8)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-3.0.1-1.el8.x86_64.rpm">rfxn-defense-3.0.1-1.el8.x86_64.rpm</a></td>
-    <td class="sha">6b18d5b3b01830016755ec645700f7a20781a09b0e8c13bfaad8251e41db00a8</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-audit-3.0.1-1.el8.noarch.rpm">rfxn-defense-audit-3.0.1-1.el8.noarch.rpm</a></td>
-    <td class="sha">c76e101144042dc9edc4420092ecb06299f8e401a0b26153a3751934fbffc196</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-auditor-3.0.1-1.el8.noarch.rpm">rfxn-defense-auditor-3.0.1-1.el8.noarch.rpm</a></td>
-    <td class="sha">37adad4abf7a65b72a7f54d806e1fa61b606df973bf58f71ddc328ba65e2911a</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-autoupdate-3.0.1-1.el8.noarch.rpm">rfxn-defense-autoupdate-3.0.1-1.el8.noarch.rpm</a></td>
-    <td class="sha">d396b0f2333ab82efce9726c46656af85697bd828493e00ca76ca5202bbc6cea</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-modprobe-3.0.1-1.el8.noarch.rpm">rfxn-defense-modprobe-3.0.1-1.el8.noarch.rpm</a></td>
-    <td class="sha">2ce6d8cd247ded67c9ce915e4a836efa8afaf0f0f431b691439f9566e53acd6e</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-shim-3.0.1-1.el8.x86_64.rpm">rfxn-defense-shim-3.0.1-1.el8.x86_64.rpm</a></td>
-    <td class="sha">74fb285a8141f4aa841e4e8746ae7dd50d32b46c532a6537a4f16c0354f6023b</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-sysctl-3.0.1-1.el8.noarch.rpm">rfxn-defense-sysctl-3.0.1-1.el8.noarch.rpm</a></td>
-    <td class="sha">65cacd5ec4d22ab7999c1f2893fc488403344bc233c63d2fcc8e6482d784fce0</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-systemd-3.0.1-1.el8.noarch.rpm">rfxn-defense-systemd-3.0.1-1.el8.noarch.rpm</a></td>
-    <td class="sha">2a2d2c1ff70efb6fc0e7356b369858c877bf5da2aef99e2088f406c13629e295</td></tr>
-<tr><td><a href="repo/8/x86_64/rfxn-defense-3.0.1-1.el8.src.rpm">rfxn-defense-3.0.1-1.el8.src.rpm</a></td>
-    <td class="sha">76026dd365aacd498034ca2ff17a91020d7cfda90f4dc4e69ba8b56cc6e8947c</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-3.0.2-1.el8.x86_64.rpm">rfxn-defense-3.0.2-1.el8.x86_64.rpm</a></td>
+    <td class="sha">efd42dd8d071421c21dfd307320e0ef2b99bee4a30d7510e22dac57539371542</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-audit-3.0.2-1.el8.noarch.rpm">rfxn-defense-audit-3.0.2-1.el8.noarch.rpm</a></td>
+    <td class="sha">50b8a9be6ba6ff2a6e8c427d97be91f8253b14829b672fced46e625ea2843524</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-auditor-3.0.2-1.el8.noarch.rpm">rfxn-defense-auditor-3.0.2-1.el8.noarch.rpm</a></td>
+    <td class="sha">150f42b877d7c3b054002100ef399db759531c587f7ad9df4713e2a2c93a76ae</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-autoupdate-3.0.2-1.el8.noarch.rpm">rfxn-defense-autoupdate-3.0.2-1.el8.noarch.rpm</a></td>
+    <td class="sha">cc47306e220390f5565e339173bfd97411bf8e870615c9856456a118c7fbd7cd</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-modprobe-3.0.2-1.el8.noarch.rpm">rfxn-defense-modprobe-3.0.2-1.el8.noarch.rpm</a></td>
+    <td class="sha">95e7b001d3b7cfd3529c55bd33b707cac68ece616a457f25b53c10a3a84f6d30</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-shim-3.0.2-1.el8.x86_64.rpm">rfxn-defense-shim-3.0.2-1.el8.x86_64.rpm</a></td>
+    <td class="sha">9715db9bfc8ff4c99183f638c0847b5f6235265e56ab1b459ae8cb95f392e91b</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-sysctl-3.0.2-1.el8.noarch.rpm">rfxn-defense-sysctl-3.0.2-1.el8.noarch.rpm</a></td>
+    <td class="sha">15b59442af3093d45351fc917cee812eab64a5ccd196f0c3875c076ee454edee</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-systemd-3.0.2-1.el8.noarch.rpm">rfxn-defense-systemd-3.0.2-1.el8.noarch.rpm</a></td>
+    <td class="sha">cf42b0266d8ed40c28b8dea5f1091fdd0128706d465fcf51981a2c6ac8bc7437</td></tr>
+<tr><td><a href="repo/8/x86_64/rfxn-defense-3.0.2-1.el8.src.rpm">rfxn-defense-3.0.2-1.el8.src.rpm</a></td>
+    <td class="sha">3bf05c48fa78d2cfbe819f557b939e12c79fa1eb8e7ffe45d1180f5593fdc8b1</td></tr>
 </table>
 
 <h3>EL9 (RHEL/Alma/Rocky/CentOS Stream 9)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-3.0.1-1.el9.x86_64.rpm">rfxn-defense-3.0.1-1.el9.x86_64.rpm</a></td>
-    <td class="sha">870faf3e8dfdc7eb9fea98a730dc5289b67f15f62d1debb257cd69f9df7020a4</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-audit-3.0.1-1.el9.noarch.rpm">rfxn-defense-audit-3.0.1-1.el9.noarch.rpm</a></td>
-    <td class="sha">63264b1627df4af5d5d2c7386431ae9418db50c1e9ba58be9a80f683316b4061</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-auditor-3.0.1-1.el9.noarch.rpm">rfxn-defense-auditor-3.0.1-1.el9.noarch.rpm</a></td>
-    <td class="sha">de2216d0da5f06789d684ced24f774b28db7e738624b1ce2404a21d9b2aef1e3</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-autoupdate-3.0.1-1.el9.noarch.rpm">rfxn-defense-autoupdate-3.0.1-1.el9.noarch.rpm</a></td>
-    <td class="sha">3863624817990c9fbe0b19888ec6cd5b61cf066d8df94fa75138af46f50a7dee</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-modprobe-3.0.1-1.el9.noarch.rpm">rfxn-defense-modprobe-3.0.1-1.el9.noarch.rpm</a></td>
-    <td class="sha">b7a90c7654c35426922f779bc7233c7885ab14443b22dbe714aa664efce94062</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-shim-3.0.1-1.el9.x86_64.rpm">rfxn-defense-shim-3.0.1-1.el9.x86_64.rpm</a></td>
-    <td class="sha">ed3282dfa24965b0d3e42bfeaa14985ce58fce1239f3b261b22adb6fa99aa731</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-sysctl-3.0.1-1.el9.noarch.rpm">rfxn-defense-sysctl-3.0.1-1.el9.noarch.rpm</a></td>
-    <td class="sha">14fd5d936c496ef2f8ea7e51c72589c753904d34102caa7b44a1a15b5724484d</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-systemd-3.0.1-1.el9.noarch.rpm">rfxn-defense-systemd-3.0.1-1.el9.noarch.rpm</a></td>
-    <td class="sha">ae16d142f07cc71e137dfe540dc3c851b45eb410550c5db9efc7ebeb714c8775</td></tr>
-<tr><td><a href="repo/9/x86_64/rfxn-defense-3.0.1-1.el9.src.rpm">rfxn-defense-3.0.1-1.el9.src.rpm</a></td>
-    <td class="sha">4ed3c0f4333d78692d079b2a96155b51f17626b304d0cd618495ec65228d8f4b</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-3.0.2-1.el9.x86_64.rpm">rfxn-defense-3.0.2-1.el9.x86_64.rpm</a></td>
+    <td class="sha">379a21e8cc6198e92c39109f26e043b19bdace9254112d2db29202503bf3e5aa</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-audit-3.0.2-1.el9.noarch.rpm">rfxn-defense-audit-3.0.2-1.el9.noarch.rpm</a></td>
+    <td class="sha">8152b328cbe64fbab4fb701bfb22780e4f9bf29d6c57b186931159df31854c45</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-auditor-3.0.2-1.el9.noarch.rpm">rfxn-defense-auditor-3.0.2-1.el9.noarch.rpm</a></td>
+    <td class="sha">795b0a776b12e066e948d1c1e3949fb7ed8ffd3edc1b37fd117964c746e88d2e</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-autoupdate-3.0.2-1.el9.noarch.rpm">rfxn-defense-autoupdate-3.0.2-1.el9.noarch.rpm</a></td>
+    <td class="sha">5de34329a105fbe9f1f6347e87dabbbc538dc1260a74cb1fdcb6f378f92bfd40</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-modprobe-3.0.2-1.el9.noarch.rpm">rfxn-defense-modprobe-3.0.2-1.el9.noarch.rpm</a></td>
+    <td class="sha">3af3b411af4828937908e77b3948431dba7eeb9bdd95880395f68dc8d7e8d217</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-shim-3.0.2-1.el9.x86_64.rpm">rfxn-defense-shim-3.0.2-1.el9.x86_64.rpm</a></td>
+    <td class="sha">52916845017ccc0c674e05e05c60aae9bcaeb416f713ad28f27223bcf9ac5b36</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-sysctl-3.0.2-1.el9.noarch.rpm">rfxn-defense-sysctl-3.0.2-1.el9.noarch.rpm</a></td>
+    <td class="sha">dd44ab6e8d737b1a421a12a3b300dcc4abf401ed2d808afd7d40d87752af66c6</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-systemd-3.0.2-1.el9.noarch.rpm">rfxn-defense-systemd-3.0.2-1.el9.noarch.rpm</a></td>
+    <td class="sha">bec85dd0897280e43aec1e0e490ccbd21dc5c3b9201b8dd73c5a031dcfbe3b7c</td></tr>
+<tr><td><a href="repo/9/x86_64/rfxn-defense-3.0.2-1.el9.src.rpm">rfxn-defense-3.0.2-1.el9.src.rpm</a></td>
+    <td class="sha">2e29a3f34d22a92f2cac34b11932d9eafa61370d7004b8eea0ac04c501de937b</td></tr>
 </table>
 
 <h3>EL10 (RHEL 10 / CentOS Stream 10 / AlmaLinux Kitten)</h3>
 <table>
 <tr><th>File</th><th>sha256</th></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-3.0.1-1.el10.x86_64.rpm">rfxn-defense-3.0.1-1.el10.x86_64.rpm</a></td>
-    <td class="sha">283c604ed960c19a35a06bb8143b14dfbd340ad391a272ab3c958412cd8ff52a</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-audit-3.0.1-1.el10.noarch.rpm">rfxn-defense-audit-3.0.1-1.el10.noarch.rpm</a></td>
-    <td class="sha">2e3d2aacc4560fc6665c3f8cca222da4a0c15ce88d19ab762b0804fba07d4be8</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-auditor-3.0.1-1.el10.noarch.rpm">rfxn-defense-auditor-3.0.1-1.el10.noarch.rpm</a></td>
-    <td class="sha">bf80a217de29d73c277b1cbecb3bc03950f13b520d2df7893e560b9cf5a63fed</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-autoupdate-3.0.1-1.el10.noarch.rpm">rfxn-defense-autoupdate-3.0.1-1.el10.noarch.rpm</a></td>
-    <td class="sha">72aa0d47a671f5bea71b0c6095cd97cb2ca5e90f4e24c08a2f9713ea83628e22</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-modprobe-3.0.1-1.el10.noarch.rpm">rfxn-defense-modprobe-3.0.1-1.el10.noarch.rpm</a></td>
-    <td class="sha">a7fa00305b861f531a6b6eb398bdbd25943ce0c7704572e8bd2a5ca859955c42</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-shim-3.0.1-1.el10.x86_64.rpm">rfxn-defense-shim-3.0.1-1.el10.x86_64.rpm</a></td>
-    <td class="sha">b7858f1fea11ee37f7f4669f7a4cf1c183ba33162c7664f61c7911d9bab7420c</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-sysctl-3.0.1-1.el10.noarch.rpm">rfxn-defense-sysctl-3.0.1-1.el10.noarch.rpm</a></td>
-    <td class="sha">f4ef3039093174dcf954699397bdf67c2ca2a02e41f88380b39d23bea531f524</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-systemd-3.0.1-1.el10.noarch.rpm">rfxn-defense-systemd-3.0.1-1.el10.noarch.rpm</a></td>
-    <td class="sha">a98bcfe1ec7b2b9a86f5f94d3b460fce1ded2d79c75b99932aa8f8d886a4e8c4</td></tr>
-<tr><td><a href="repo/10/x86_64/rfxn-defense-3.0.1-1.el10.src.rpm">rfxn-defense-3.0.1-1.el10.src.rpm</a></td>
-    <td class="sha">ef093d4cd29d660e72ac60e62647599ed48add44231868d0dbe5c13e6372e697</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-3.0.2-1.el10.x86_64.rpm">rfxn-defense-3.0.2-1.el10.x86_64.rpm</a></td>
+    <td class="sha">fec9f133b123fbbd1bfaea85736f8620c4890159edb188b0e234877f88f06ac7</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-audit-3.0.2-1.el10.noarch.rpm">rfxn-defense-audit-3.0.2-1.el10.noarch.rpm</a></td>
+    <td class="sha">c5c0db5ef103be35879f33104a3fab0d8b81afdd954fc4ca935809613e461626</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-auditor-3.0.2-1.el10.noarch.rpm">rfxn-defense-auditor-3.0.2-1.el10.noarch.rpm</a></td>
+    <td class="sha">78dbd678b2e209d36e07985483c582e34867b9ac033b4e792dbb6ca4a3f4e7c4</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-autoupdate-3.0.2-1.el10.noarch.rpm">rfxn-defense-autoupdate-3.0.2-1.el10.noarch.rpm</a></td>
+    <td class="sha">0672dd4317b5bc83c0bacefa513728138a80a2e186bd7f00bbde88ac5aa7876f</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-modprobe-3.0.2-1.el10.noarch.rpm">rfxn-defense-modprobe-3.0.2-1.el10.noarch.rpm</a></td>
+    <td class="sha">8b9cd054342f5694118a560eaddb379720f4c72e0bfc312e71ec68d26cf23e96</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-shim-3.0.2-1.el10.x86_64.rpm">rfxn-defense-shim-3.0.2-1.el10.x86_64.rpm</a></td>
+    <td class="sha">320ba68792c474f0f1a0f123836e96c95f01f9fc06dbe7a0ab0cd7d36c73cee7</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-sysctl-3.0.2-1.el10.noarch.rpm">rfxn-defense-sysctl-3.0.2-1.el10.noarch.rpm</a></td>
+    <td class="sha">a22e6b8b2d946e13d2f9cda5ee985c1d26189c2ae453727802ade37d520caa5f</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-systemd-3.0.2-1.el10.noarch.rpm">rfxn-defense-systemd-3.0.2-1.el10.noarch.rpm</a></td>
+    <td class="sha">6d4b18a6cf540e95bb98f48fb5b8b2d7e3b931df6ac4228806c9de4af52b9459</td></tr>
+<tr><td><a href="repo/10/x86_64/rfxn-defense-3.0.2-1.el10.src.rpm">rfxn-defense-3.0.2-1.el10.src.rpm</a></td>
+    <td class="sha">9e8f1262f2a07ee5a042d068778d0c3491edd7ffed1e3cf10896557bdab0c08f</td></tr>
 </table>
 
 <h2 id="signing">Signing</h2>
@@ -615,7 +615,7 @@ we publish alongside it). dnf imports the public key from
 gpg --fingerprint proj@rfxn.com
 # expect: 6001 1CDC EA2F F52D 975A  FDEE 6D30 F32C D5E8 0F80
 rpm --import https://rfxn.github.io/rfxn-defense/RPM-GPG-KEY-rfxn
-rpm -K /path/to/rfxn-defense-3.0.1-1.el9.x86_64.rpm
+rpm -K /path/to/rfxn-defense-3.0.2-1.el9.x86_64.rpm
 # expect: digests signatures OK</pre>
 
 <h2 id="defense">Defense in depth</h2>
@@ -662,7 +662,35 @@ Per-commit history:
 </p>
 <table>
 <tr><th>Version</th><th>Date</th><th>Summary</th></tr>
-<tr><td><strong>v3.0.1</strong></td>
+<tr><td><strong>v3.0.2</strong></td>
+    <td>2026-05-24</td>
+    <td>EL7 silent-failure closure. Empirically validated against a
+        fresh CentOS 7.9.2009 VM (systemd 219, procps-ng 3.3.10,
+        kernel 3.10). <strong>Critical:</strong> systemd v219 (EL7)
+        silently ignores <code>RestrictNamespaces=</code> (added in
+        v235); the userns drop-in shipped on every prior 3.0.x build
+        was inert at unit-start on EL7. <strong>Critical:</strong>
+        EL7 procps-ng 3.3.10 mis-parses the sysctl.d(5)
+        <code>-key</code> silent-skip prefix (added in 3.3.12), so
+        every key in <code>99-rfxn-defense-ptrace.conf</code> and
+        <code>99-rfxn-defense-userns.conf</code> silently no-op'd
+        &mdash; ssh-keysign-pwn (CVE-2026-46333) primary mitigation
+        latent on every EL7 host. Both layers now distro-gated; the
+        ptrace_scope sysctl dropped the <code>-</code> prefix.
+        <strong>Critical:</strong> <code>%posttrans sysctl</code>
+        loop omitted <code>ptrace.conf</code> entirely &mdash;
+        replaced with <code>sysctl --system</code> so the file
+        actually applies at install time on every distro. Auditor:
+        <code>systemd_restrict_namespaces</code> no longer silent-
+        SKIPs on EL7 (now emits explicit "predates v235" reason or
+        FAIL with stale drop-in list); <code>userns_sysctl</code> OK
+        message distinguishes "blocked by rfxn drop-in" from "blocked
+        by kernel/distro default"; <code>ptrace_scope</code>
+        remediation text points at the correct file (was stale from
+        v3.0.0). New <code>packaging/test-el7-live.sh</code> live-host
+        runner with 33 assertions including empirical mitigation
+        probes that isolate each layer.</td></tr>
+<tr><td>v3.0.1</td>
     <td>2026-05-24</td>
     <td>Fixup release validated against live cPanel + admin hosts.
         <strong>Critical:</strong> systemd drop-in deny-list syntax
